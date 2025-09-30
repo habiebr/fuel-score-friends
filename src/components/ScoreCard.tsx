@@ -40,20 +40,20 @@ export function ScoreCard({
       `bg-gradient-to-br ${getGradientColor()}`,
       className
     )}>
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="text-center">
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">{title}</h3>
-          <div className={cn("text-4xl font-bold mb-1", getScoreColor())}>
+          <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2">{title}</h3>
+          <div className={cn("text-2xl sm:text-4xl font-bold mb-1", getScoreColor())}>
             {score}
-            {maxScore && <span className="text-xl text-muted-foreground">/{maxScore}</span>}
+            {maxScore && <span className="text-sm sm:text-xl text-muted-foreground">/{maxScore}</span>}
           </div>
           {subtitle && (
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">{subtitle}</p>
           )}
         </div>
         
         {/* Progress indicator */}
-        <div className="mt-4 bg-muted rounded-full h-2 overflow-hidden">
+        <div className="mt-3 sm:mt-4 bg-muted rounded-full h-1.5 sm:h-2 overflow-hidden">
           <div 
             className={cn(
               "h-full transition-all duration-500 rounded-full",

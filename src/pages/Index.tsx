@@ -31,16 +31,17 @@ const Index = () => {
 
   return (
     <div className="relative">
-      {/* Logout Button */}
-      <div className="absolute top-4 right-4 z-10">
+      {/* Mobile-Friendly Logout Button */}
+      <div className="absolute top-3 right-3 z-10">
         <Button 
           variant="ghost" 
           size="sm" 
           onClick={signOut}
-          className="bg-background/80 backdrop-blur-sm"
+          className="bg-background/80 backdrop-blur-sm text-xs sm:text-sm"
         >
-          <LogOut className="h-4 w-4 mr-2" />
-          Logout
+          <LogOut className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+          <span className="hidden sm:inline">Logout</span>
+          <span className="sm:hidden">Out</span>
         </Button>
       </div>
       
