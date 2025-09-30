@@ -1,6 +1,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { WearablesSync } from '@/components/WearablesSync';
 import { LogOut, User, Target, Activity } from 'lucide-react';
 
 export default function Profile() {
@@ -14,6 +15,9 @@ export default function Profile() {
           <h1 className="text-2xl font-bold text-foreground mb-2">Profile</h1>
           <p className="text-muted-foreground text-sm">{user?.email}</p>
         </div>
+
+        {/* Wearables Sync */}
+        <WearablesSync />
 
         {/* Profile Stats */}
         <Card className="shadow-card mb-4">
