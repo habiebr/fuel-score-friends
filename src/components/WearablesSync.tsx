@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Watch, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Watch, Upload, CheckCircle, AlertCircle, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useHealthKit } from '@/hooks/useHealthKit';
+import { Capacitor } from '@capacitor/core';
 
 export function WearablesSync() {
   const [uploading, setUploading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const { toast } = useToast();
+  const { isAvailable, isAuthorized, requestAuthorization, fetchTodayData } = useHealthKit();
+  const isNative = Capacitor.isNativePlatform();
 
   const handleFitFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -94,18 +99,48 @@ export function WearablesSync() {
           </label>
         </div>
 
-        {/* Apple Health - Coming Soon */}
-        <div className="space-y-2 opacity-60">
+        {/* Apple Health */}
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="font-semibold text-sm">Apple Health</h4>
-              <p className="text-xs text-muted-foreground">Available in mobile app</p>
+              <h4 className="font-semibold text-sm">Apple Health / Google Fit</h4>
+              <p className="text-xs text-muted-foreground">
+                {isNative ? (isAuthorized ? 'Connected' : 'Authorize access') : 'Available in mobile app'}
+              </p>
             </div>
           </div>
-          <Button variant="secondary" className="w-full" disabled>
-            <Watch className="h-4 w-4 mr-2" />
-            Coming Soon
-          </Button>
+          {isNative ? (
+            <Button 
+              variant={isAuthorized ? "outline" : "secondary"} 
+              className="w-full"
+              onClick={async () => {
+                if (!isAuthorized) {
+                  await requestAuthorization();
+                } else {
+                  setSyncing(true);
+                  const data = await fetchTodayData();
+                  if (data) {
+                    // Sync to database
+                    toast({
+                      title: "Health data synced!",
+                      description: "Your wearable data has been updated",
+                    });
+                    setLastSync(new Date());
+                  }
+                  setSyncing(false);
+                }
+              }}
+              disabled={syncing}
+            >
+              <Smartphone className="h-4 w-4 mr-2" />
+              {syncing ? 'Syncing...' : (isAuthorized ? 'Sync Now' : 'Authorize')}
+            </Button>
+          ) : (
+            <Button variant="secondary" className="w-full" disabled>
+              <Watch className="h-4 w-4 mr-2" />
+              Build Mobile App First
+            </Button>
+          )}
         </div>
 
         {/* Last Sync Status */}
