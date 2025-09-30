@@ -1,12 +1,50 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Dashboard } from '@/components/Dashboard';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { LogOut } from 'lucide-react';
 
 const Index = () => {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+  const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+        <div className="animate-pulse">
+          <div className="w-12 h-12 bg-primary rounded-full animate-pulse-glow"></div>
+        </div>
       </div>
+    );
+  }
+
+  if (!user) {
+    return null; // Will redirect to auth
+  }
+
+  return (
+    <div className="relative">
+      {/* Logout Button */}
+      <div className="absolute top-4 right-4 z-10">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={signOut}
+          className="bg-background/80 backdrop-blur-sm"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Logout
+        </Button>
+      </div>
+      
+      <Dashboard />
     </div>
   );
 };
