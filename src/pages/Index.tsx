@@ -1,12 +1,11 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dashboard } from '@/components/Dashboard';
+import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { LogOut } from 'lucide-react';
 
 const Index = () => {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,23 +29,10 @@ const Index = () => {
   }
 
   return (
-    <div className="relative">
-      {/* Mobile-Friendly Logout Button */}
-      <div className="absolute top-3 right-3 z-10">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={signOut}
-          className="bg-background/80 backdrop-blur-sm text-xs sm:text-sm"
-        >
-          <LogOut className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-          <span className="hidden sm:inline">Logout</span>
-          <span className="sm:hidden">Out</span>
-        </Button>
-      </div>
-      
+    <>
       <Dashboard />
-    </div>
+      <BottomNav />
+    </>
   );
 };
 
