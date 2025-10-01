@@ -189,6 +189,17 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         })));
       }
 
+      // Calculate planned nutrition from meal plans
+      const plannedNutrition = plans?.reduce(
+        (acc, plan) => ({
+          calories: acc.calories + (plan.recommended_calories || 0),
+          protein: acc.protein + (plan.recommended_protein_grams || 0),
+          carbs: acc.carbs + (plan.recommended_carbs_grams || 0),
+          fat: acc.fat + (plan.recommended_fat_grams || 0),
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      ) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
       setData({
         dailyScore: nutritionScore?.daily_score || 0,
         caloriesConsumed: nutritionScore?.calories_consumed || 0,
@@ -199,10 +210,10 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         steps: wearableData?.steps || 0,
         caloriesBurned: wearableData?.calories_burned || 0,
         activeMinutes: wearableData?.active_minutes || 0,
-        plannedCalories: nutritionScore?.planned_calories || 0,
-        plannedProtein: nutritionScore?.planned_protein_grams || 0,
-        plannedCarbs: nutritionScore?.planned_carbs_grams || 0,
-        plannedFat: nutritionScore?.planned_fat_grams || 0,
+        plannedCalories: plannedNutrition.calories,
+        plannedProtein: plannedNutrition.protein,
+        plannedCarbs: plannedNutrition.carbs,
+        plannedFat: plannedNutrition.fat,
         breakfastScore: nutritionScore?.breakfast_score || null,
         lunchScore: nutritionScore?.lunch_score || null,
         dinnerScore: nutritionScore?.dinner_score || null,
