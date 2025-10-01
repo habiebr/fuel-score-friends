@@ -183,8 +183,8 @@ export default function Profile() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-lg mb-1">Fitness Goals</h3>
-                  <p className="text-sm text-muted-foreground">Set and track your objectives</p>
+                  <h3 className="font-semibold text-lg mb-1">Training Goals</h3>
+                  <p className="text-sm text-muted-foreground">Set your fitness objectives</p>
                 </div>
                 <Button 
                   variant="default" 
@@ -198,7 +198,7 @@ export default function Profile() {
             </CardContent>
           </Card>
 
-          {/* Wearable Performance Graph */}
+          {/* Activity Metrics with Premium Tabs */}
           <div className="mb-6">
             <WearablePerformanceGraph />
           </div>

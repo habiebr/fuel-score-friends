@@ -1,4 +1,4 @@
-import { Home, User, Camera, Target, Utensils } from 'lucide-react';
+import { Home, User, Camera, Utensils, Users } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
@@ -24,17 +24,17 @@ export function BottomNav({ onAddMeal }: BottomNavProps) {
             <span className="text-xs font-medium">Home</span>
           </NavLink>
 
-          {/* Goals */}
+          {/* Community */}
           <NavLink
-            to="/goals"
+            to="/community"
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                 isActive ? 'text-primary' : 'text-muted-foreground'
               }`
             }
           >
-            <Target className="h-5 w-5" />
-            <span className="text-xs font-medium">Goals</span>
+            <Users className="h-5 w-5" />
+            <span className="text-xs font-medium">Community</span>
           </NavLink>
 
           {/* Center Add Meal Button */}

@@ -48,13 +48,34 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [raceGoal, setRaceGoal] = useState<string>('');
+  const [targetMonths, setTargetMonths] = useState<string>('');
 
   useEffect(() => {
     if (user) {
       loadDashboardData();
       generateDailyMealPlan();
+      loadGoals();
     }
   }, [user]);
+
+  const loadGoals = async () => {
+    if (!user) return;
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('fitness_goals, activity_level')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (profile && profile.fitness_goals && profile.fitness_goals.length > 0) {
+        setRaceGoal(profile.fitness_goals[0]);
+      }
+    } catch (error) {
+      console.error('Error loading goals:', error);
+    }
+  };
 
   const generateDailyMealPlan = async () => {
     if (!user) return;
@@ -167,6 +188,38 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
             className="animate-fade-in"
           />
         </div>
+
+        {/* Race Goals Widget */}
+        {raceGoal && (
+          <Card className="shadow-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Target className="h-4 w-4 text-primary" />
+                    <span className="font-semibold text-sm">Race Goal</span>
+                  </div>
+                  <div className="text-lg font-bold text-primary capitalize">
+                    {raceGoal.replace('_', ' ')}
+                  </div>
+                  {targetMonths && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Target: {targetMonths} months
+                    </div>
+                  )}
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => navigate('/goals')}
+                  className="text-primary hover:text-primary-glow"
+                >
+                  Update
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Mobile-First Main Content */}
         <div className="space-y-4 sm:space-y-6">
@@ -306,18 +359,18 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
               <Button 
                 variant="outline" 
                 className="w-full"
-                onClick={() => navigate('/goals')}
+                onClick={() => navigate('/meals')}
               >
-                <Target className="h-4 w-4 mr-2" />
-                Goals
+                <CalendarDays className="h-4 w-4 mr-2" />
+                Meal Diary
               </Button>
               <Button 
                 variant="outline" 
                 className="w-full"
-                onClick={() => navigate('/activity')}
+                onClick={() => navigate('/profile')}
               >
-                <CalendarDays className="h-4 w-4 mr-2" />
-                Activity
+                <Target className="h-4 w-4 mr-2" />
+                Profile & Goals
               </Button>
             </CardContent>
           </Card>
