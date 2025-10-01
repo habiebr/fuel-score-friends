@@ -360,11 +360,15 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     if (!user) return;
 
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('fitness_goals, goal_type, goal_name, target_date, fitness_level, activity_level')
+        .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
+
+      if (profileError) {
+        console.log('Profiles select error (tolerating missing optional columns):', profileError.message);
+      }
 
       console.log('Profile data:', profile);
 
