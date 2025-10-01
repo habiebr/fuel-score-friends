@@ -118,12 +118,12 @@ export function AppleHealthSync() {
       return;
     }
 
-    // Check file size (warn if > 200MB)
-    const maxSize = 200 * 1024 * 1024; // 200MB
+    // Check file size (warn if > 300MB)
+    const maxSize = 300 * 1024 * 1024; // 300MB
     if (file.size > maxSize) {
       toast({
         title: "File too large",
-        description: "Please use a smaller export or the mobile app for very large files (max 200MB)",
+        description: "Please use a smaller export or the mobile app for very large files (max 300MB)",
         variant: "destructive",
       });
       return;
