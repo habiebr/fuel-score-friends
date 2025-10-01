@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     for (const session of parsedData.sessions) {
       const sessionDate = new Date(session.timestamp).toISOString().split('T')[0];
       
-      const { error: upsertError } = await supabase
+      const { data: wearableData, error: upsertError } = await supabase
         .from('wearable_data')
         .upsert({
           user_id: user.id,
@@ -54,22 +54,51 @@ Deno.serve(async (req) => {
           avg_power: Math.round(session.avgPower),
           max_speed: session.maxSpeed,
           activity_type: session.activityType,
+          avg_temperature: session.avgTemperature ? Math.round(session.avgTemperature) : null,
+          training_effect: session.trainingEffect || null,
+          recovery_time: session.recoveryTime || null,
           heart_rate_zones: parsedData.heartRateZones,
           gps_data: parsedData.gpsPoints.slice(0, 500), // Limit GPS points
           detailed_metrics: {
-            avgCadence: session.avgCadence,
-            avgPower: session.avgPower,
-            maxSpeed: session.maxSpeed,
-            totalAscent: session.totalAscent,
             duration: session.duration
           }
         }, {
           onConflict: 'user_id,date'
-        });
+        })
+        .select('id')
+        .single();
 
       if (upsertError) {
         console.error('Upsert error:', upsertError);
         throw upsertError;
+      }
+
+      // Store lap data if available
+      if (parsedData.laps && parsedData.laps.length > 0 && wearableData) {
+        const lapsToInsert = parsedData.laps.map((lap: any, index: number) => ({
+          user_id: user.id,
+          wearable_data_id: wearableData.id,
+          lap_index: index + 1,
+          start_time: lap.startTime,
+          total_time: lap.totalTime,
+          total_distance: lap.totalDistance,
+          avg_heart_rate: lap.avgHeartRate,
+          max_heart_rate: lap.maxHeartRate,
+          avg_speed: lap.avgSpeed,
+          calories: lap.calories
+        }));
+
+        const { error: lapsError } = await supabase
+          .from('wearable_laps')
+          .upsert(lapsToInsert, {
+            onConflict: 'wearable_data_id,lap_index'
+          });
+
+        if (lapsError) {
+          console.error('Laps insert error:', lapsError);
+        } else {
+          console.log(`Inserted ${lapsToInsert.length} laps for session`);
+        }
       }
     }
 
