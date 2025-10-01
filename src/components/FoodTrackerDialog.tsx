@@ -53,54 +53,57 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
     setNutritionData(null);
 
     try {
-      // Simulate upload progress
       setProgress(30);
       
-      // Convert image to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
+      // Convert image to base64 with timeout
+      const base64Image = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        const timeout = setTimeout(() => {
+          reject(new Error('Image processing timed out. Please try a smaller image.'));
+        }, 30000); // 30 second timeout
+        
+        reader.onload = () => {
+          clearTimeout(timeout);
+          resolve(reader.result as string);
+        };
+        
+        reader.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error('Failed to read image file'));
+        };
+        
+        reader.readAsDataURL(file);
+      });
+
+      setStage('analyzing');
+      setProgress(50);
       
-      reader.onload = async () => {
-        try {
-          const base64Image = reader.result as string;
-          setStage('analyzing');
-          setProgress(50);
-          
-          const { data, error } = await supabase.functions.invoke('nutrition-ai', {
-            body: { 
-              type: 'food_photo',
-              image: base64Image,
-              mealType
-            }
-          });
-
-          if (error) {
-            console.error('Nutrition AI error:', error);
-            throw new Error(error.message || 'Failed to analyze food');
-          }
-
-          setProgress(90);
-
-          if (data?.nutritionData) {
-            setNutritionData(data.nutritionData);
-            setStage('complete');
-            setProgress(100);
-            toast({
-              title: "Food analyzed!",
-              description: `Found: ${data.nutritionData.food_name}`,
-            });
-          } else {
-            throw new Error('No nutrition data received from AI');
-          }
-        } catch (innerError) {
-          console.error('Error in reader.onload:', innerError);
-          throw innerError;
+      const { data, error } = await supabase.functions.invoke('nutrition-ai', {
+        body: { 
+          type: 'food_photo',
+          image: base64Image,
+          mealType
         }
-      };
+      });
 
-      reader.onerror = () => {
-        throw new Error('Failed to read image file');
-      };
+      if (error) {
+        console.error('Nutrition AI error:', error);
+        throw new Error(error.message || 'Failed to analyze food');
+      }
+
+      setProgress(90);
+
+      if (data?.nutritionData) {
+        setNutritionData(data.nutritionData);
+        setStage('complete');
+        setProgress(100);
+        toast({
+          title: "Food analyzed!",
+          description: `Found: ${data.nutritionData.food_name}`,
+        });
+      } else {
+        throw new Error('No nutrition data received from AI');
+      }
     } catch (error) {
       console.error('Error analyzing food:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
