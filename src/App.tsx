@@ -11,6 +11,7 @@ import Goals from "./pages/Goals";
 import Community from "./pages/Community";
 import Auth from "./pages/Auth";
 import Import from "./pages/Import";
+import Meals from "./pages/Meals";
 import NotFound from "./pages/NotFound";
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 
@@ -39,6 +40,7 @@ function App() {
               <Route path="/goals" element={<Goals />} />
               <Route path="/community" element={<Community />} />
               <Route path="/import" element={<Import />} />
+              <Route path="/meals" element={<Meals />} />
               <Route path="/auth" element={<Auth />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

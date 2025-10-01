@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { userProfile, wearableData, foodLogs, type = "suggestion", image, mealType } = await req.json();
+    const { userProfile, wearableData, foodLogs, type = "suggestion", image, mealType, query } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -49,6 +49,20 @@ serve(async (req) => {
           ]
         }
       ];
+    } else if (type === "food_search") {
+      // Web-based food search
+      if (!query) {
+        throw new Error('Query is required for food search');
+      }
+
+      systemPrompt = `You are a nutrition database expert. When given a food name, provide accurate nutritional information based on standard USDA database values and common serving sizes.`;
+      
+      prompt = `Provide detailed nutrition information for: "${query}". Return data in this exact JSON format: {"food_name": "specific food name", "serving_size": "typical serving size (e.g., 1 cup, 100g, 1 medium)", "calories": number, "protein_grams": number, "carbs_grams": number, "fat_grams": number}. Use standard serving sizes and accurate USDA values. Only return the JSON, no other text.`;
+      
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ];
     } else if (type === "suggestion") {
       systemPrompt = `You are a certified nutritionist and fitness expert. Provide personalized nutrition advice based on user data. Be concise, actionable, and encouraging. Always consider their activity level, goals, and current nutrition intake.`;
       
@@ -79,7 +93,7 @@ Return just the numeric score (0-100) and a brief explanation.`;
     }
 
     // Prepare messages based on type
-    if (type !== "food_photo") {
+    if (type !== "food_photo" && type !== "food_search") {
       messages = [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
@@ -123,8 +137,8 @@ Return just the numeric score (0-100) and a brief explanation.`;
     const data = await response.json();
     const aiResponse = data.choices[0].message.content;
 
-    // For food photo analysis, parse the JSON response
-    if (type === "food_photo") {
+    // For food photo analysis or food search, parse the JSON response
+    if (type === "food_photo" || type === "food_search") {
       try {
         const nutritionData = JSON.parse(aiResponse);
         return new Response(JSON.stringify({ 

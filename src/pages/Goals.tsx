@@ -7,7 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { Target, Upload, Calendar, Zap, CheckCircle } from 'lucide-react';
+import { AIMacroEstimation } from '@/components/AIMacroEstimation';
+import { ExercisePlanDialog } from '@/components/ExercisePlanDialog';
+import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +25,7 @@ export default function Goals() {
   const [parsing, setParsing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
+  const [exercisePlanOpen, setExercisePlanOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -155,6 +158,7 @@ export default function Goals() {
   return (
     <>
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
+      <ExercisePlanDialog open={exercisePlanOpen} onOpenChange={setExercisePlanOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-7xl mx-auto p-4">
           {/* Header */}
@@ -263,28 +267,32 @@ export default function Goals() {
           </Card>
 
           {/* AI Nutrition Insights */}
+          <AIMacroEstimation />
+
+          {/* Manual Exercise Plan */}
           <Card className="shadow-card mb-4">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-primary" />
-                AI Nutrition Coach
+                <Dumbbell className="h-5 w-5 text-primary" />
+                Exercise Planning
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                Based on your training data, AI will automatically suggest optimal nutrition timing and amounts
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Create a detailed weekly exercise plan with daily activities and calorie estimates
               </p>
               <Button 
-                variant="outline" 
+                variant="default" 
                 className="w-full"
-                onClick={() => navigate('/')}
+                onClick={() => setExercisePlanOpen(true)}
               >
-                View Nutrition Insights
+                <Calendar className="h-4 w-4 mr-2" />
+                Set Exercise Plan
               </Button>
             </CardContent>
           </Card>
 
-          <Button 
+          <Button
             onClick={handleSaveGoals}
             disabled={uploading || !raceGoal || !targetMonths}
             className="w-full"
