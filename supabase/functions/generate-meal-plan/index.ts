@@ -39,13 +39,24 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .single();
 
-    // Fetch recent wearable data
+    // Fetch recent wearable data with comprehensive metrics
     const { data: wearableData } = await supabaseClient
       .from("wearable_data")
       .select("*")
       .eq("user_id", user.id)
       .eq("date", targetDate)
       .single();
+
+    // Fetch recent 7-day wearable data for trends
+    const sevenDaysAgo = new Date(targetDate);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const { data: recentWearableData } = await supabaseClient
+      .from("wearable_data")
+      .select("*")
+      .eq("user_id", user.id)
+      .gte("date", sevenDaysAgo.toISOString().split("T")[0])
+      .order("date", { ascending: false })
+      .limit(7);
 
     // Calculate daily calorie needs with enhanced logic
     const bmr = profile?.weight && profile?.height && profile?.age
@@ -84,6 +95,15 @@ serve(async (req) => {
 
     console.log(`Calculated nutrition needs - BMR: ${bmr}, TDEE: ${totalDailyCalories}, Goal: ${fitnessGoal}`);
 
+    // Calculate average metrics from recent data
+    const avgMetrics = recentWearableData?.length ? {
+      avgCalories: Math.round(recentWearableData.reduce((sum, d) => sum + (d.calories_burned || 0), 0) / recentWearableData.length),
+      avgSteps: Math.round(recentWearableData.reduce((sum, d) => sum + (d.steps || 0), 0) / recentWearableData.length),
+      avgHeartRate: Math.round(recentWearableData.reduce((sum, d) => sum + (d.heart_rate_avg || 0), 0) / recentWearableData.length),
+      avgSleep: (recentWearableData.reduce((sum, d) => sum + (d.sleep_hours || 0), 0) / recentWearableData.length).toFixed(1),
+      avgDistance: (recentWearableData.reduce((sum, d) => sum + (d.distance_meters || 0), 0) / recentWearableData.length / 1000).toFixed(1),
+    } : null;
+
     // Use AI to generate detailed meal suggestions
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
@@ -96,18 +116,39 @@ User Profile:
 - Activity Level: ${profile?.activity_level || "moderate"}
 - Fitness Goals: ${fitnessGoal || "general fitness"}
 
-Today's Activity:
-- Calories burned from exercise: ${wearableData?.calories_burned || 0}
+Today's Activity Metrics:
+- Calories burned: ${wearableData?.calories_burned || 0} kcal
 - Steps: ${wearableData?.steps || 0}
+- Distance: ${wearableData?.distance_meters ? (wearableData.distance_meters / 1000).toFixed(2) : 0} km
 - Active minutes: ${wearableData?.active_minutes || 0}
+- Average heart rate: ${wearableData?.heart_rate_avg || "N/A"} bpm
+- Max heart rate: ${wearableData?.max_heart_rate || "N/A"} bpm
+- Sleep hours: ${wearableData?.sleep_hours || "N/A"} hours
+- Training effect: ${wearableData?.training_effect || "N/A"}
+- Recovery time needed: ${wearableData?.recovery_time || "N/A"} hours
+- Activity type: ${wearableData?.activity_type || "general"}
+
+7-Day Average Trends:
+${avgMetrics ? `- Average calories burned: ${avgMetrics.avgCalories} kcal/day
+- Average steps: ${avgMetrics.avgSteps} steps/day
+- Average heart rate: ${avgMetrics.avgHeartRate} bpm
+- Average sleep: ${avgMetrics.avgSleep} hours/night
+- Average distance: ${avgMetrics.avgDistance} km/day` : "- No recent data available"}
 
 Daily Calorie Target: ${totalDailyCalories} kcal
 ${calorieAdjustment !== 0 ? `(Adjusted ${calorieAdjustment > 0 ? '+' : ''}${calorieAdjustment} kcal for ${fitnessGoal?.replace('_', ' ')})` : ''}
 
-IMPORTANT: This meal plan must match the user's fitness goal:
+IMPORTANT: This meal plan must match the user's fitness goal and activity level:
 ${fitnessGoal === 'lose_weight' ? '- Focus on high protein, moderate carbs, filling foods with controlled portions' : ''}
 ${fitnessGoal === 'gain_muscle' ? '- Emphasize high protein (2g per kg body weight), sufficient carbs for energy, healthy fats' : ''}
 ${fitnessGoal === 'improve_endurance' ? '- Balance carbs for energy, adequate protein for recovery' : ''}
+
+Consider the user's wearable data:
+- If training effect is high or recovery time is significant, recommend more protein and anti-inflammatory foods
+- If sleep quality is poor, suggest foods that promote better sleep (magnesium, tryptophan)
+- If heart rate trends are elevated, consider hydration and electrolyte-rich foods
+- For high-intensity activity days, increase carb recommendations for recovery
+- Account for actual calories burned to prevent under/over-eating
 
 Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), and dinner (30%).
 
