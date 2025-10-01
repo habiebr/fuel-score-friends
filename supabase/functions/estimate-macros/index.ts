@@ -15,7 +15,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const groqApiKey = Deno.env.get("GROQ_API_KEY")!;
 
     const authHeader = req.headers.get("Authorization")!;
     
@@ -177,15 +177,15 @@ CRITICAL: Return ONLY the JSON object, no other text.
     });
     
     const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${lovableApiKey}`,
+          Authorization: `Bearer ${groqApiKey}`,
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "llama-3.1-8b-instant",
           messages: [
             {
               role: "system",

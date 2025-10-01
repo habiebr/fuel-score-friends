@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreCard } from '@/components/ScoreCard';
+import { DailyNutritionSummary } from '@/components/DailyNutritionSummary';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarDays, Target, Users, Zap, TrendingUp, Clock } from 'lucide-react';
+import { CalendarDays, Target, Users, Zap, TrendingUp, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 
 interface MealSuggestion {
@@ -69,14 +70,235 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     minutes: number;
     seconds: number;
   } | null>(null);
+  const [currentMealIndex, setCurrentMealIndex] = useState(0);
+
+  // Function to determine current meal based on time and wearable data patterns
+  const getCurrentMealType = () => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Check if we have wearable data to determine patterns
+    if (data?.wearableData) {
+      const { steps, calories_burned, heart_rate_avg } = data.wearableData;
+      
+      // If user has been very active (high steps, high calories), they might need more frequent meals
+      if (steps > 8000 || calories_burned > 500) {
+        // More frequent meal pattern for active users
+        if (currentHour >= 5 && currentHour < 10) return 'breakfast';
+        if (currentHour >= 10 && currentHour < 14) return 'lunch';
+        if (currentHour >= 14 && currentHour < 18) return 'snack';
+        if (currentHour >= 18 && currentHour < 22) return 'dinner';
+        return 'breakfast'; // Default to breakfast for very early/late hours
+      }
+      
+      // If user has elevated heart rate, they might need energy
+      if (heart_rate_avg && heart_rate_avg > 80) {
+        if (currentHour >= 5 && currentHour < 11) return 'breakfast';
+        if (currentHour >= 11 && currentHour < 16) return 'lunch';
+        if (currentHour >= 16 && currentHour < 21) return 'dinner';
+        return 'breakfast';
+      }
+    }
+    
+    // Default time-based pattern
+    if (currentHour >= 5 && currentHour < 11) return 'breakfast';
+    if (currentHour >= 11 && currentHour < 16) return 'lunch';
+    if (currentHour >= 16 && currentHour < 21) return 'dinner';
+    return 'breakfast'; // Default to breakfast for very early/late hours
+  };
+
+  // Carousel navigation functions
+  const nextMeal = () => {
+    setCurrentMealIndex((prev) => (prev + 1) % getAvailableMeals().length);
+  };
+
+  const prevMeal = () => {
+    setCurrentMealIndex((prev) => (prev - 1 + getAvailableMeals().length) % getAvailableMeals().length);
+  };
+
+  const getAvailableMeals = () => {
+    const currentMealType = getCurrentMealType();
+    const plan = mealPlans.find(p => p.meal_type === currentMealType);
+    
+    if (plan && plan.meal_suggestions && Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0) {
+      return plan.meal_suggestions;
+    }
+    
+    // Fallback to static suggestions
+    const targetCalories = plan?.recommended_calories || 400;
+    const indonesianSuggestion = getIndonesianMealSuggestions(currentMealType, targetCalories);
+    return [indonesianSuggestion];
+  };
+
+  // Indonesian food suggestions with portions
+  const getIndonesianMealSuggestions = (mealType: string, targetCalories: number) => {
+    const suggestions = {
+      breakfast: [
+        {
+          name: "Nasi Uduk + Ayam Goreng",
+          description: "Nasi uduk dengan ayam goreng dan sambal kacang",
+          foods: [
+            "Nasi uduk (150g)",
+            "Ayam goreng (100g)", 
+            "Sambal kacang (30g)",
+            "Timun (50g)",
+            "Daun seledri (5g)"
+          ],
+          calories: 450,
+          protein: 25,
+          carbs: 45,
+          fat: 18
+        },
+        {
+          name: "Bubur Ayam",
+          description: "Bubur nasi dengan ayam suwir dan pelengkap",
+          foods: [
+            "Bubur nasi (200g)",
+            "Ayam suwir (80g)", 
+            "Kacang kedelai (20g)",
+            "Daun seledri (10g)",
+            "Bawang goreng (5g)"
+          ],
+          calories: 380,
+          protein: 22,
+          carbs: 42,
+          fat: 12
+        },
+        {
+          name: "Lontong Sayur",
+          description: "Lontong dengan sayur labu siam dan kuah santan",
+          foods: [
+            "Lontong (120g)",
+            "Sayur labu siam (150g)", 
+            "Santan (100ml)",
+            "Tempe (50g)",
+            "Bawang merah (10g)"
+          ],
+          calories: 320,
+          protein: 18,
+          carbs: 38,
+          fat: 14
+        }
+      ],
+      lunch: [
+        {
+          name: "Nasi Padang",
+          description: "Nasi putih dengan rendang dan sayuran",
+          foods: [
+            "Nasi putih (150g)",
+            "Rendang daging (100g)", 
+            "Sayur daun singkong (100g)",
+            "Sambal ijo (20g)",
+            "Kerupuk (10g)"
+          ],
+          calories: 650,
+          protein: 35,
+          carbs: 55,
+          fat: 28
+        },
+        {
+          name: "Gado-gado",
+          description: "Salad sayuran dengan bumbu kacang",
+          foods: [
+            "Sayuran segar (200g)",
+            "Tahu (80g)", 
+            "Tempe (60g)",
+            "Bumbu kacang (45g)",
+            "Kerupuk (15g)"
+          ],
+          calories: 420,
+          protein: 28,
+          carbs: 35,
+          fat: 22
+        },
+        {
+          name: "Soto Ayam",
+          description: "Sup ayam dengan bumbu kuning dan pelengkap",
+          foods: [
+            "Daging ayam (120g)",
+            "Nasi putih (150g)", 
+            "Tauge (60g)",
+            "Bawang goreng (10g)",
+            "Sambal (15g)"
+          ],
+          calories: 480,
+          protein: 32,
+          carbs: 48,
+          fat: 16
+        }
+      ],
+      dinner: [
+        {
+          name: "Pecel Lele",
+          description: "Lele goreng dengan sambal dan lalapan",
+          foods: [
+            "Lele goreng (200g)",
+            "Nasi putih (150g)", 
+            "Lalapan (100g)",
+            "Sambal terasi (30g)",
+            "Daun kemangi (10g)"
+          ],
+          calories: 520,
+          protein: 38,
+          carbs: 45,
+          fat: 20
+        },
+        {
+          name: "Rawon",
+          description: "Sup daging dengan bumbu hitam khas Jawa Timur",
+          foods: [
+            "Daging sapi (120g)",
+            "Nasi putih (150g)", 
+            "Tauge (60g)",
+            "Bawang goreng (10g)",
+            "Sambal (15g)"
+          ],
+          calories: 480,
+          protein: 35,
+          carbs: 42,
+          fat: 18
+        },
+        {
+          name: "Ayam Bakar",
+          description: "Ayam bakar dengan bumbu kecap dan nasi",
+          foods: [
+            "Ayam bakar (150g)",
+            "Nasi putih (150g)", 
+            "Tempe goreng (60g)",
+            "Sambal (15g)",
+            "Timun (50g)"
+          ],
+          calories: 450,
+          protein: 30,
+          carbs: 40,
+          fat: 16
+        }
+      ]
+    };
+
+    const mealSuggestions = suggestions[mealType as keyof typeof suggestions] || [];
+    
+    // Find the suggestion closest to target calories
+    const closestSuggestion = mealSuggestions.reduce((closest, current) => {
+      const closestDiff = Math.abs(closest.calories - targetCalories);
+      const currentDiff = Math.abs(current.calories - targetCalories);
+      return currentDiff < closestDiff ? current : closest;
+    }, mealSuggestions[0]);
+
+    return closestSuggestion || mealSuggestions[0];
+  };
 
   useEffect(() => {
     if (user) {
       loadDashboardData();
-      generateDailyMealPlan();
       loadGoals();
     }
   }, [user]);
+
+  // Reset meal index when meal plans change
+  useEffect(() => {
+    setCurrentMealIndex(0);
+  }, [mealPlans]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -86,7 +308,10 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
       const now = new Date();
       const target = new Date(raceDate);
       
+      console.log('Countdown update:', { now, target, raceDate });
+      
       if (target <= now) {
+        console.log('Target date has passed');
         setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         return;
       }
@@ -97,6 +322,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
       const minutes = differenceInMinutes(target, now) % 60;
       const seconds = differenceInSeconds(target, now) % 60;
 
+      console.log('Countdown calculated:', { days, hours, minutes, seconds });
       setCountdown({ days, hours, minutes, seconds });
     };
 
@@ -112,24 +338,39 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('fitness_goals, activity_level')
+        .select('fitness_goals, target_date, fitness_level, activity_level')
         .eq('user_id', user.id)
         .maybeSingle();
+
+      console.log('Profile data:', profile);
 
       if (profile && profile.fitness_goals && profile.fitness_goals.length > 0) {
         const goalName = profile.fitness_goals[0];
         setRaceGoal(goalName);
+        console.log('Race goal set:', goalName);
 
-        // Try to find the marathon event matching this goal
-        const { data: marathonEvent } = await supabase
-          .from('marathon_events')
-          .select('event_date, event_name')
-          .ilike('event_name', `%${goalName}%`)
-          .maybeSingle();
+        // Use target_date from profile if available
+        if (profile.target_date) {
+          const targetDate = new Date(profile.target_date);
+          setRaceDate(targetDate);
+          console.log('Target date set:', targetDate);
+        } else {
+          // Try to find the marathon event matching this goal as fallback
+          const { data: marathonEvent } = await supabase
+            .from('marathon_events')
+            .select('event_date, event_name')
+            .ilike('event_name', `%${goalName}%`)
+            .maybeSingle();
 
-        if (marathonEvent) {
-          setRaceDate(new Date(marathonEvent.event_date));
+          if (marathonEvent) {
+            setRaceDate(new Date(marathonEvent.event_date));
+            console.log('Marathon event date set:', marathonEvent.event_date);
+          } else {
+            console.log('No target date or marathon event found');
+          }
         }
+      } else {
+        console.log('No fitness goals found in profile');
       }
     } catch (error) {
       console.error('Error loading goals:', error);
@@ -340,7 +581,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         </div>
 
         {/* Race Goals Widget */}
-        {raceGoal && (
+        {raceGoal ? (
           <Card className="shadow-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
@@ -410,11 +651,40 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
               )}
             </CardContent>
           </Card>
+        ) : (
+          <Card className="shadow-card mb-6 bg-gradient-to-br from-muted/5 to-muted/10 border-muted/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Target className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold text-sm text-muted-foreground">Race Goal</span>
+                  </div>
+                  <div className="text-lg font-bold text-muted-foreground">
+                    No goal set
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Set your running goal to see countdown timer
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => navigate('/goals')}
+                  className="text-primary hover:text-primary-glow"
+                >
+                  Set Goal
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Today's Nutrition - Priority Section */}
-        <div className="space-y-4 sm:space-y-6">
-          <Card className="shadow-card">
+        {/* Daily Nutrition Summary */}
+        <DailyNutritionSummary />
+
+        {/* Today's Nutrition Plan */}
+        <Card className="shadow-card mb-6">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Target className="h-5 w-5 text-primary" />
@@ -422,135 +692,143 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Calories Progress */}
-              <div className="bg-muted/30 rounded-lg p-4 mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium">Daily Calories</span>
-                  <span className="text-sm text-muted-foreground">
-                    {data?.caloriesConsumed || 0} / {data?.plannedCalories || 0}
-                  </span>
+              {/* Generate Meal Plan Button */}
+              {mealPlans.length === 0 && (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Belum ada rencana makan untuk hari ini
+                  </p>
+                  <Button 
+                    onClick={generateDailyMealPlan}
+                    disabled={generatingPlan}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    {generatingPlan ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Target className="mr-2 h-4 w-4" />
+                        Generate Meal Plan
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div 
-                    className="bg-primary h-2 rounded-full transition-all"
-                    style={{ 
-                      width: `${Math.min(100, ((data?.caloriesConsumed || 0) / (data?.plannedCalories || 1)) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
+              )}
 
-              {/* Macros Grid - Mobile Optimized */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                <div className="text-center p-3 sm:p-4 bg-success/10 rounded-lg">
-                  <div className="text-xl sm:text-2xl font-bold text-success">
-                    {data?.proteinGrams || 0}g
-                  </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">
-                    Protein ({data?.plannedProtein || 0}g)
+              {/* Swipeable Meal Carousel */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4" />
+                    Current Meal Recommendation
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={prevMeal}
+                      disabled={getAvailableMeals().length <= 1}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      {currentMealIndex + 1} / {getAvailableMeals().length}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={nextMeal}
+                      disabled={getAvailableMeals().length <= 1}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="text-center p-3 sm:p-4 bg-warning/10 rounded-lg">
-                  <div className="text-xl sm:text-2xl font-bold text-warning">
-                    {data?.carbsGrams || 0}g
-                  </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">
-                    Carbs ({data?.plannedCarbs || 0}g)
-                  </div>
-                </div>
-                <div className="text-center p-3 sm:p-4 bg-info/10 rounded-lg">
-                  <div className="text-xl sm:text-2xl font-bold text-info">
-                    {data?.fatGrams || 0}g
-                  </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">
-                    Fat ({data?.plannedFat || 0}g)
-                  </div>
-                </div>
-              </div>
-              
-              {/* AI Suggestions */}
-              <div className="bg-gradient-primary/10 rounded-lg p-4 border border-primary/20">
-                <h4 className="font-semibold mb-2 text-primary flex items-center gap-2">
-                  <Zap className="h-4 w-4" />
-                  AI Suggestion
-                </h4>
-                <p className="text-sm text-muted-foreground">
-                  💡 Based on your activity, try adding more protein to your next meal.
-                </p>
-              </div>
-              
-              {/* Leaderboard Position */}
-              <div className="bg-secondary/10 rounded-lg p-4 border border-secondary/20">
-                <h4 className="font-semibold mb-2 text-secondary flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Community
-                </h4>
-                <p className="text-sm text-muted-foreground">
-                  🏆 You are #3 in this week's leaderboard
-                </p>
-              </div>
-
-              {/* Meal Timeline */}
-              <div className="mt-4">
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4" />
-                  Today's Meal Schedule
-                </h4>
-                <div className="space-y-2">
-                  {['breakfast', 'lunch', 'dinner'].map((mealType) => {
-                    const plan = mealPlans.find(p => p.meal_type === mealType);
-                    const score = mealType === 'breakfast' ? data?.breakfastScore 
-                      : mealType === 'lunch' ? data?.lunchScore 
-                      : data?.dinnerScore;
-                    
-                    return (
-                      <div key={mealType} className="p-3 bg-muted/30 rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <div className="font-medium text-sm capitalize">{mealType}</div>
-                            {plan && (
-                              <div className="text-xs text-muted-foreground">
-                                {plan.recommended_calories} kcal target
-                              </div>
+                
+                {(() => {
+                  const currentMealType = getCurrentMealType();
+                  const plan = mealPlans.find(p => p.meal_type === currentMealType);
+                  const score = currentMealType === 'breakfast' ? data?.breakfastScore 
+                    : currentMealType === 'lunch' ? data?.lunchScore 
+                    : data?.dinnerScore;
+                  
+                  const availableMeals = getAvailableMeals();
+                  const currentMeal = availableMeals[currentMealIndex];
+                  
+                  // Get current time for display
+                  const now = new Date();
+                  const currentTime = now.toLocaleTimeString('id-ID', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: false 
+                  });
+                  
+                  return (
+                    <div className="p-4 bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-lg">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="font-medium text-lg capitalize flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            {currentMealType} - {currentTime}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Target: {plan?.recommended_calories || 400} kcal
+                            {data?.wearableData && (
+                              <span className="ml-2 text-xs">
+                                (Based on {data.wearableData.steps} steps, {data.wearableData.calories_burned} cal burned)
+                              </span>
                             )}
                           </div>
-                          {score !== null && (
-                            <div className={`text-xs font-medium px-2 py-1 rounded ${
-                              score >= 80 ? 'bg-success/20 text-success' :
-                              score >= 60 ? 'bg-warning/20 text-warning' :
-                              'bg-destructive/20 text-destructive'
-                            }`}>
-                              Score: {score}
-                            </div>
-                          )}
                         </div>
-                        {plan && plan.meal_suggestions && Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0 && (
-                          <div className="mt-2 space-y-1 border-t border-border pt-2">
-                            <div className="text-xs font-medium text-primary">
-                              💡 {(plan.meal_suggestions[0] as { name: string }).name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {(plan.meal_suggestions[0] as { description: string }).description}
-                            </div>
-                            {(plan.meal_suggestions[0] as { foods: string[] }).foods && (
-                              <div className="text-xs text-muted-foreground">
-                                📋 {(plan.meal_suggestions[0] as { foods: string[] }).foods.join(', ')}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {(!plan || !plan.meal_suggestions || plan.meal_suggestions.length === 0) && (
-                          <div className="text-xs text-muted-foreground mt-2 italic">
-                            Click "Generate Plan" above to see meal suggestions
+                        {score !== null && (
+                          <div className={`text-sm font-medium px-3 py-1 rounded-full ${
+                            score >= 80 ? 'bg-success/20 text-success' :
+                            score >= 60 ? 'bg-warning/20 text-warning' :
+                            'bg-destructive/20 text-destructive'
+                          }`}>
+                            Score: {score}
                           </div>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
+                      
+                      {/* Current Meal Suggestion */}
+                      <div className="space-y-3">
+                        <div className="text-lg font-semibold text-primary">
+                          🇮🇩 {currentMeal.name}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {currentMeal.description}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          <div className="font-medium mb-2">📋 Bahan & Porsi:</div>
+                          <ul className="list-disc list-inside space-y-1">
+                            {currentMeal.foods.map((food: string, index: number) => (
+                              <li key={index}>{food}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="flex gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">🔥 {currentMeal.calories} cal</span>
+                          <span className="flex items-center gap-1">🥩 {currentMeal.protein}g protein</span>
+                          <span className="flex items-center gap-1">🍚 {currentMeal.carbs}g carbs</span>
+                          <span className="flex items-center gap-1">🥑 {currentMeal.fat}g fat</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>
+
+        {/* Additional Sections */}
+        <div className="space-y-4 sm:space-y-6">
+
 
           {/* Quick Actions */}
           <Card className="shadow-card">

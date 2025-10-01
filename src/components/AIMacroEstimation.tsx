@@ -35,7 +35,7 @@ export function AIMacroEstimation() {
         setEstimation(data.estimation);
         toast({
           title: 'Macros estimated!',
-          description: 'AI has generated your personalized nutrition plan',
+          description: 'Your personalized nutrition plan has been generated',
         });
       }
     } catch (error) {
@@ -55,12 +55,12 @@ export function AIMacroEstimation() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Zap className="h-5 w-5 text-primary" />
-          AI Macro Estimation
+          Macro Estimation
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Get AI-powered macronutrient recommendations based on your activity data and goals
+          Get personalized macronutrient recommendations based on your activity data and goals
         </p>
 
         {!estimation ? (

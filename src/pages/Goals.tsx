@@ -8,24 +8,49 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { AIMacroEstimation } from '@/components/AIMacroEstimation';
-import { ExercisePlanDialog } from '@/components/ExercisePlanDialog';
-import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell } from 'lucide-react';
+import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ArrowLeft, Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+
+interface DayPlan {
+  day: string;
+  activity: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
+  duration: number;
+  estimatedCalories: number;
+}
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function Goals() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  
+  // Step management
+  const [currentStep, setCurrentStep] = useState(1);
+  
+  // Step 1: Running Goal
   const [raceGoal, setRaceGoal] = useState('');
-  const [targetMonths, setTargetMonths] = useState('');
-  const [weeklyRuns, setWeeklyRuns] = useState('');
+  const [customGoalName, setCustomGoalName] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [fitnessLevel, setFitnessLevel] = useState('');
+  
+  // Step 2: Training Plan
+  const [weekPlan, setWeekPlan] = useState<DayPlan[]>(
+    DAYS.map((day) => ({
+      day,
+      activity: 'rest',
+      duration: 0,
+      estimatedCalories: 0,
+    }))
+  );
+  
+  // UI state
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
-  const [exercisePlanOpen, setExercisePlanOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -39,19 +64,44 @@ export default function Goals() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('fitness_goals, activity_level')
+        .select('fitness_goals, activity_level, target_date, fitness_level')
         .eq('user_id', user.id)
         .single();
 
-      if (error) throw error;
-
-      if (data) {
+      if (error) {
+        console.error('Error loading goals:', error);
+        // Don't throw error, just continue with defaults
+      } else if (data) {
+        // Load Step 1 data
         if (data.fitness_goals && data.fitness_goals.length > 0) {
-          setRaceGoal(data.fitness_goals[0]);
+          const savedGoal = data.fitness_goals[0];
+          const predefinedGoals = ['5k', '10k', 'half_marathon', 'full_marathon', 'ultra'];
+          
+          if (predefinedGoals.includes(savedGoal)) {
+            setRaceGoal(savedGoal);
+          } else {
+            // It's a custom goal name
+            setRaceGoal('custom');
+            setCustomGoalName(savedGoal);
+          }
         }
-        if (data.activity_level && data.activity_level.includes('runs_per_week')) {
-          const runs = data.activity_level.split('_')[0];
-          setWeeklyRuns(runs);
+        if (data.target_date) {
+          setTargetDate(data.target_date);
+        }
+        if (data.fitness_level) {
+          setFitnessLevel(data.fitness_level);
+        }
+        
+        // Load Step 2 data (training plan)
+        if (data.activity_level && typeof data.activity_level === 'string' && data.activity_level.startsWith('[')) {
+          try {
+            const parsedPlan = JSON.parse(data.activity_level);
+            if (Array.isArray(parsedPlan)) {
+              setWeekPlan(parsedPlan);
+            }
+          } catch (e) {
+            console.log('Could not parse training plan, using default');
+          }
         }
       }
     } catch (error) {
@@ -59,6 +109,33 @@ export default function Goals() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateCalories = (activity: string, duration: number): number => {
+    const caloriesPerMinute: { [key: string]: number } = {
+      rest: 0,
+      run: 10,
+      strength: 6,
+      cardio: 8,
+      other: 7,
+    };
+    return Math.round((caloriesPerMinute[activity] || 0) * duration);
+  };
+
+  const updateDayPlan = (index: number, field: keyof DayPlan, value: any) => {
+    setWeekPlan((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      
+      if (field === 'activity' || field === 'duration') {
+        updated[index].estimatedCalories = calculateCalories(
+          field === 'activity' ? value : updated[index].activity,
+          field === 'duration' ? Number(value) : updated[index].duration
+        );
+      }
+      
+      return updated;
+    });
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,30 +192,63 @@ export default function Goals() {
 
     setUploading(true);
     try {
+      // First, try to update with all fields
+      const updateData: any = {
+        fitness_goals: [raceGoal === 'custom' ? customGoalName : raceGoal],
+        activity_level: JSON.stringify(weekPlan)
+      };
+
+      // Only add these fields if they have values (in case columns don't exist yet)
+      if (targetDate) {
+        updateData.target_date = targetDate;
+      }
+      if (fitnessLevel) {
+        updateData.fitness_level = fitnessLevel;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          fitness_goals: [raceGoal],
-          activity_level: weeklyRuns ? `${weeklyRuns}_runs_per_week` : 'moderate'
-        })
+        .update(updateData)
         .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(error.message || 'Database update failed');
+      }
 
       toast({
-        title: "Goals saved!",
-        description: "Your training goals have been updated",
+        title: "Goals & Plan saved!",
+        description: "Your running goal and training plan have been updated",
       });
     } catch (error) {
       console.error('Error saving goals:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast({
         title: "Save failed",
-        description: "Failed to save goals. Please try again.",
+        description: `Failed to save goals and plan: ${errorMessage}`,
         variant: "destructive",
       });
     } finally {
       setUploading(false);
     }
+  };
+
+  const canProceedToStep2 = () => {
+    if (raceGoal === 'custom') {
+      return raceGoal && customGoalName.trim() && targetDate && fitnessLevel;
+    }
+    return raceGoal && targetDate && fitnessLevel;
+  };
+
+  const isStep1Complete = () => {
+    if (raceGoal === 'custom') {
+      return raceGoal && customGoalName.trim() && targetDate && fitnessLevel;
+    }
+    return raceGoal && targetDate && fitnessLevel;
+  };
+
+  const isStep2Complete = () => {
+    return weekPlan.some(day => day.activity !== 'rest' && day.duration > 0);
   };
 
   if (loading) {
@@ -158,159 +268,256 @@ export default function Goals() {
   return (
     <>
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
-      <ExercisePlanDialog open={exercisePlanOpen} onOpenChange={setExercisePlanOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-7xl mx-auto p-4">
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-foreground mb-2">Training Goals</h1>
-            <p className="text-muted-foreground text-sm">Set your race goals and training schedule</p>
-            {raceGoal && (
-              <div className="flex items-center gap-2 mt-2 text-success text-sm">
-                <CheckCircle className="h-4 w-4" />
-                <span>Goal saved: {raceGoal.replace('_', ' ').toUpperCase()}</span>
-              </div>
-            )}
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+              Set Your Goals & Training Plan
+            </h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Define your running goal and create your weekly training schedule
+            </p>
           </div>
 
-          {/* Race Goal */}
-          <Card className="shadow-card mb-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-primary" />
-                Race Goal
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="race-type">Race Type</Label>
-                <Select value={raceGoal} onValueChange={setRaceGoal}>
-                  <SelectTrigger id="race-type">
-                    <SelectValue placeholder="Select race distance" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5k">5K</SelectItem>
-                    <SelectItem value="10k">10K</SelectItem>
-                    <SelectItem value="half_marathon">Half Marathon (HM)</SelectItem>
-                    <SelectItem value="full_marathon">Full Marathon (FM)</SelectItem>
-                    <SelectItem value="ultra">Ultra Marathon</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="target-months">Target Timeline (months)</Label>
-                <Input
-                  id="target-months"
-                  type="number"
-                  min="1"
-                  max="24"
-                  value={targetMonths}
-                  onChange={(e) => setTargetMonths(e.target.value)}
-                  placeholder="e.g., 6 months"
-                />
+          {/* Progress Indicator */}
+          <div className="mb-8">
+            <div className="flex items-center justify-center space-x-4">
+              <div className={`flex items-center space-x-2 ${currentStep >= 1 ? 'text-primary' : 'text-muted-foreground'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                  currentStep >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}>
+                  1
+                </div>
+                <span className="text-sm font-medium">Running Goal</span>
               </div>
-
-              {/* Marathon Calendar Link */}
-              <div className="pt-2">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate('/marathons')}
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Browse Marathon Calendar
-                </Button>
+              <div className={`w-8 h-0.5 ${currentStep >= 2 ? 'bg-primary' : 'bg-muted'}`}></div>
+              <div className={`flex items-center space-x-2 ${currentStep >= 2 ? 'text-primary' : 'text-muted-foreground'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                  currentStep >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}>
+                  2
+                </div>
+                <span className="text-sm font-medium">Training Plan</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* Training Schedule */}
-          <Card className="shadow-card mb-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
-                Training Schedule
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="weekly-runs">Runs per week</Label>
-                <Input
-                  id="weekly-runs"
-                  type="number"
-                  min="1"
-                  max="7"
-                  value={weeklyRuns}
-                  onChange={(e) => setWeeklyRuns(e.target.value)}
-                  placeholder="e.g., 3-5 runs"
-                />
-              </div>
+          {/* Step 1: Running Goal */}
+          {currentStep === 1 && (
+            <Card className="shadow-card mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  Step 1: What's Your Running Goal?
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Race Type */}
+                <div className="space-y-2">
+                  <Label htmlFor="race-type">Race Distance or Event</Label>
+                  <Select value={raceGoal} onValueChange={setRaceGoal}>
+                    <SelectTrigger id="race-type">
+                      <SelectValue placeholder="Select your target race distance or event" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5k">5K (3.1 miles)</SelectItem>
+                      <SelectItem value="10k">10K (6.2 miles)</SelectItem>
+                      <SelectItem value="half_marathon">Half Marathon (13.1 miles)</SelectItem>
+                      <SelectItem value="full_marathon">Full Marathon (26.2 miles)</SelectItem>
+                      <SelectItem value="ultra">Ultra Marathon (50K+)</SelectItem>
+                      <SelectItem value="custom">Custom Race/Event</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Upload Training Plan */}
-              <div className="space-y-2">
-                <Label>Upload Training Plan Image</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Take a photo of your training schedule and we'll parse it with AI
-                </p>
-                <label htmlFor="plan-upload">
-                  <Button 
-                    variant="secondary" 
-                    className="w-full" 
-                    disabled={parsing}
-                    asChild
-                  >
-                    <span>
-                      <Upload className="h-4 w-4 mr-2" />
-                      {parsing ? 'Parsing...' : 'Upload Training Plan'}
-                    </span>
-                  </Button>
-                  <input
-                    id="plan-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                    disabled={parsing}
+                {/* Custom Race/Event Name - Only show when custom is selected */}
+                {raceGoal === 'custom' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="custom-goal-name">Race/Event Name *</Label>
+                    <Input
+                      id="custom-goal-name"
+                      type="text"
+                      placeholder="e.g., Jakarta Marathon 2024, Personal Best 5K, Trail Run Challenge, etc."
+                      value={customGoalName}
+                      onChange={(e) => setCustomGoalName(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Name your specific race or running event
+                    </p>
+                  </div>
+                )}
+
+                {/* Target Date */}
+                <div className="space-y-2">
+                  <Label htmlFor="target-date">Target Race Date</Label>
+                  <Input
+                    id="target-date"
+                    type="date"
+                    value={targetDate}
+                    onChange={(e) => setTargetDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
                   />
-                </label>
-              </div>
-            </CardContent>
-          </Card>
+                </div>
 
-          {/* AI Nutrition Insights */}
+                {/* Fitness Level */}
+                <div className="space-y-2">
+                  <Label htmlFor="fitness-level">Current Fitness Level</Label>
+                  <Select value={fitnessLevel} onValueChange={setFitnessLevel}>
+                    <SelectTrigger id="fitness-level">
+                      <SelectValue placeholder="Select your current fitness level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="beginner">Beginner (0-6 months running)</SelectItem>
+                      <SelectItem value="intermediate">Intermediate (6 months - 2 years)</SelectItem>
+                      <SelectItem value="advanced">Advanced (2+ years running)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Marathon Calendar Link */}
+                <div className="pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => navigate('/marathons')}
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Browse Specific Races
+                  </Button>
+                </div>
+
+                {/* Step Navigation */}
+                <div className="flex justify-end pt-4">
+                  <Button
+                    onClick={() => setCurrentStep(2)}
+                    disabled={!canProceedToStep2()}
+                    className="flex items-center gap-2"
+                  >
+                    Next: Training Plan
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 2: Training Plan */}
+          {currentStep === 2 && (
+            <Card className="shadow-card mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Dumbbell className="h-5 w-5 text-primary" />
+                  Step 2: Create Your Weekly Training Plan
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Plan your weekly training schedule. Set rest days and workout activities.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Weekly Summary */}
+                <div className="grid grid-cols-2 gap-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+                  <div>
+                    <div className="text-2xl font-bold text-primary">
+                      {weekPlan.filter(day => day.activity !== 'rest').length}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Active Days</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-primary">
+                      {weekPlan.reduce((sum, day) => sum + day.estimatedCalories, 0)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Weekly Calories</div>
+                  </div>
+                </div>
+
+                {/* Day Plans */}
+                <div className="space-y-4">
+                  {weekPlan.map((dayPlan, index) => (
+                    <div
+                      key={dayPlan.day}
+                      className="p-4 border rounded-lg hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        {dayPlan.activity === 'rest' ? (
+                          <Pause className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Play className="h-4 w-4 text-primary" />
+                        )}
+                        <div className="font-semibold text-sm flex-1">{dayPlan.day}</div>
+                        {dayPlan.estimatedCalories > 0 && (
+                          <div className="text-xs text-primary font-medium">
+                            ~{dayPlan.estimatedCalories} cal
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Activity</Label>
+                          <Select
+                            value={dayPlan.activity}
+                            onValueChange={(value) => updateDayPlan(index, 'activity', value)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="rest">Rest Day</SelectItem>
+                              <SelectItem value="run">Running</SelectItem>
+                              <SelectItem value="strength">Strength Training</SelectItem>
+                              <SelectItem value="cardio">Cardio</SelectItem>
+                              <SelectItem value="other">Other Exercise</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {dayPlan.activity !== 'rest' && (
+                          <div className="space-y-1">
+                            <Label className="text-xs">Duration (minutes)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="300"
+                              value={dayPlan.duration || ''}
+                              onChange={(e) => updateDayPlan(index, 'duration', e.target.value)}
+                              placeholder="0"
+                              className="h-9"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Step Navigation */}
+                <div className="flex justify-between pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentStep(1)}
+                    className="flex items-center gap-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Goal
+                  </Button>
+                  <Button
+                    onClick={handleSaveGoals}
+                    disabled={uploading || !isStep1Complete()}
+                    className="flex items-center gap-2"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    Save Goals & Plan
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Nutrition Insights - Show on both steps */}
           <AIMacroEstimation />
-
-          {/* Manual Exercise Plan */}
-          <Card className="shadow-card mb-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Dumbbell className="h-5 w-5 text-primary" />
-                Exercise Planning
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Create a detailed weekly exercise plan with daily activities and calorie estimates
-              </p>
-              <Button 
-                variant="default" 
-                className="w-full"
-                onClick={() => setExercisePlanOpen(true)}
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                Set Exercise Plan
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Button
-            onClick={handleSaveGoals}
-            disabled={uploading || !raceGoal || !targetMonths}
-            className="w-full"
-          >
-            Save Goals
-          </Button>
         </div>
       </div>
       <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />

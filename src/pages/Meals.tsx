@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { Calendar, Search, ArrowLeft, Utensils, TrendingUp, Loader2 } from 'lucide-react';
+import { Calendar, Search, ArrowLeft, Utensils, TrendingUp, Loader2, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -42,12 +42,56 @@ export default function Meals() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
   const [weekData, setWeekData] = useState<DayData[]>([]);
+  const [dailyMealPlan, setDailyMealPlan] = useState<any>(null);
+  const [loadingMealPlan, setLoadingMealPlan] = useState(false);
+  const [currentMealIndex, setCurrentMealIndex] = useState(0);
+  const [currentMealType, setCurrentMealType] = useState('breakfast');
+
+  // Carousel navigation functions
+  const nextMeal = () => {
+    const availableMeals = getAvailableMeals();
+    setCurrentMealIndex((prev) => (prev + 1) % availableMeals.length);
+  };
+
+  const prevMeal = () => {
+    const availableMeals = getAvailableMeals();
+    setCurrentMealIndex((prev) => (prev - 1 + availableMeals.length) % availableMeals.length);
+  };
+
+  const getAvailableMeals = () => {
+    if (!dailyMealPlan || !dailyMealPlan[currentMealType]) return [];
+    return dailyMealPlan[currentMealType].suggestions || [];
+  };
+
+  const switchMealType = (mealType: string) => {
+    setCurrentMealType(mealType);
+    setCurrentMealIndex(0);
+  };
+
+  const getCurrentMealType = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    
+    if (hour >= 5 && hour < 11) return 'breakfast';
+    if (hour >= 11 && hour < 15) return 'lunch';
+    if (hour >= 15 && hour < 19) return 'dinner';
+    return 'snack';
+  };
 
   useEffect(() => {
     if (user) {
       loadWeekData();
+      loadDailyMealPlan();
     }
   }, [user]);
+
+  // Reset carousel when meal plans change
+  useEffect(() => {
+    if (dailyMealPlan) {
+      setCurrentMealType(getCurrentMealType());
+      setCurrentMealIndex(0);
+    }
+  }, [dailyMealPlan]);
 
   const loadWeekData = async () => {
     if (!user) return;
@@ -102,6 +146,49 @@ export default function Meals() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDailyMealPlan = async () => {
+    if (!user) return;
+
+    setLoadingMealPlan(true);
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      
+      // Load meal plans from database (same as Dashboard)
+      const { data: plans, error } = await supabase
+        .from('daily_meal_plans')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('date', today);
+
+      if (error) throw error;
+
+      if (plans && plans.length > 0) {
+        // Convert database format to the format expected by the UI
+        const mealPlanData: any = {};
+        plans.forEach(plan => {
+          if (plan.meal_suggestions && Array.isArray(plan.meal_suggestions)) {
+            mealPlanData[plan.meal_type] = {
+              target_calories: plan.recommended_calories,
+              target_protein: plan.recommended_protein_grams,
+              target_carbs: plan.recommended_carbs_grams,
+              target_fat: plan.recommended_fat_grams,
+              suggestions: plan.meal_suggestions
+            };
+          }
+        });
+        
+        if (Object.keys(mealPlanData).length > 0) {
+          setDailyMealPlan(mealPlanData);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading meal plan:', error);
+      // Don't show error toast for meal plan as it's optional
+    } finally {
+      setLoadingMealPlan(false);
     }
   };
 
@@ -168,12 +255,12 @@ export default function Meals() {
             <p className="text-muted-foreground text-sm">Track your nutrition and search for foods</p>
           </div>
 
-          {/* AI Food Search */}
+          {/* Food Search */}
           <Card className="shadow-card mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Search className="h-5 w-5 text-primary" />
-                AI Food Search
+                Food Search
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -215,6 +302,206 @@ export default function Meals() {
               )}
             </CardContent>
           </Card>
+
+          {/* Daily Meal Plan */}
+          {!dailyMealPlan && !loadingMealPlan && (
+            <Card className="shadow-card mb-6">
+              <CardContent className="text-center py-8">
+                <Utensils className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Meal Plan Available</h3>
+                <p className="text-muted-foreground mb-4">
+                  Generate a personalized meal plan based on your running goals
+                </p>
+                <Button 
+                  onClick={async () => {
+                    setLoadingMealPlan(true);
+                    try {
+                      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
+                        body: { date: format(new Date(), 'yyyy-MM-dd') }
+                      });
+                      if (error) throw error;
+                      if (data.success) {
+                        await loadDailyMealPlan(); // Reload from database
+                      }
+                    } catch (error) {
+                      console.error('Error generating meal plan:', error);
+                    } finally {
+                      setLoadingMealPlan(false);
+                    }
+                  }}
+                  disabled={loadingMealPlan}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  {loadingMealPlan ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Utensils className="mr-2 h-4 w-4" />
+                      Generate Meal Plan
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {dailyMealPlan && (
+            <Card className="shadow-card mb-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Utensils className="h-5 w-5 text-primary" />
+                      Today's Meal Plan
+                      {loadingMealPlan && <Loader2 className="h-4 w-4 animate-spin" />}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Indonesian meal suggestions with precise gram portions for runners
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setLoadingMealPlan(true);
+                      try {
+                        const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
+                          body: { date: format(new Date(), 'yyyy-MM-dd') }
+                        });
+                        if (error) throw error;
+                        if (data.success) {
+                          await loadDailyMealPlan(); // Reload from database
+                        }
+                      } catch (error) {
+                        console.error('Error regenerating meal plan:', error);
+                      } finally {
+                        setLoadingMealPlan(false);
+                      }
+                    }}
+                    disabled={loadingMealPlan}
+                    className="flex items-center gap-2"
+                  >
+                    <Utensils className="h-4 w-4" />
+                    Regenerate
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Meal Type Selector */}
+                <div className="flex gap-2 mb-4">
+                  {['breakfast', 'lunch', 'dinner', 'snack'].map((mealType) => (
+                    <Button
+                      key={mealType}
+                      variant={currentMealType === mealType ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => switchMealType(mealType)}
+                      className="capitalize"
+                    >
+                      {mealType}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Swipeable Meal Carousel */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Current Meal Recommendation
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={prevMeal}
+                        disabled={getAvailableMeals().length <= 1}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        {currentMealIndex + 1} / {getAvailableMeals().length}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={nextMeal}
+                        disabled={getAvailableMeals().length <= 1}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const plan = dailyMealPlan[currentMealType];
+                    const availableMeals = getAvailableMeals();
+                    const currentMeal = availableMeals[currentMealIndex];
+
+                    if (!currentMeal) {
+                      return (
+                        <div className="p-4 bg-muted/30 border rounded-lg text-center text-muted-foreground">
+                          No meal suggestions available for {currentMealType}
+                        </div>
+                      );
+                    }
+
+                    // Get current time for display
+                    const now = new Date();
+                    const currentTime = now.toLocaleTimeString('id-ID', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false
+                    });
+
+                    return (
+                      <div className="p-4 bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-lg">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="font-medium text-lg capitalize flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              {currentMealType} - {currentTime}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Target: {plan?.target_calories || 400} kcal
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Current Meal Suggestion */}
+                        <div className="space-y-3">
+                          <div className="text-lg font-semibold text-primary">
+                            🇮🇩 {currentMeal.name}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {currentMeal.description}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <div className="font-medium mb-2">📋 Bahan & Porsi:</div>
+                            <ul className="list-disc list-inside space-y-1">
+                              {currentMeal.foods?.map((food: string, index: number) => (
+                                <li key={index}>{food}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="flex gap-4 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">🔥 {currentMeal.calories} cal</span>
+                            <span className="flex items-center gap-1">🥩 {currentMeal.protein}g protein</span>
+                            <span className="flex items-center gap-1">🍚 {currentMeal.carbs}g carbs</span>
+                            <span className="flex items-center gap-1">🥑 {currentMeal.fat}g fat</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Week Overview */}
           <div className="space-y-4">

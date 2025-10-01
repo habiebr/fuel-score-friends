@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 type FileProgress = {
   name: string;
@@ -22,12 +23,22 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const [fileProgress, setFileProgress] = useState<FileProgress[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const startUpload = async (files: File[]) => {
     if (uploading) {
       toast({
         title: "Upload in progress",
         description: "Please wait for the current upload to complete",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to upload files",
         variant: "destructive",
       });
       return;
@@ -57,17 +68,24 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         setUploadProgress(Math.round((i / totalFiles) * 100));
 
         try {
+          console.log(`Processing file: ${file.name} (${file.size} bytes)`);
+          
           const fileData = await file.arrayBuffer();
           const base64Data = btoa(
             new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
           );
 
+          console.log(`Calling parse-fit-data function for ${file.name}`);
           const { data, error } = await supabase.functions.invoke('parse-fit-data', {
             body: { fitData: base64Data }
           });
 
-          if (error) throw error;
+          if (error) {
+            console.error(`Function error for ${file.name}:`, error);
+            throw error;
+          }
 
+          console.log(`Successfully processed ${file.name}:`, data);
           // Update status to success
           setFileProgress(prev => prev.map((p, idx) => 
             idx === i ? { ...p, status: 'success' } : p
@@ -75,12 +93,14 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           successCount++;
         } catch (error) {
           console.error(`Error uploading ${file.name}:`, error);
+          const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+          
           // Update status to error
           setFileProgress(prev => prev.map((p, idx) => 
             idx === i ? { 
               ...p, 
               status: 'error',
-              error: error instanceof Error ? error.message : 'Upload failed'
+              error: errorMessage
             } : p
           ));
           errorCount++;

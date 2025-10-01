@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Auth Test</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Supabase Authentication Test</h1>
+    <div id="status">Testing connection...</div>
+    <div id="user-info"></div>
+    
+    <script>
+        const SUPABASE_URL = 'https://eecdbddpzwedficnpenm.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlY2RiZGRwendlZGZpY25wZW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NTczMjIsImV4cCI6MjA3MTIzMzMyMn0.DsT8hmM9CPW-0yrcchJAKOulyH6p_GnjoVIz1S0CbvI';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        async function testConnection() {
+            try {
+                // Test database connection
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('count')
+                    .limit(1);
+                
+                if (error) {
+                    document.getElementById('status').innerHTML = `❌ Database Error: ${error.message}`;
+                } else {
+                    document.getElementById('status').innerHTML = '✅ Database connection successful!';
+                }
+                
+                // Test auth status
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    document.getElementById('user-info').innerHTML = `✅ User logged in: ${session.user.email}`;
+                } else {
+                    document.getElementById('user-info').innerHTML = 'ℹ️ No user logged in (this is normal for first visit)';
+                }
+                
+            } catch (err) {
+                document.getElementById('status').innerHTML = `❌ Connection Error: ${err.message}`;
+            }
+        }
+        
+        testConnection();
+    </script>
+</body>
+</html>

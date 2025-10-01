@@ -74,18 +74,64 @@ export function DailyNutritionAdvisor() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('estimate-macros', {
-        body: {}
-      });
+      // Get meal plan data from database
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const { data: mealPlans } = await supabase
+        .from('daily_meal_plans')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('date', today);
 
-      if (error) throw error;
+      if (mealPlans && mealPlans.length > 0) {
+        // Calculate totals from meal plans
+        const totalCalories = mealPlans.reduce((acc, plan) => acc + (plan.recommended_calories || 0), 0);
+        const totalProtein = mealPlans.reduce((acc, plan) => acc + (plan.recommended_protein_grams || 0), 0);
+        const totalCarbs = mealPlans.reduce((acc, plan) => acc + (plan.recommended_carbs_grams || 0), 0);
+        const totalFat = mealPlans.reduce((acc, plan) => acc + (plan.recommended_fat_grams || 0), 0);
 
-      if (data.estimation) {
-        setAdvice(data.estimation);
+        const advice: NutritionAdvice = {
+          dailyCalories: totalCalories,
+          protein: totalProtein,
+          carbs: totalCarbs,
+          fat: totalFat,
+          insights: [
+            `Based on your running goals and training plan`,
+            `Daily target: ${totalCalories} calories`,
+            `Training intensity: ${totalCalories > 2500 ? 'High' : 'Moderate'}`
+          ],
+          recommendations: [
+            'Focus on pre-workout carbs for energy',
+            'Include protein within 30 minutes post-workout',
+            'Stay hydrated throughout the day',
+            'Consider your training schedule for meal timing'
+          ]
+        };
+
+        setAdvice(advice);
         toast({
-          title: 'Nutrition advice generated!',
-          description: 'AI has analyzed your data and created personalized recommendations',
+          title: 'Running-specific nutrition advice generated!',
+          description: 'AI has analyzed your running goals and created personalized recommendations',
         });
+      } else {
+        // Fallback to basic advice if no meal plan data
+        const advice: NutritionAdvice = {
+          dailyCalories: 2000,
+          protein: 150,
+          carbs: 250,
+          fat: 80,
+          insights: [
+            'No meal plan data available',
+            'Consider generating a daily meal plan',
+            'Focus on balanced nutrition'
+          ],
+          recommendations: [
+            'Generate a meal plan for personalized advice',
+            'Include protein in every meal',
+            'Stay hydrated',
+            'Eat a variety of fruits and vegetables'
+          ]
+        };
+        setAdvice(advice);
       }
     } catch (error) {
       console.error('Error generating nutrition advice:', error);

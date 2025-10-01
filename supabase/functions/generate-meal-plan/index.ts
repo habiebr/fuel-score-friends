@@ -50,9 +50,9 @@ serve(async (req) => {
     );
 
     const { date } = await req.json();
-    const targetDate = date || new Date().toISOString().split("T")[0];
+    const requestDate = date || new Date().toISOString().split("T")[0];
 
-    console.log(`3. Generating meal plan for user ${userId} on ${targetDate}`);
+    console.log(`3. Generating meal plan for user ${userId} on ${requestDate}`);
 
     // Fetch user profile
     console.log("4. Fetching user profile...");
@@ -72,11 +72,11 @@ serve(async (req) => {
       .from("wearable_data")
       .select("*")
       .eq("user_id", userId)
-      .eq("date", targetDate)
+      .eq("date", requestDate)
       .single();
 
     // Fetch recent 7-day wearable data for trends
-    const sevenDaysAgo = new Date(targetDate);
+    const sevenDaysAgo = new Date(requestDate);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const { data: recentWearableData } = await supabaseAdmin
       .from("wearable_data")
@@ -109,14 +109,55 @@ serve(async (req) => {
       totalDailyCalories = Math.round(bmr + wearableData.calories_burned);
     }
 
-    // Adjust based on fitness goal
+    // Adjust based on running goals and training plan
     const fitnessGoal = profile?.fitness_goals?.[0];
-    let calorieAdjustment = 0;
+    const targetDate = profile?.target_date;
+    const fitnessLevel = profile?.fitness_level;
+    const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
     
-    if (fitnessGoal === 'lose_weight') {
-      calorieAdjustment = -500; // 500 calorie deficit for weight loss
-    } else if (fitnessGoal === 'gain_muscle') {
-      calorieAdjustment = 300; // 300 calorie surplus for muscle gain
+    let calorieAdjustment = 0;
+    let trainingIntensity = "moderate";
+    
+    // Check if user has a running goal
+    if (fitnessGoal) {
+      if (fitnessGoal.includes('marathon')) {
+        calorieAdjustment = 500; // Extra calories for marathon training
+        trainingIntensity = "high";
+      } else if (fitnessGoal.includes('half')) {
+        calorieAdjustment = 300; // Extra calories for half marathon training
+        trainingIntensity = "moderate-high";
+      } else if (fitnessGoal.includes('5k') || fitnessGoal.includes('10k')) {
+        calorieAdjustment = 200; // Extra calories for shorter distance training
+        trainingIntensity = "moderate";
+      } else if (fitnessGoal === 'lose_weight') {
+        calorieAdjustment = -500; // 500 calorie deficit for weight loss
+        trainingIntensity = "moderate";
+      } else if (fitnessGoal === 'gain_muscle') {
+        calorieAdjustment = 300; // 300 calorie surplus for muscle gain
+        trainingIntensity = "moderate";
+      }
+    }
+    
+    // Adjust based on today's training plan
+    if (weekPlan && Array.isArray(weekPlan)) {
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const todayPlan = weekPlan.find(day => day.day === today);
+      
+      if (todayPlan) {
+        if (todayPlan.activity === 'run' && todayPlan.duration > 60) {
+          calorieAdjustment += 400; // Long run day
+          trainingIntensity = "high";
+        } else if (todayPlan.activity === 'run' && todayPlan.duration > 30) {
+          calorieAdjustment += 200; // Medium run day
+          trainingIntensity = "moderate-high";
+        } else if (todayPlan.activity === 'run') {
+          calorieAdjustment += 100; // Short run day
+          trainingIntensity = "moderate";
+        } else if (todayPlan.activity === 'rest') {
+          calorieAdjustment -= 100; // Rest day - slightly fewer calories
+          trainingIntensity = "low";
+        }
+      }
     }
     
     totalDailyCalories += calorieAdjustment;
@@ -134,10 +175,10 @@ serve(async (req) => {
 
     // Use AI to generate detailed meal suggestions
     console.log("5. Preparing AI request...");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
     
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not set");
+    if (!GROQ_API_KEY) {
+      console.error("GROQ_API_KEY is not set");
       return new Response(JSON.stringify({ error: "AI service not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -152,7 +193,22 @@ User Profile:
 - BMR (Basal Metabolic Rate): ${bmr} kcal
 - Activity Level: ${profile?.activity_level || "moderate"}
 - Fitness Goals: ${fitnessGoal || "general fitness"}
-- Location: Melbourne, Australia
+- Target Race Date: ${targetDate || "not set"}
+- Fitness Level: ${fitnessLevel || "intermediate"}
+        - Training Intensity: ${trainingIntensity}
+        - Location: Indonesia
+
+Running Goals & Training Plan:
+- Primary Goal: ${fitnessGoal || "general fitness"}
+- Target Date: ${targetDate || "not specified"}
+- Current Fitness Level: ${fitnessLevel || "intermediate"}
+- Weekly Training Plan: ${weekPlan ? JSON.stringify(weekPlan, null, 2) : "not set"}
+- Today's Training: ${(() => {
+  if (!weekPlan) return "not set";
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  const todayPlan = weekPlan.find(day => day.day === today);
+  return todayPlan ? `${todayPlan.activity} for ${todayPlan.duration} minutes (${todayPlan.estimatedCalories} calories)` : "rest day";
+})()}
 
 Today's Activity Metrics:
 - Calories burned: ${wearableData?.calories_burned || 0} kcal
@@ -177,20 +233,31 @@ Daily Calorie Target: ${totalDailyCalories} kcal
 ${calorieAdjustment !== 0 ? `(Adjusted ${calorieAdjustment > 0 ? '+' : ''}${calorieAdjustment} kcal for ${fitnessGoal?.replace('_', ' ')})` : ''}
 
 IMPORTANT LOCATION-SPECIFIC REQUIREMENTS:
-- User is based in MELBOURNE, AUSTRALIA
-- Suggest locally available Australian ingredients and foods
-- Include Melbourne café culture options (e.g., smashed avo, flat whites, grain bowls)
-- Use Australian produce that's in season
-- Include multicultural Melbourne options (Asian fusion, Mediterranean, etc.)
-- Suggest realistic portions and foods available at local supermarkets (Coles, Woolworths)
-- Consider Australian dietary preferences and local food culture
-- Use metric measurements (grams, ml)
+- User is based in INDONESIA
+- Suggest authentic Indonesian ingredients and foods
+- Include traditional Indonesian dishes and modern Indonesian cuisine
+- Use Indonesian produce that's in season and locally available
+- Include regional Indonesian specialties (Javanese, Sumatran, Balinese, etc.)
+- Suggest realistic portions and foods available at local markets (pasar tradisional, supermarket)
+- Consider Indonesian dietary preferences and food culture
+- Use metric measurements (grams, ml) and Indonesian portion sizes
+- Include Indonesian cooking methods (tumis, goreng, rebus, bakar, etc.)
 
 MEAL PLANNING REQUIREMENTS:
-This meal plan must match the user's fitness goal and activity level:
-${fitnessGoal === 'lose_weight' ? '- Focus on high protein, moderate carbs, filling foods with controlled portions' : ''}
-${fitnessGoal === 'gain_muscle' ? '- Emphasize high protein (2g per kg body weight), sufficient carbs for energy, healthy fats' : ''}
-${fitnessGoal === 'improve_endurance' ? '- Balance carbs for energy, adequate protein for recovery' : ''}
+This meal plan must match the user's running goals and training intensity:
+
+RUNNING-SPECIFIC NUTRITION:
+${fitnessGoal && fitnessGoal.includes('marathon') ? '- MARATHON TRAINING: High carb intake (60-70% of calories), adequate protein for muscle repair, focus on endurance nutrition' : ''}
+${fitnessGoal && fitnessGoal.includes('half') ? '- HALF MARATHON TRAINING: Balanced carbs and protein, focus on sustained energy and recovery' : ''}
+${fitnessGoal && (fitnessGoal.includes('5k') || fitnessGoal.includes('10k')) ? '- SHORT DISTANCE TRAINING: Moderate carbs, higher protein for speed and power, quick recovery foods' : ''}
+${fitnessGoal === 'lose_weight' ? '- WEIGHT LOSS: High protein, moderate carbs, filling foods with controlled portions' : ''}
+${fitnessGoal === 'gain_muscle' ? '- MUSCLE GAIN: High protein (2g per kg body weight), sufficient carbs for energy, healthy fats' : ''}
+
+TRAINING DAY ADJUSTMENTS:
+${trainingIntensity === 'high' ? '- HIGH INTENSITY DAY: Extra carbs 2-3 hours before training, protein within 30 minutes after' : ''}
+${trainingIntensity === 'moderate-high' ? '- MODERATE-HIGH INTENSITY: Balanced pre-workout nutrition, good recovery foods' : ''}
+${trainingIntensity === 'moderate' ? '- MODERATE INTENSITY: Standard balanced nutrition' : ''}
+${trainingIntensity === 'low' ? '- REST DAY: Lighter meals, focus on recovery and preparation for next training' : ''}
 
 Consider the user's wearable data:
 - If training effect is high or recovery time is significant, recommend more protein and anti-inflammatory foods
@@ -202,17 +269,19 @@ Consider the user's wearable data:
 Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), and dinner (30%).
 
 For each meal, provide 2-3 realistic meal options with:
-- Specific meal name (Melbourne-style where appropriate)
-- List of locally available foods/ingredients
+- Specific meal name (Indonesian-style)
+- List of locally available foods/ingredients with EXACT gram portions (e.g., "Nasi putih (150g)", "Ayam goreng (100g)")
 - Brief appetizing description
 - Accurate macros (calories, protein, carbs, fat)
 
-Make suggestions practical, tasty, culturally diverse, and SPECIFICALLY tailored to Melbourne/Australian availability.
+IMPORTANT: All food ingredients MUST include precise gram measurements to help runners with portion control and nutrition tracking.
 
-Examples of Melbourne-appropriate meals:
-- Breakfast: Smashed avocado on sourdough with poached eggs and feta
-- Lunch: Poke bowl with sushi-grade salmon from Melbourne Fish Market
-- Dinner: Grilled barramundi with roasted vegetables and quinoa
+Make suggestions practical, tasty, culturally diverse, and SPECIFICALLY tailored to Indonesian availability.
+
+Examples of Indonesian-appropriate meals:
+- Breakfast: Nasi uduk dengan ayam goreng dan sambal kacang
+- Lunch: Gado-gado dengan bumbu kacang dan kerupuk
+- Dinner: Rendang daging dengan nasi putih dan sayur daun singkong
 
 Return ONLY valid JSON in this exact format:
 {
@@ -223,9 +292,9 @@ Return ONLY valid JSON in this exact format:
     "target_fat": ${Math.round((totalDailyCalories * 0.30 * 0.30) / 9)},
     "suggestions": [
       {
-        "name": "Meal name (Melbourne-style)",
-        "foods": ["locally available ingredient 1", "ingredient 2", "ingredient 3"],
-        "description": "Brief description",
+        "name": "Nama makanan Indonesia",
+        "foods": ["Bahan lokal 1 (100g)", "Bahan 2 (50g)", "Bahan 3 (30g)"],
+        "description": "Deskripsi singkat dalam bahasa Indonesia",
         "calories": ${Math.round(totalDailyCalories * 0.30)},
         "protein": ${Math.round((totalDailyCalories * 0.30 * 0.30) / 4)},
         "carbs": ${Math.round((totalDailyCalories * 0.30 * 0.40) / 4)},
@@ -238,17 +307,17 @@ Return ONLY valid JSON in this exact format:
 }
 `;
 
-    console.log("6. Calling AI API...");
+    console.log("6. Calling Groq API...");
     const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "llama-3.1-8b-instant",
           messages: [
             {
               role: "system",
@@ -261,6 +330,7 @@ Return ONLY valid JSON in this exact format:
             },
           ],
           response_format: { type: "json_object" },
+          temperature: 0.7,
         }),
       }
     );

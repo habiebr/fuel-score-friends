@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "13.0.4"
   }
   public: {
     Tables: {
@@ -98,6 +98,57 @@ export type Database = {
         }
         Relationships: []
       }
+      food_suggestions: {
+        Row: {
+          calories: number | null
+          created_at: string
+          description: string | null
+          distance_km: number | null
+          food_name: string
+          id: string
+          image_url: string | null
+          location_lat: number | null
+          location_lng: number | null
+          price: number | null
+          provider: string
+          rating: number | null
+          restaurant_name: string
+          user_id: string
+        }
+        Insert: {
+          calories?: number | null
+          created_at?: string
+          description?: string | null
+          distance_km?: number | null
+          food_name: string
+          id?: string
+          image_url?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          price?: number | null
+          provider: string
+          rating?: number | null
+          restaurant_name: string
+          user_id: string
+        }
+        Update: {
+          calories?: number | null
+          created_at?: string
+          description?: string | null
+          distance_km?: number | null
+          food_name?: string
+          id?: string
+          image_url?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          price?: number | null
+          provider?: string
+          rating?: number | null
+          restaurant_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       friends: {
         Row: {
           created_at: string
@@ -158,6 +209,54 @@ export type Database = {
           id?: string
           location?: string
           registration_deadline?: string | null
+        }
+        Relationships: []
+      }
+      meal_plans: {
+        Row: {
+          created_at: string
+          cuisine_type: string | null
+          description: string | null
+          dietary_type: string[] | null
+          duration_days: number
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          meals_per_day: number
+          name: string
+          price: number
+          target_calories: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cuisine_type?: string | null
+          description?: string | null
+          dietary_type?: string[] | null
+          duration_days?: number
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          meals_per_day?: number
+          name: string
+          price: number
+          target_calories?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cuisine_type?: string | null
+          description?: string | null
+          dietary_type?: string[] | null
+          duration_days?: number
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          meals_per_day?: number
+          name?: string
+          price?: number
+          target_calories?: number | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -228,11 +327,19 @@ export type Database = {
         Row: {
           activity_level: string | null
           age: number | null
+          city: string | null
           created_at: string
-          display_name: string | null
-          fitness_goals: string[] | null
+          dietary_restrictions: string[] | null
+          email: string | null
+          fitness_goals: string | null
+          fitness_level: string | null
+          full_name: string | null
           height: number | null
           id: string
+          location_lat: number | null
+          location_lng: number | null
+          preferred_cuisine: string[] | null
+          target_date: string | null
           updated_at: string
           user_id: string
           weight: number | null
@@ -240,11 +347,19 @@ export type Database = {
         Insert: {
           activity_level?: string | null
           age?: number | null
+          city?: string | null
           created_at?: string
-          display_name?: string | null
-          fitness_goals?: string[] | null
+          dietary_restrictions?: string[] | null
+          email?: string | null
+          fitness_goals?: string | null
+          fitness_level?: string | null
+          full_name?: string | null
           height?: number | null
           id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          preferred_cuisine?: string[] | null
+          target_date?: string | null
           updated_at?: string
           user_id: string
           weight?: number | null
@@ -252,89 +367,108 @@ export type Database = {
         Update: {
           activity_level?: string | null
           age?: number | null
+          city?: string | null
           created_at?: string
-          display_name?: string | null
-          fitness_goals?: string[] | null
+          dietary_restrictions?: string[] | null
+          email?: string | null
+          fitness_goals?: string | null
+          fitness_level?: string | null
+          full_name?: string | null
           height?: number | null
           id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          preferred_cuisine?: string[] | null
+          target_date?: string | null
           updated_at?: string
           user_id?: string
           weight?: number | null
         }
         Relationships: []
       }
-      wearable_data: {
+      user_subscriptions: {
         Row: {
-          active_minutes: number | null
-          activity_type: string | null
-          avg_cadence: number | null
-          avg_power: number | null
-          avg_temperature: number | null
-          calories_burned: number | null
           created_at: string
-          date: string
-          detailed_metrics: Json | null
-          distance_meters: number | null
-          elevation_gain: number | null
-          gps_data: Json | null
-          heart_rate_avg: number | null
-          heart_rate_zones: Json | null
+          end_date: string | null
           id: string
-          max_heart_rate: number | null
-          max_speed: number | null
-          recovery_time: number | null
-          sleep_hours: number | null
-          steps: number | null
-          training_effect: number | null
+          meal_plan_id: string
+          price_paid: number | null
+          start_date: string
+          status: string
+          updated_at: string
           user_id: string
         }
         Insert: {
-          active_minutes?: number | null
-          activity_type?: string | null
-          avg_cadence?: number | null
-          avg_power?: number | null
-          avg_temperature?: number | null
-          calories_burned?: number | null
           created_at?: string
-          date?: string
-          detailed_metrics?: Json | null
-          distance_meters?: number | null
-          elevation_gain?: number | null
-          gps_data?: Json | null
-          heart_rate_avg?: number | null
-          heart_rate_zones?: Json | null
+          end_date?: string | null
           id?: string
-          max_heart_rate?: number | null
-          max_speed?: number | null
-          recovery_time?: number | null
-          sleep_hours?: number | null
-          steps?: number | null
-          training_effect?: number | null
+          meal_plan_id: string
+          price_paid?: number | null
+          start_date?: string
+          status?: string
+          updated_at?: string
           user_id: string
         }
         Update: {
-          active_minutes?: number | null
-          activity_type?: string | null
-          avg_cadence?: number | null
-          avg_power?: number | null
-          avg_temperature?: number | null
-          calories_burned?: number | null
           created_at?: string
-          date?: string
-          detailed_metrics?: Json | null
-          distance_meters?: number | null
-          elevation_gain?: number | null
-          gps_data?: Json | null
-          heart_rate_avg?: number | null
-          heart_rate_zones?: Json | null
+          end_date?: string | null
           id?: string
-          max_heart_rate?: number | null
-          max_speed?: number | null
-          recovery_time?: number | null
-          sleep_hours?: number | null
-          steps?: number | null
-          training_effect?: number | null
+          meal_plan_id?: string
+          price_paid?: number | null
+          start_date?: string
+          status?: string
+          updated_at?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_subscriptions_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wearable_data: {
+        Row: {
+          avg_temperature: number | null
+          created_at: string
+          data_type: string
+          device_type: string
+          id: string
+          recorded_at: string
+          recovery_time: number | null
+          training_effect: number | null
+          unit: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          avg_temperature?: number | null
+          created_at?: string
+          data_type: string
+          device_type: string
+          id?: string
+          recorded_at: string
+          recovery_time?: number | null
+          training_effect?: number | null
+          unit: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          avg_temperature?: number | null
+          created_at?: string
+          data_type?: string
+          device_type?: string
+          id?: string
+          recorded_at?: string
+          recovery_time?: number | null
+          training_effect?: number | null
+          unit?: string
+          user_id?: string
+          value?: number
         }
         Relationships: []
       }
