@@ -103,76 +103,95 @@ async function parseFitFile(data: Uint8Array) {
   const gpsPoints: any[] = [];
   
   try {
-    // Validate FIT file header
-    if (data.length < 14) {
-      throw new Error('File too small to be a valid FIT file');
+    console.log('Parsing FIT file with Official Garmin SDK...');
+    
+    // Dynamically import Garmin FIT SDK
+    const { Decoder, Stream } = await import('npm:@garmin/fitsdk');
+    
+    // Use Official Garmin FIT SDK
+    const stream = Stream.fromByteArray(data);
+    const decoder = new Decoder(stream);
+    const { messages, errors } = decoder.read();
+    
+    if (errors.length > 0) {
+      console.warn('FIT parsing warnings:', errors);
     }
     
-    const headerSize = data[0];
-    if (headerSize !== 14 && headerSize !== 12) {
-      throw new Error('Invalid FIT file header size');
+    console.log(`Parsed ${messages.length} total messages from FIT file`);
+    
+    // Process session messages
+    const sessionMsgs = messages.sessionMesgs || [];
+    for (const session of sessionMsgs) {
+      const sportMap: Record<string, string> = {
+        'running': 'running',
+        'cycling': 'cycling',
+        'swimming': 'swimming',
+        'walking': 'walking',
+        'hiking': 'hiking',
+        'training': 'training',
+        'transition': 'transition',
+        'fitness_equipment': 'fitness',
+      };
+      
+      sessions.push({
+        timestamp: session.startTime || session.timestamp || new Date().toISOString(),
+        activityType: sportMap[session.sport] || session.sport || 'unknown',
+        totalDistance: session.totalDistance || 0,
+        totalCalories: session.totalCalories || 0,
+        avgHeartRate: session.avgHeartRate || 0,
+        maxHeartRate: session.maxHeartRate || 0,
+        avgCadence: session.avgCadence || session.avgRunningCadence || 0,
+        avgPower: session.avgPower || 0,
+        maxSpeed: session.maxSpeed || session.enhancedMaxSpeed || 0,
+        totalAscent: session.totalAscent || 0,
+        duration: session.totalElapsedTime || 0,
+        activeMinutes: Math.round((session.totalTimerTime || 0) / 60),
+        avgTemperature: session.avgTemperature,
+        trainingEffect: session.totalTrainingEffect,
+        recoveryTime: session.timeToRecovery,
+      });
     }
     
-    // Check FIT signature (.FIT)
-    const signature = String.fromCharCode(data[8], data[9], data[10], data[11]);
-    if (signature !== '.FIT') {
-      throw new Error('Invalid FIT file signature');
-    }
-    
-    console.log('Valid FIT file detected, parsing data...');
-    
-    // Parse FIT messages
-    const messages = await parseFitMessages(data, headerSize);
-    
-    console.log(`Parsed ${messages.length} total messages`);
-    
-    // Extract session data
-    for (const msg of messages) {
-      if (msg.type === 'session') {
-        sessions.push({
-          timestamp: msg.start_time || msg.timestamp || new Date().toISOString(),
-          activityType: msg.sport || 'unknown',
-          totalDistance: msg.total_distance || 0,
-          totalCalories: msg.total_calories || 0,
-          avgHeartRate: msg.avg_heart_rate || 0,
-          maxHeartRate: msg.max_heart_rate || 0,
-          avgCadence: msg.avg_cadence || 0,
-          avgPower: msg.avg_power || 0,
-          maxSpeed: msg.max_speed || 0,
-          totalAscent: msg.total_ascent || 0,
-          duration: msg.total_elapsed_time || 0,
-          activeMinutes: Math.round((msg.total_timer_time || 0) / 60)
+    // Process record messages (data points)
+    const recordMsgs = messages.recordMesgs || [];
+    for (const record of recordMsgs) {
+      const recordData: any = {
+        timestamp: record.timestamp,
+        heartRate: record.heartRate,
+        cadence: record.cadence || record.runningCadence,
+        speed: record.speed || record.enhancedSpeed,
+        power: record.power,
+        altitude: record.altitude || record.enhancedAltitude,
+        distance: record.distance,
+        temperature: record.temperature,
+      };
+      records.push(recordData);
+      
+      // Collect GPS data if available
+      if (record.positionLat !== undefined && record.positionLong !== undefined) {
+        gpsPoints.push({
+          lat: record.positionLat * (180 / Math.pow(2, 31)), // Convert semicircles to degrees
+          lng: record.positionLong * (180 / Math.pow(2, 31)),
+          altitude: record.altitude || record.enhancedAltitude,
+          timestamp: record.timestamp
         });
       }
-      
-      // Extract record data points
-      if (msg.type === 'record') {
-        const record: any = {
-          timestamp: msg.timestamp,
-          heartRate: msg.heart_rate,
-          cadence: msg.cadence,
-          speed: msg.speed,
-          power: msg.power,
-          altitude: msg.altitude,
-          distance: msg.distance
-        };
-        records.push(record);
-        
-        // Collect GPS data if available
-        if (msg.position_lat && msg.position_long) {
-          gpsPoints.push({
-            lat: msg.position_lat * (180 / Math.pow(2, 31)), // Convert semicircles to degrees
-            lng: msg.position_long * (180 / Math.pow(2, 31)),
-            altitude: msg.altitude,
-            timestamp: msg.timestamp
-          });
-        }
-      }
     }
+    
+    // Process lap messages for additional insights
+    const lapMsgs = messages.lapMesgs || [];
+    const laps = lapMsgs.map((lap: any) => ({
+      startTime: lap.startTime,
+      totalTime: lap.totalTimerTime,
+      totalDistance: lap.totalDistance,
+      avgHeartRate: lap.avgHeartRate,
+      maxHeartRate: lap.maxHeartRate,
+      avgSpeed: lap.avgSpeed || lap.enhancedAvgSpeed,
+      calories: lap.totalCalories,
+    }));
     
     // If no sessions found but we have records, create a synthetic session
     if (sessions.length === 0 && records.length > 0) {
-      const totalCalories = records.reduce((sum, r) => sum + (r.calories || 0), 0);
       const heartRates = records.filter(r => r.heartRate).map(r => r.heartRate);
       const avgHeartRate = heartRates.length > 0 ? heartRates.reduce((a, b) => a + b, 0) / heartRates.length : 0;
       const maxHeartRate = heartRates.length > 0 ? Math.max(...heartRates) : 0;
@@ -181,8 +200,8 @@ async function parseFitFile(data: Uint8Array) {
         timestamp: records[0]?.timestamp || new Date().toISOString(),
         activityType: 'unknown',
         totalDistance: records[records.length - 1]?.distance || 0,
-        totalCalories,
-        avgHeartRate,
+        totalCalories: 0,
+        avgHeartRate: Math.round(avgHeartRate),
         maxHeartRate,
         avgCadence: 0,
         avgPower: 0,
@@ -196,170 +215,20 @@ async function parseFitFile(data: Uint8Array) {
     // Calculate heart rate zones
     const heartRateZones = calculateHeartRateZones(records);
     
+    console.log(`Extracted ${sessions.length} sessions, ${records.length} records, ${gpsPoints.length} GPS points, ${laps.length} laps`);
+    
     return {
       sessions,
       records,
       gpsPoints,
-      heartRateZones
+      heartRateZones,
+      laps
     };
     
   } catch (error) {
     console.error('Error parsing FIT file:', error);
     throw new Error(`FIT file parsing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-}
-
-async function parseFitMessages(data: Uint8Array, headerSize: number): Promise<any[]> {
-  const messages: any[] = [];
-  let offset = headerSize;
-  const definitions = new Map();
-  
-  // Read data size from header
-  const dataSize = data[4] | (data[5] << 8) | (data[6] << 16) | (data[7] << 24);
-  const endOffset = Math.min(headerSize + dataSize, data.length - 2);
-  
-  while (offset < endOffset) {
-    if (offset >= data.length) break;
-    
-    const recordHeader = data[offset];
-    offset++;
-    
-    // Check for compressed timestamp header
-    if ((recordHeader & 0x80) === 0x80) {
-      const localMessageType = (recordHeader >> 5) & 0x03;
-      
-      const def = definitions.get(localMessageType);
-      if (def && offset + def.size <= data.length) {
-        const fields = readFields(data, offset, def.fields);
-        offset += def.size;
-        messages.push({ type: def.globalType, ...fields });
-      }
-      continue;
-    }
-    
-    const isDefinitionMessage = (recordHeader & 0x40) === 0x40;
-    const localMessageType = recordHeader & 0x0F;
-    
-    if (isDefinitionMessage) {
-      // Parse definition message
-      if (offset + 5 >= data.length) break;
-      
-      offset++; // Skip reserved byte
-      offset++; // Skip architecture byte
-      
-      const globalMessageNumber = data[offset] | (data[offset + 1] << 8);
-      offset += 2;
-      
-      const numFields = data[offset];
-      offset++;
-      
-      const fields = [];
-      for (let i = 0; i < numFields && offset + 3 <= data.length; i++) {
-        const fieldDef = data[offset];
-        const fieldSize = data[offset + 1];
-        const fieldType = data[offset + 2];
-        offset += 3;
-        
-        fields.push({ def: fieldDef, size: fieldSize, type: fieldType });
-      }
-      
-      const totalSize = fields.reduce((sum, f) => sum + f.size, 0);
-      definitions.set(localMessageType, {
-        globalType: getMessageType(globalMessageNumber),
-        fields,
-        size: totalSize
-      });
-    } else {
-      // Parse data message
-      const def = definitions.get(localMessageType);
-      if (def && offset + def.size <= data.length) {
-        const fields = readFields(data, offset, def.fields);
-        offset += def.size;
-        messages.push({ type: def.globalType, ...fields });
-      } else {
-        offset += 10; // Skip if we can't parse
-      }
-    }
-  }
-  
-  return messages;
-}
-
-function readFields(data: Uint8Array, offset: number, fieldDefs: any[]): any {
-  const fields: any = {};
-  let currentOffset = offset;
-  
-  for (const fieldDef of fieldDefs) {
-    if (currentOffset + fieldDef.size > data.length) break;
-    
-    let value;
-    switch (fieldDef.size) {
-      case 1:
-        value = data[currentOffset];
-        break;
-      case 2:
-        value = data[currentOffset] | (data[currentOffset + 1] << 8);
-        break;
-      case 4:
-        value = data[currentOffset] | (data[currentOffset + 1] << 8) | 
-                (data[currentOffset + 2] << 16) | (data[currentOffset + 3] << 24);
-        break;
-      default:
-        currentOffset += fieldDef.size;
-        continue;
-    }
-    
-    currentOffset += fieldDef.size;
-    
-    // Map field definitions to field names
-    const fieldName = getFieldName(fieldDef.def);
-    if (fieldName && value !== 0xFF && value !== 0xFFFF && value !== 0xFFFFFFFF) {
-      fields[fieldName] = value;
-    }
-  }
-  
-  return fields;
-}
-
-function getMessageType(globalMessageNumber: number): string {
-  const types: Record<number, string> = {
-    0: 'file_id',
-    18: 'session',
-    19: 'lap',
-    20: 'record',
-    21: 'event',
-    23: 'device_info',
-    34: 'activity',
-  };
-  return types[globalMessageNumber] || 'unknown';
-}
-
-function getFieldName(fieldDef: number): string | null {
-  const names: Record<number, string> = {
-    253: 'timestamp',
-    0: 'start_time',
-    1: 'position_lat',
-    2: 'position_long',
-    3: 'altitude',
-    4: 'heart_rate',
-    5: 'cadence',
-    6: 'distance',
-    7: 'speed',
-    8: 'power',
-    9: 'total_elapsed_time',
-    10: 'total_timer_time',
-    11: 'total_distance',
-    13: 'total_calories',
-    14: 'total_ascent',
-    15: 'avg_heart_rate',
-    16: 'max_heart_rate',
-    17: 'avg_cadence',
-    18: 'avg_power',
-    19: 'max_speed',
-    20: 'sport',
-    21: 'sub_sport',
-  };
-  return names[fieldDef] || null;
 }
 
 function calculateHeartRateZones(records: any[]) {
