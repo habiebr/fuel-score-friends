@@ -7,6 +7,7 @@ import { Camera, Upload, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 interface FoodTrackerDialogProps {
   open: boolean;
@@ -100,6 +101,15 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         title: "Meal logged!",
         description: "Your nutrition data has been saved",
       });
+
+      // Calculate nutrition score after logging food
+      try {
+        await supabase.functions.invoke('calculate-nutrition-score', {
+          body: { date: format(new Date(), 'yyyy-MM-dd') }
+        });
+      } catch (scoreError) {
+        console.error('Error calculating nutrition score:', scoreError);
+      }
       
       // Reset and close
       setNutritionData(null);

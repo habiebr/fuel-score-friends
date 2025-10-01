@@ -8,6 +8,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { CalendarDays, Target, Users, Zap, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 
+interface MealPlan {
+  meal_type: string;
+  recommended_calories: number;
+  recommended_protein_grams: number;
+  recommended_carbs_grams: number;
+  recommended_fat_grams: number;
+  meal_suggestions: unknown;
+  meal_score: number | null;
+}
+
 interface DashboardData {
   dailyScore: number;
   caloriesConsumed: number;
@@ -18,6 +28,13 @@ interface DashboardData {
   steps: number;
   caloriesBurned: number;
   activeMinutes: number;
+  plannedCalories: number;
+  plannedProtein: number;
+  plannedCarbs: number;
+  plannedFat: number;
+  breakfastScore: number | null;
+  lunchScore: number | null;
+  dinnerScore: number | null;
 }
 
 interface DashboardProps {
@@ -28,13 +45,35 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
 
   useEffect(() => {
     if (user) {
       loadDashboardData();
+      generateDailyMealPlan();
     }
   }, [user]);
+
+  const generateDailyMealPlan = async () => {
+    if (!user) return;
+    
+    setGeneratingPlan(true);
+    try {
+      const { error } = await supabase.functions.invoke('generate-meal-plan', {
+        body: { date: format(new Date(), 'yyyy-MM-dd') }
+      });
+      
+      if (error) {
+        console.error('Error generating meal plan:', error);
+      }
+    } catch (error) {
+      console.error('Error invoking meal plan function:', error);
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
 
   const loadDashboardData = async () => {
     if (!user) return;
@@ -58,6 +97,17 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         .eq('date', today)
         .single();
 
+      // Fetch meal plans for today
+      const { data: plans } = await supabase
+        .from('daily_meal_plans')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('date', today);
+
+      if (plans) {
+        setMealPlans(plans);
+      }
+
       setData({
         dailyScore: nutritionScore?.daily_score || 0,
         caloriesConsumed: nutritionScore?.calories_consumed || 0,
@@ -68,6 +118,13 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         steps: wearableData?.steps || 0,
         caloriesBurned: wearableData?.calories_burned || 0,
         activeMinutes: wearableData?.active_minutes || 0,
+        plannedCalories: nutritionScore?.planned_calories || 0,
+        plannedProtein: nutritionScore?.planned_protein_grams || 0,
+        plannedCarbs: nutritionScore?.planned_carbs_grams || 0,
+        plannedFat: nutritionScore?.planned_fat_grams || 0,
+        breakfastScore: nutritionScore?.breakfast_score || null,
+        lunchScore: nutritionScore?.lunch_score || null,
+        dinnerScore: nutritionScore?.dinner_score || null,
       });
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -122,25 +179,49 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Calories Progress */}
+              <div className="bg-muted/30 rounded-lg p-4 mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium">Daily Calories</span>
+                  <span className="text-sm text-muted-foreground">
+                    {data?.caloriesConsumed || 0} / {data?.plannedCalories || 0}
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div 
+                    className="bg-primary h-2 rounded-full transition-all"
+                    style={{ 
+                      width: `${Math.min(100, ((data?.caloriesConsumed || 0) / (data?.plannedCalories || 1)) * 100)}%` 
+                    }}
+                  />
+                </div>
+              </div>
+
               {/* Macros Grid - Mobile Optimized */}
               <div className="grid grid-cols-3 gap-2 sm:gap-4">
                 <div className="text-center p-3 sm:p-4 bg-success/10 rounded-lg">
                   <div className="text-xl sm:text-2xl font-bold text-success">
                     {data?.proteinGrams || 0}g
                   </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Protein</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">
+                    Protein ({data?.plannedProtein || 0}g)
+                  </div>
                 </div>
                 <div className="text-center p-3 sm:p-4 bg-warning/10 rounded-lg">
                   <div className="text-xl sm:text-2xl font-bold text-warning">
                     {data?.carbsGrams || 0}g
                   </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Carbs</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">
+                    Carbs ({data?.plannedCarbs || 0}g)
+                  </div>
                 </div>
                 <div className="text-center p-3 sm:p-4 bg-info/10 rounded-lg">
                   <div className="text-xl sm:text-2xl font-bold text-info">
                     {data?.fatGrams || 0}g
                   </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Fat</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">
+                    Fat ({data?.plannedFat || 0}g)
+                  </div>
                 </div>
               </div>
               
@@ -173,27 +254,41 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                   Today's Meal Schedule
                 </h4>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                    <div>
-                      <div className="font-medium text-sm">Breakfast</div>
-                      <div className="text-xs text-muted-foreground">8:00 AM</div>
-                    </div>
-                    <div className="text-xs text-success font-medium">✓ Logged</div>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                    <div>
-                      <div className="font-medium text-sm">Lunch</div>
-                      <div className="text-xs text-muted-foreground">12:30 PM</div>
-                    </div>
-                    <div className="text-xs text-warning font-medium">⏰ Coming up</div>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                    <div>
-                      <div className="font-medium text-sm">Dinner</div>
-                      <div className="text-xs text-muted-foreground">7:00 PM</div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">Planned</div>
-                  </div>
+                  {['breakfast', 'lunch', 'dinner'].map((mealType) => {
+                    const plan = mealPlans.find(p => p.meal_type === mealType);
+                    const score = mealType === 'breakfast' ? data?.breakfastScore 
+                      : mealType === 'lunch' ? data?.lunchScore 
+                      : data?.dinnerScore;
+                    
+                    return (
+                      <div key={mealType} className="p-3 bg-muted/30 rounded-lg">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div className="font-medium text-sm capitalize">{mealType}</div>
+                            {plan && (
+                              <div className="text-xs text-muted-foreground">
+                                {plan.recommended_calories} kcal target
+                              </div>
+                            )}
+                          </div>
+                          {score !== null && (
+                            <div className={`text-xs font-medium px-2 py-1 rounded ${
+                              score >= 80 ? 'bg-success/20 text-success' :
+                              score >= 60 ? 'bg-warning/20 text-warning' :
+                              'bg-destructive/20 text-destructive'
+                            }`}>
+                              Score: {score}
+                            </div>
+                          )}
+                        </div>
+                        {plan && plan.meal_suggestions && Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            💡 Try: {(plan.meal_suggestions[0] as { name: string }).name}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </CardContent>

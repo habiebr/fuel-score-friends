@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_meal_plans: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          meal_score: number | null
+          meal_suggestions: Json | null
+          meal_type: string
+          recommended_calories: number
+          recommended_carbs_grams: number
+          recommended_fat_grams: number
+          recommended_protein_grams: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          meal_score?: number | null
+          meal_suggestions?: Json | null
+          meal_type: string
+          recommended_calories: number
+          recommended_carbs_grams: number
+          recommended_fat_grams: number
+          recommended_protein_grams: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          meal_score?: number | null
+          meal_suggestions?: Json | null
+          meal_type?: string
+          recommended_calories?: number
+          recommended_carbs_grams?: number
+          recommended_fat_grams?: number
+          recommended_protein_grams?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       food_logs: {
         Row: {
           calories: number
@@ -79,40 +124,61 @@ export type Database = {
       }
       nutrition_scores: {
         Row: {
+          breakfast_score: number | null
           calories_consumed: number | null
           carbs_grams: number | null
           created_at: string
           daily_score: number
           date: string
+          dinner_score: number | null
           fat_grams: number | null
           id: string
+          lunch_score: number | null
           meals_logged: number | null
+          planned_calories: number | null
+          planned_carbs_grams: number | null
+          planned_fat_grams: number | null
+          planned_protein_grams: number | null
           protein_grams: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          breakfast_score?: number | null
           calories_consumed?: number | null
           carbs_grams?: number | null
           created_at?: string
           daily_score?: number
           date?: string
+          dinner_score?: number | null
           fat_grams?: number | null
           id?: string
+          lunch_score?: number | null
           meals_logged?: number | null
+          planned_calories?: number | null
+          planned_carbs_grams?: number | null
+          planned_fat_grams?: number | null
+          planned_protein_grams?: number | null
           protein_grams?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          breakfast_score?: number | null
           calories_consumed?: number | null
           carbs_grams?: number | null
           created_at?: string
           daily_score?: number
           date?: string
+          dinner_score?: number | null
           fat_grams?: number | null
           id?: string
+          lunch_score?: number | null
           meals_logged?: number | null
+          planned_calories?: number | null
+          planned_carbs_grams?: number | null
+          planned_fat_grams?: number | null
+          planned_protein_grams?: number | null
           protein_grams?: number | null
           updated_at?: string
           user_id?: string
