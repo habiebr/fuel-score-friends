@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
+import { WearablePerformanceGraph } from '@/components/WearablePerformanceGraph';
 import { LogOut, User, Target, Activity as ActivityIcon, Download, TrendingUp, Flame, Heart, Zap, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -196,6 +197,11 @@ export default function Profile() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Wearable Performance Graph */}
+          <div className="mb-6">
+            <WearablePerformanceGraph />
+          </div>
 
           {/* Activity Metrics with Premium Tabs */}
           <div className="mb-6">
