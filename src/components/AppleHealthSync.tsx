@@ -118,12 +118,12 @@ export function AppleHealthSync() {
       return;
     }
 
-    // Check file size (warn if > 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    // Check file size (warn if > 200MB)
+    const maxSize = 200 * 1024 * 1024; // 200MB
     if (file.size > maxSize) {
       toast({
         title: "File too large",
-        description: "Please use a smaller export or the mobile app for large files (max 10MB)",
+        description: "Please use a smaller export or the mobile app for very large files (max 200MB)",
         variant: "destructive",
       });
       return;
@@ -345,39 +345,6 @@ export function AppleHealthSync() {
             </span>
           </div>
         )}
-
-          {/* Upload Button */}
-          <label htmlFor="apple-health-xml">
-            <Button 
-              variant="secondary" 
-              className="w-full" 
-              disabled={uploading}
-              asChild
-            >
-              <span>
-                <Upload className="h-4 w-4 mr-2" />
-                {uploading ? 'Processing...' : 'Upload export.xml'}
-              </span>
-            </Button>
-            <input
-              id="apple-health-xml"
-              type="file"
-              accept=".xml"
-              className="hidden"
-              onChange={handleAppleHealthXML}
-              disabled={uploading}
-            />
-          </label>
-
-          {/* Last Sync Status */}
-          {lastSync && (
-            <div className="flex items-center gap-2 p-3 bg-success/10 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-success" />
-              <span className="text-xs text-success">
-                Last synced: {lastSync.toLocaleString()}
-              </span>
-            </div>
-          )}
 
           {/* Note */}
           <div className="flex items-start gap-2 p-3 bg-muted/30 rounded-lg">
