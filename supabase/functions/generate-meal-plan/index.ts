@@ -10,47 +10,46 @@ serve(async (req) => {
   console.log("=== Meal plan generation started ===");
 
   try {
-    console.log("1. Creating Supabase client...");
-    const supabaseClient = createClient(
+    console.log("1. Extracting user from JWT...");
+    
+    // Get the JWT token from Authorization header
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("No Authorization header");
+      return new Response(JSON.stringify({ error: "Authorization header missing" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Create admin client with service role key
+    const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      {
-        global: { headers: { Authorization: req.headers.get("Authorization")! } },
-      }
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    console.log("2. Getting user...");
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser();
+    // Verify the JWT and get user
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
     
-    if (userError) {
-      console.error("User error:", userError);
-      return new Response(JSON.stringify({ error: "Authentication failed: " + userError.message }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    
-    if (!user) {
-      console.error("No user found");
-      return new Response(JSON.stringify({ error: "No authenticated user" }), {
+    if (userError || !user) {
+      console.error("Auth error:", userError);
+      return new Response(JSON.stringify({ error: "Authentication failed" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`3. User authenticated: ${user.id}`);
+    console.log(`2. User authenticated: ${user.id}`);
 
     const { date } = await req.json();
     const targetDate = date || new Date().toISOString().split("T")[0];
 
-    console.log(`4. Generating meal plan for user ${user.id} on ${targetDate}`);
+    console.log(`3. Generating meal plan for user ${user.id} on ${targetDate}`);
 
     // Fetch user profile
-    console.log("5. Fetching user profile...");
-    const { data: profile, error: profileError } = await supabaseClient
+    console.log("4. Fetching user profile...");
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("*")
       .eq("user_id", user.id)
@@ -62,7 +61,7 @@ serve(async (req) => {
     console.log("Profile data:", profile ? "found" : "not found");
 
     // Fetch recent wearable data with comprehensive metrics
-    const { data: wearableData } = await supabaseClient
+    const { data: wearableData } = await supabaseAdmin
       .from("wearable_data")
       .select("*")
       .eq("user_id", user.id)
@@ -72,7 +71,7 @@ serve(async (req) => {
     // Fetch recent 7-day wearable data for trends
     const sevenDaysAgo = new Date(targetDate);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const { data: recentWearableData } = await supabaseClient
+    const { data: recentWearableData } = await supabaseAdmin
       .from("wearable_data")
       .select("*")
       .eq("user_id", user.id)
@@ -127,7 +126,7 @@ serve(async (req) => {
     } : null;
 
     // Use AI to generate detailed meal suggestions
-    console.log("6. Preparing AI request...");
+    console.log("5. Preparing AI request...");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -232,7 +231,7 @@ Return ONLY valid JSON in this exact format:
 }
 `;
 
-    console.log("7. Calling AI API...");
+    console.log("6. Calling AI API...");
     const aiResponse = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -273,7 +272,7 @@ Return ONLY valid JSON in this exact format:
       });
     }
 
-    console.log("8. Parsing AI response...");
+    console.log("7. Parsing AI response...");
     const aiData = await aiResponse.json();
     const content = aiData.choices[0].message.content;
     console.log("AI Response received, length:", content?.length || 0);
@@ -310,7 +309,7 @@ Return ONLY valid JSON in this exact format:
     }
 
     // Store meal plans for each meal type
-    console.log("9. Storing meal plans in database...");
+    console.log("8. Storing meal plans in database...");
     const mealTypes = ["breakfast", "lunch", "dinner"];
 
     for (const mealType of mealTypes) {
@@ -321,7 +320,7 @@ Return ONLY valid JSON in this exact format:
       }
 
       console.log(`Inserting ${mealType} plan...`);
-      const { error: insertError } = await supabaseClient
+      const { error: insertError } = await supabaseAdmin
         .from("daily_meal_plans")
         .upsert(
           {
@@ -346,7 +345,7 @@ Return ONLY valid JSON in this exact format:
       }
     }
 
-    console.log(`10. Successfully generated meal plan for ${targetDate}`);
+    console.log(`9. Successfully generated meal plan for ${targetDate}`);
 
     return new Response(
       JSON.stringify({
