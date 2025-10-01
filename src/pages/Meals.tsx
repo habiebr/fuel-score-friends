@@ -186,20 +186,44 @@ export default function Meals() {
       if (error) throw error;
 
       if (plans && plans.length > 0) {
-        // Convert database format to the format expected by the UI
+        const ensureThree = (mealType: string, existing: any[] | undefined) => {
+          const baseFallbacks = {
+            breakfast: [
+              { name: 'Nasi Uduk + Ayam Goreng', foods: ['Nasi uduk (150g)','Ayam goreng (100g)','Sambal kacang (30g)'], description: 'Sarapan gurih khas Indonesia', calories: 450, protein: 25, carbs: 45, fat: 18 },
+              { name: 'Bubur Ayam', foods: ['Bubur nasi (200g)','Ayam suwir (80g)','Bawang goreng (5g)'], description: 'Bubur hangat dengan ayam', calories: 380, protein: 22, carbs: 42, fat: 12 },
+              { name: 'Lontong Sayur', foods: ['Lontong (120g)','Sayur labu siam (150g)','Santan (100ml)'], description: 'Sarapan lontong sayur', calories: 320, protein: 18, carbs: 38, fat: 14 },
+            ],
+            lunch: [
+              { name: 'Nasi Padang', foods: ['Nasi (150g)','Rendang (100g)','Sayur singkong (100g)'], description: 'Rendang dan sayur', calories: 650, protein: 35, carbs: 55, fat: 28 },
+              { name: 'Gado-gado', foods: ['Sayuran (200g)','Tahu (80g)','Bumbu kacang (45g)'], description: 'Salad Indonesia', calories: 420, protein: 28, carbs: 35, fat: 22 },
+              { name: 'Soto Ayam', foods: ['Ayam (120g)','Nasi (150g)','Tauge (60g)'], description: 'Sup ayam segar', calories: 480, protein: 32, carbs: 48, fat: 16 },
+            ],
+            dinner: [
+              { name: 'Pecel Lele', foods: ['Lele (200g)','Nasi (150g)','Lalapan (100g)'], description: 'Lele goreng sambal', calories: 520, protein: 38, carbs: 45, fat: 20 },
+              { name: 'Rawon', foods: ['Daging (120g)','Nasi (150g)','Tauge (60g)'], description: 'Sup rawon khas', calories: 480, protein: 35, carbs: 42, fat: 18 },
+              { name: 'Ayam Bakar', foods: ['Ayam (150g)','Nasi (150g)','Tempe (60g)'], description: 'Ayam bakar manis', calories: 450, protein: 30, carbs: 40, fat: 16 },
+            ],
+          } as const;
+
+          const list = Array.isArray(existing) ? [...existing] : [];
+          const fallbacks = baseFallbacks[mealType as 'breakfast'|'lunch'|'dinner'] || [];
+          for (let i = 0; i < fallbacks.length && list.length < 3; i++) {
+            list.push(fallbacks[i]);
+          }
+          return list.slice(0, 3);
+        };
+
         const mealPlanData: any = {};
         plans.forEach(plan => {
-          if (plan.meal_suggestions && Array.isArray(plan.meal_suggestions)) {
-            mealPlanData[plan.meal_type] = {
-              target_calories: plan.recommended_calories,
-              target_protein: plan.recommended_protein_grams,
-              target_carbs: plan.recommended_carbs_grams,
-              target_fat: plan.recommended_fat_grams,
-              suggestions: plan.meal_suggestions
-            };
-          }
+          mealPlanData[plan.meal_type] = {
+            target_calories: plan.recommended_calories,
+            target_protein: plan.recommended_protein_grams,
+            target_carbs: plan.recommended_carbs_grams,
+            target_fat: plan.recommended_fat_grams,
+            suggestions: ensureThree(plan.meal_type, plan.meal_suggestions as any[])
+          };
         });
-        
+
         if (Object.keys(mealPlanData).length > 0) {
           setDailyMealPlan(mealPlanData);
         }

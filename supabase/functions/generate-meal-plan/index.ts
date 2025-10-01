@@ -331,10 +331,17 @@ Return ONLY valid JSON in this exact format:
     const mealTypes = ["breakfast", "lunch", "dinner"];
 
     for (const mealType of mealTypes) {
-      const meal = mealPlan[mealType];
+      // Ensure we have a meal object with targets even if AI missed it
+      let meal = mealPlan[mealType];
       if (!meal) {
-        console.log(`Skipping ${mealType} - no data`);
-        continue;
+        const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : 0.30;
+        meal = {
+          target_calories: Math.round(totalDailyCalories * pct),
+          target_protein: Math.round((totalDailyCalories * pct * 0.30) / 4),
+          target_carbs: Math.round((totalDailyCalories * pct * 0.40) / 4),
+          target_fat: Math.round((totalDailyCalories * pct * 0.30) / 9),
+          suggestions: [],
+        };
       }
 
       console.log(`Inserting ${mealType} plan...`);
