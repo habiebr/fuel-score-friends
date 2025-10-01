@@ -435,8 +435,23 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                           )}
                         </div>
                         {plan && plan.meal_suggestions && Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0 && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            💡 Try: {(plan.meal_suggestions[0] as { name: string }).name}
+                          <div className="mt-2 space-y-1 border-t border-border pt-2">
+                            <div className="text-xs font-medium text-primary">
+                              💡 {(plan.meal_suggestions[0] as { name: string }).name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {(plan.meal_suggestions[0] as { description: string }).description}
+                            </div>
+                            {(plan.meal_suggestions[0] as { foods: string[] }).foods && (
+                              <div className="text-xs text-muted-foreground">
+                                📋 {(plan.meal_suggestions[0] as { foods: string[] }).foods.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {(!plan || !plan.meal_suggestions || plan.meal_suggestions.length === 0) && (
+                          <div className="text-xs text-muted-foreground mt-2 italic">
+                            Click "Generate Plan" above to see meal suggestions
                           </div>
                         )}
                       </div>

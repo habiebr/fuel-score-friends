@@ -109,11 +109,91 @@ serve(async (req) => {
           dinner: 0.30 
         };
 
+        // Generate meal suggestions based on goal and meal type
+        const getMealSuggestions = (mealType: string, calories: number, protein: number, carbs: number, fat: number) => {
+          const suggestions: any[] = [];
+
+          if (mealType === 'breakfast') {
+            if (fitnessGoal === 'gain_muscle') {
+              suggestions.push({
+                name: "High-Protein Breakfast",
+                foods: ["4 scrambled eggs", "2 slices whole wheat toast", "avocado", "Greek yogurt"],
+                description: "Protein-packed breakfast to support muscle growth",
+                calories, protein, carbs, fat
+              });
+            } else if (fitnessGoal === 'lose_weight') {
+              suggestions.push({
+                name: "Light & Filling Breakfast",
+                foods: ["Egg white omelette with vegetables", "oatmeal with berries", "black coffee"],
+                description: "High protein, high fiber, low calorie breakfast",
+                calories, protein, carbs, fat
+              });
+            } else {
+              suggestions.push({
+                name: "Balanced Breakfast",
+                foods: ["2 eggs", "whole grain toast", "banana", "almond butter"],
+                description: "Balanced macros to start your day",
+                calories, protein, carbs, fat
+              });
+            }
+          } else if (mealType === 'lunch') {
+            if (fitnessGoal === 'gain_muscle') {
+              suggestions.push({
+                name: "Power Lunch",
+                foods: ["Grilled chicken breast 200g", "sweet potato", "broccoli", "quinoa"],
+                description: "Lean protein with complex carbs for sustained energy",
+                calories, protein, carbs, fat
+              });
+            } else if (fitnessGoal === 'lose_weight') {
+              suggestions.push({
+                name: "Lean & Green Lunch",
+                foods: ["Grilled fish", "large mixed salad", "olive oil dressing", "cauliflower rice"],
+                description: "High protein, low carb lunch option",
+                calories, protein, carbs, fat
+              });
+            } else {
+              suggestions.push({
+                name: "Balanced Bowl",
+                foods: ["Chicken or tofu 150g", "brown rice", "mixed vegetables", "tahini sauce"],
+                description: "Complete meal with all macros",
+                calories, protein, carbs, fat
+              });
+            }
+          } else if (mealType === 'dinner') {
+            if (fitnessGoal === 'gain_muscle') {
+              suggestions.push({
+                name: "Muscle-Building Dinner",
+                foods: ["Lean steak 200g", "baked potato", "green beans", "cottage cheese"],
+                description: "High protein dinner for overnight muscle recovery",
+                calories, protein, carbs, fat
+              });
+            } else if (fitnessGoal === 'lose_weight') {
+              suggestions.push({
+                name: "Light Dinner",
+                foods: ["Grilled salmon", "steamed vegetables", "small portion quinoa"],
+                description: "Light yet satisfying dinner",
+                calories, protein, carbs, fat
+              });
+            } else {
+              suggestions.push({
+                name: "Complete Dinner",
+                foods: ["Protein (chicken/fish/tofu) 150g", "roasted vegetables", "whole grain side"],
+                description: "Balanced dinner to end your day",
+                calories, protein, carbs, fat
+              });
+            }
+          }
+
+          return suggestions;
+        };
+
         for (const mealType of mealTypes) {
           const mealCalories = Math.round(totalDailyCalories * mealPercentages[mealType]);
           const mealProtein = Math.round((mealCalories * proteinRatio) / 4);
           const mealCarbs = Math.round((mealCalories * carbsRatio) / 4);
           const mealFat = Math.round((mealCalories * fatRatio) / 9);
+
+          const mealSuggestions = getMealSuggestions(mealType, mealCalories, mealProtein, mealCarbs, mealFat);
 
           const { error: insertError } = await supabaseClient
             .from("daily_meal_plans")
@@ -126,7 +206,7 @@ serve(async (req) => {
                 recommended_protein_grams: mealProtein,
                 recommended_carbs_grams: mealCarbs,
                 recommended_fat_grams: mealFat,
-                meal_suggestions: [],
+                meal_suggestions: mealSuggestions,
               },
               {
                 onConflict: "user_id,date,meal_type",
