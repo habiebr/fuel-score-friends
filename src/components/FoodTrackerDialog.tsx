@@ -55,34 +55,25 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
     try {
       setProgress(30);
       
-      // Convert image to base64 with timeout
-      const base64Image = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        const timeout = setTimeout(() => {
-          reject(new Error('Image processing timed out. Please try a smaller image.'));
-        }, 30000); // 30 second timeout
-        
-        reader.onload = () => {
-          clearTimeout(timeout);
-          resolve(reader.result as string);
-        };
-        
-        reader.onerror = () => {
-          clearTimeout(timeout);
-          reject(new Error('Failed to read image file'));
-        };
-        
-        reader.readAsDataURL(file);
-      });
+      // Upload original file to Supabase Storage and get a signed URL
+      setProgress(40);
+      const userId = user?.id || 'anonymous';
+      const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+      const bucket = supabase.storage.from('food-photos');
+      const uploadRes = await bucket.upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadRes.error) throw uploadRes.error;
+      const signed = await bucket.createSignedUrl(path, 600); // 10 minutes
+      if (signed.error || !signed.data?.signedUrl) throw signed.error || new Error('Failed to create signed URL');
 
       setStage('analyzing');
-      setProgress(50);
+      setProgress(60);
       
       const session = (await supabase.auth.getSession()).data.session;
       const { data, error } = await supabase.functions.invoke('nutrition-ai', {
         body: { 
           type: 'food_photo',
-          image: base64Image,
+          image: signed.data.signedUrl,
           mealType
         },
         headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,

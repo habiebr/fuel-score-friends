@@ -79,6 +79,16 @@ CREATE TABLE IF NOT EXISTS public.nutrition_scores (
 -- 5) Helpful indexes
 CREATE INDEX IF NOT EXISTS idx_daily_meal_plans_user_date ON public.daily_meal_plans(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_wearable_data_user_date ON public.wearable_data(user_id, date);
+-- Defensive unique indexes (if table existed without constraints)
+DO $$ BEGIN
+  ALTER TABLE public.daily_meal_plans
+  ADD CONSTRAINT daily_meal_plans_user_date_meal_type_key UNIQUE (user_id, date, meal_type);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE public.wearable_data
+  ADD CONSTRAINT wearable_data_user_date_key UNIQUE (user_id, date);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS idx_food_logs_user_logged_at ON public.food_logs(user_id, logged_at);
 
 -- 6) RLS enable (if not already) and simple policies

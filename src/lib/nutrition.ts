@@ -32,18 +32,31 @@ export function adjustedPlannedCaloriesForActivity(plannedCalories: number, acti
 }
 
 export function computeDailyScore(planned: PlannedNutrition, consumed: PlannedNutrition, activityCalories: number): number {
-  const adjustedPlanned = adjustedPlannedCaloriesForActivity(planned.calories, activityCalories);
-  if (adjustedPlanned === 0) return 0;
+  const basePlannedCalories = Math.max(0, planned.calories || 0);
+  const extraCalories = Math.max(0, activityCalories || 0);
+  const adjustedPlannedCalories = basePlannedCalories + extraCalories;
+  if (adjustedPlannedCalories === 0) return 0;
 
-  const calorieScore = Math.min(100, (consumed.calories / adjustedPlanned) * 100);
-  const proteinScore = planned.protein > 0 ? Math.min(100, (consumed.protein / planned.protein) * 100) : 100;
-  const carbsScore = planned.carbs > 0 ? Math.min(100, (consumed.carbs / planned.carbs) * 100) : 100;
-  const fatScore = planned.fat > 0 ? Math.min(100, (consumed.fat / planned.fat) * 100) : 100;
+  // Scale macro targets proportionally with the calorie increase from activity
+  let proteinTarget = Math.max(0, planned.protein || 0);
+  let carbsTarget = Math.max(0, planned.carbs || 0);
+  let fatTarget = Math.max(0, planned.fat || 0);
+  if (basePlannedCalories > 0 && extraCalories > 0) {
+    const scale = adjustedPlannedCalories / basePlannedCalories;
+    proteinTarget = Math.round(proteinTarget * scale);
+    carbsTarget = Math.round(carbsTarget * scale);
+    fatTarget = Math.round(fatTarget * scale);
+  }
+
+  const calorieScore = Math.min(100, (consumed.calories / adjustedPlannedCalories) * 100);
+  const proteinScore = proteinTarget > 0 ? Math.min(100, (consumed.protein / proteinTarget) * 100) : 100;
+  const carbsScore = carbsTarget > 0 ? Math.min(100, (consumed.carbs / carbsTarget) * 100) : 100;
+  const fatScore = fatTarget > 0 ? Math.min(100, (consumed.fat / fatTarget) * 100) : 100;
 
   let weighted = calorieScore * 0.4 + proteinScore * 0.3 + carbsScore * 0.2 + fatScore * 0.1;
 
-  const calorieOver = consumed.calories > adjustedPlanned * 1.1;
-  const proteinOver = planned.protein > 0 && consumed.protein > planned.protein * 1.1;
+  const calorieOver = consumed.calories > adjustedPlannedCalories * 1.1;
+  const proteinOver = proteinTarget > 0 && consumed.protein > proteinTarget * 1.1;
   if (calorieOver) weighted -= 5;
   if (proteinOver) weighted -= 2;
 

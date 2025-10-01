@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreCard } from '@/components/ScoreCard';
-import { DailyNutritionSummary } from '@/components/DailyNutritionSummary';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarDays, Target, Users, Zap, TrendingUp, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
+import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 
@@ -53,25 +53,17 @@ interface DashboardData {
 
 interface DashboardProps {
   onAddMeal?: () => void;
+  onAnalyzeFitness?: () => void;
 }
 
-export function Dashboard({ onAddMeal }: DashboardProps) {
+export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const { user, session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generatingPlan, setGeneratingPlan] = useState(false);
-  const [raceGoal, setRaceGoal] = useState<string>('');
-  // targetMonths is shown as a derived label; compute dynamically from raceDate
-  const [raceDate, setRaceDate] = useState<Date | null>(null);
-  const [countdown, setCountdown] = useState<{
-    days: number;
-    hours: number;
-    minutes: number;
-    seconds: number;
-  } | null>(null);
+  // Removed manual generate plan action from dashboard
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
 
   // Function to determine current meal based on time and wearable data patterns
@@ -295,7 +287,6 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
   useEffect(() => {
     if (user) {
       loadDashboardData();
-      loadGoals();
     }
   }, [user]);
 
@@ -305,9 +296,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
 
     const channel = supabase
       .channel('dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `user_id=eq.${user.id}` }, () => {
-        loadGoals();
-      })
+      // profiles changes previously drove race goal widget; removed
       .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_meal_plans', filter: `user_id=eq.${user.id}` }, () => {
         loadDashboardData();
       })
@@ -324,139 +313,9 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     };
   }, [user]);
 
-  // Countdown timer effect
-  useEffect(() => {
-    if (!raceDate) return;
+  // race goal widget removed
 
-    const updateCountdown = () => {
-      const now = new Date();
-      const target = new Date(raceDate);
-      
-      console.log('Countdown update:', { now, target, raceDate });
-      
-      if (target <= now) {
-        console.log('Target date has passed');
-        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        return;
-      }
-
-      const totalSeconds = differenceInSeconds(target, now);
-      const days = Math.floor(totalSeconds / (24 * 60 * 60));
-      const hours = differenceInHours(target, now) % 24;
-      const minutes = differenceInMinutes(target, now) % 60;
-      const seconds = differenceInSeconds(target, now) % 60;
-
-      console.log('Countdown calculated:', { days, hours, minutes, seconds });
-      setCountdown({ days, hours, minutes, seconds });
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
-  }, [raceDate]);
-
-  const loadGoals = async () => {
-    if (!user) return;
-
-    try {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.log('Profiles select error (tolerating missing optional columns):', profileError.message);
-      }
-
-      console.log('Profile data:', profile);
-
-      if (profile) {
-        const formatLabel = (value?: string | null) => {
-          if (!value) return '';
-          return String(value)
-            .replace(/_/g, ' ')
-            .replace(/\b\w/g, (c) => c.toUpperCase());
-        };
-
-        const goalName = profile.goal_name && String(profile.goal_name).trim().length > 0
-          ? profile.goal_name
-          : (Array.isArray(profile.fitness_goals) && profile.fitness_goals.length > 0
-            ? String(profile.fitness_goals[0])
-            : formatLabel(profile.goal_type));
-
-        setRaceGoal(goalName || '');
-        console.log('Race goal set:', goalName);
-
-        // Use target_date from profile if available
-        if (profile.target_date) {
-          const targetDate = new Date(profile.target_date);
-          setRaceDate(targetDate);
-          console.log('Target date set:', targetDate);
-        } else {
-          // Try to find the marathon event matching this goal as fallback
-          const { data: marathonEvent } = await supabase
-            .from('marathon_events')
-            .select('event_date, event_name')
-            .ilike('event_name', `%${goalName}%`)
-            .maybeSingle();
-
-          if (marathonEvent) {
-            setRaceDate(new Date(marathonEvent.event_date));
-            console.log('Marathon event date set:', marathonEvent.event_date);
-          } else {
-            console.log('No target date or marathon event found');
-          }
-        }
-      } else {
-        console.log('No fitness goals found in profile');
-      }
-    } catch (error) {
-      console.error('Error loading goals:', error);
-    }
-  };
-
-  const generateDailyMealPlan = async () => {
-    if (!user) return;
-    
-    setGeneratingPlan(true);
-    try {
-      console.log('Generating meal plan...');
-      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-        body: { date: format(new Date(), 'yyyy-MM-dd') },
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
-      });
-      
-      if (error) {
-        console.error('Error generating meal plan:', error);
-        toast({
-          title: 'Generation failed',
-          description: error.message || 'Unable to generate meal plan. Please try again.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      console.log('Meal plan generated:', data);
-      toast({
-        title: 'Success!',
-        description: 'Your daily meal plan has been generated',
-      });
-
-      // Reload dashboard data after successful generation
-      await loadDashboardData();
-    } catch (error) {
-      console.error('Error invoking meal plan function:', error);
-      toast({
-        title: 'Error',
-        description: 'Something went wrong. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setGeneratingPlan(false);
-    }
-  };
+  // Manual plan generation removed
 
   const loadDashboardData = async () => {
     if (!user) return;
@@ -472,14 +331,15 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         .eq('date', today)
         .maybeSingle();
 
-      // Fetch wearable data for today
-      const { data: wearableRaw } = await (supabase as any)
+      // Fetch wearable data for today (pick latest if duplicates exist)
+      const { data: wearableList } = await (supabase as any)
         .from('wearable_data')
         .select('*')
         .eq('user_id', user.id)
         .eq('date', today)
-        .maybeSingle();
-      const wearableData: any = wearableRaw as any;
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const wearableData: any = Array.isArray(wearableList) && wearableList.length > 0 ? wearableList[0] : null;
 
       // Fetch meal plans for today
       const { data: plans } = await supabase
@@ -649,108 +509,9 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
           </CardContent>
         </Card>
 
-        {/* Race Goals Widget */}
-        {raceGoal ? (
-          <Card className="shadow-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Target className="h-4 w-4 text-primary" />
-                    <span className="font-semibold text-sm">Race Goal</span>
-                  </div>
-                  <div className="text-lg font-bold text-primary">
-                    {raceGoal}
-                  </div>
-                  {raceDate && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Target: {Math.max(0, Math.floor(differenceInDays(raceDate, new Date()) / 30))} months
-                    </div>
-                  )}
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => navigate('/goals')}
-                  className="text-primary hover:text-primary-glow"
-                >
-                  Update
-                </Button>
-              </div>
+        <RaceGoalWidget />
 
-              {/* Countdown Timer */}
-              {countdown && raceDate && (
-                <div className="pt-3 border-t border-primary/10">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="h-3 w-3 text-primary" />
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Time until race:
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="text-center bg-primary/10 rounded-lg p-2">
-                      <div className="text-xl font-bold text-primary">
-                        {countdown.days}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Days</div>
-                    </div>
-                    <div className="text-center bg-primary/10 rounded-lg p-2">
-                      <div className="text-xl font-bold text-primary">
-                        {countdown.hours}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Hours</div>
-                    </div>
-                    <div className="text-center bg-primary/10 rounded-lg p-2">
-                      <div className="text-xl font-bold text-primary">
-                        {countdown.minutes}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Mins</div>
-                    </div>
-                    <div className="text-center bg-primary/10 rounded-lg p-2">
-                      <div className="text-xl font-bold text-primary">
-                        {countdown.seconds}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Secs</div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-center text-muted-foreground mt-2">
-                    Race date: {format(raceDate, 'MMM dd, yyyy')}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="shadow-card mb-6 bg-gradient-to-br from-muted/5 to-muted/10 border-muted/20">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Target className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold text-sm text-muted-foreground">Race Goal</span>
-                  </div>
-                  <div className="text-lg font-bold text-muted-foreground">
-                    No goal set
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Set your running goal to see countdown timer
-                  </div>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => navigate('/goals')}
-                  className="text-primary hover:text-primary-glow"
-                >
-                  Set Goal
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Daily Nutrition Summary */}
-        <DailyNutritionSummary />
+        {/* Daily Nutrition Summary removed */}
 
         {/* Today's Nutrition Plan */}
         <Card className="shadow-card mb-6">
@@ -767,23 +528,6 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                     <p className="text-sm text-muted-foreground mb-3">
                       No meal plan found for today. Showing default runner-friendly suggestions.
                     </p>
-                    <Button 
-                      onClick={generateDailyMealPlan}
-                      disabled={generatingPlan}
-                      className="bg-primary hover:bg-primary/90"
-                    >
-                      {generatingPlan ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Target className="mr-2 h-4 w-4" />
-                          Generate Meal Plan
-                        </>
-                      )}
-                    </Button>
                   </div>
                   <div className="space-y-3">
                     {([
@@ -874,14 +618,14 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                 Profile & Goals
               </Button>
               <Button 
-                variant="default" 
-                className="w-full col-span-2"
-                onClick={generateDailyMealPlan}
-                disabled={generatingPlan}
+                variant="outline" 
+                className="w-full"
+                onClick={onAnalyzeFitness}
               >
-                <Zap className="h-4 w-4 mr-2" />
-                {generatingPlan ? 'Generating...' : 'Generate Daily Plan'}
+                <Camera className="h-4 w-4 mr-2" />
+                Analyze Fitness
               </Button>
+              {/* Manual generate daily plan button removed */}
             </CardContent>
           </Card>
 

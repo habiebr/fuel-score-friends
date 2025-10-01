@@ -1,4 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+// Alternative FIT parser (server-side) with Deno npm compatibility
+// Uses callback API; we'll wrap it in a Promise
+// @ts-ignore - types may not be available in Deno env
+import FitParser from 'npm:fit-file-parser';
 import { corsHeaders } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
@@ -42,90 +46,84 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { fitData } = await req.json();
-    
-    // Decode base64 .fit file data
-    const binaryData = Uint8Array.from(atob(fitData), c => c.charCodeAt(0));
-    
-    console.log(`Processing FIT file of size: ${binaryData.length} bytes`);
-    
-    // Parse .fit file with Garmin FIT SDK
-    const parsedData = await parseFitFile(binaryData);
-    
-    console.log(`Parsed ${parsedData.sessions.length} sessions with ${parsedData.records.length} records`);
-    
-    // Store each session
-    for (const session of parsedData.sessions) {
-      const sessionDate = new Date(session.timestamp).toISOString().split('T')[0];
-      
-      const { data: wearableData, error: upsertError } = await supabase
-        .from('wearable_data')
-        .upsert({
-          user_id: user.id,
-          date: sessionDate,
-          calories_burned: Math.round(session.totalCalories),
-          active_minutes: session.activeMinutes,
-          heart_rate_avg: Math.round(session.avgHeartRate),
-          max_heart_rate: session.maxHeartRate,
-          distance_meters: Math.round(session.totalDistance),
-          elevation_gain: Math.round(session.totalAscent),
-          avg_cadence: Math.round(session.avgCadence),
-          avg_power: Math.round(session.avgPower),
-          max_speed: session.maxSpeed,
-          activity_type: session.activityType,
-          avg_temperature: session.avgTemperature ? Math.round(session.avgTemperature) : null,
-          training_effect: session.trainingEffect || null,
-          recovery_time: session.recoveryTime || null,
-          heart_rate_zones: parsedData.heartRateZones,
-          gps_data: parsedData.gpsPoints.slice(0, 500), // Limit GPS points
-          detailed_metrics: {
-            duration: session.duration
-          }
-        }, {
-          onConflict: 'user_id,date'
-        })
-        .select('id')
-        .single();
+    const body = await req.json();
+    const sessionsInput: any[] | undefined = Array.isArray(body?.sessions) ? body.sessions : undefined;
+    const fitData: string | undefined = typeof body?.fitData === 'string' ? body.fitData : undefined;
 
-      if (upsertError) {
-        console.error('Upsert error:', upsertError);
-        throw upsertError;
+    let sessions: any[] = [];
+
+    let recordsCount = 0;
+
+    if (sessionsInput && sessionsInput.length > 0) {
+      // Use client-parsed sessions (preferred: preserves real timestamps)
+      sessions = sessionsInput;
+      console.log(`Received ${sessions.length} pre-parsed session(s) from client`);
+    } else if (fitData) {
+      // Fallback: decode and parse FIT on server
+      const binaryData = Uint8Array.from(atob(fitData), c => c.charCodeAt(0));
+      console.log(`Processing FIT file of size: ${binaryData.length} bytes`);
+      // Try high-fidelity parser first, then fall back to basic
+      try {
+        const parsed = await parseFitWithLibrary(binaryData.buffer);
+        sessions = parsed.sessions;
+        recordsCount = parsed.recordsCount;
+        console.log(`Parsed (lib) ${sessions.length} sessions with ${recordsCount} records`);
+      } catch (libErr) {
+        console.warn('fit-file-parser failed, falling back to basic parser:', libErr);
+        const parsedData = await parseFitFile(binaryData);
+        sessions = parsedData.sessions;
+        recordsCount = Array.isArray(parsedData.records) ? parsedData.records.length : 0;
+        console.log(`Parsed (basic) ${parsedData.sessions.length} sessions with ${parsedData.records.length} records`);
       }
+    } else {
+      return new Response(JSON.stringify({ error: 'Invalid payload. Provide sessions[] or fitData.' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-      // Store lap data if available
-      if (parsedData.laps && parsedData.laps.length > 0 && wearableData) {
-        const lapsToInsert = parsedData.laps.map((lap: any, index: number) => ({
-          user_id: user.id,
-          wearable_data_id: wearableData.id,
-          lap_index: index + 1,
-          start_time: lap.startTime,
-          total_time: lap.totalTime,
-          total_distance: lap.totalDistance,
-          avg_heart_rate: lap.avgHeartRate,
-          max_heart_rate: lap.maxHeartRate,
-          avg_speed: lap.avgSpeed,
-          calories: lap.calories
-        }));
+    // Insert a new row per session (no aggregation)
+    for (const session of sessions) {
+      const sessionTs = session?.timestamp || session?.startTime || session?.start_time || session?.time_created || new Date().toISOString();
+      const sessionDate = new Date(sessionTs).toISOString().split('T')[0];
+      const calories = Math.max(0, Math.round(session.totalCalories || session.total_calories || 0));
+      const durationSec = Math.max(0, Math.round(session.duration || session.totalTimerTime || session.total_timer_time || 0));
+      const activeMinutes = Math.round(durationSec / 60);
+      const distance = Math.max(0, Math.round(session.totalDistance || session.total_distance || session.distance || 0));
+      const avgHr = Math.max(0, Math.round(session.avgHeartRate || session.avg_heart_rate || 0));
+      const maxHr = Math.max(0, Number(session.maxHeartRate || session.max_heart_rate || 0)) || null;
+      const activityType = session.activityType || session.activity || 'activity';
+      const trainingEffect = session.trainingEffect ?? null;
+      const recoveryTime = session.recoveryTime ?? null;
 
-        const { error: lapsError } = await supabase
-          .from('wearable_laps')
-          .upsert(lapsToInsert, {
-            onConflict: 'wearable_data_id,lap_index'
-          });
+      const row = {
+        user_id: user.id,
+        date: sessionDate,
+        calories_burned: calories,
+        active_minutes: activeMinutes,
+        distance_meters: distance,
+        heart_rate_avg: avgHr,
+        max_heart_rate: maxHr,
+        activity_type: activityType,
+        training_effect: trainingEffect,
+        recovery_time: recoveryTime,
+        source: 'fit'
+      } as Record<string, unknown>;
 
-        if (lapsError) {
-          console.error('Laps insert error:', lapsError);
-        } else {
-          console.log(`Inserted ${lapsToInsert.length} laps for session`);
-        }
+      const { error: insertError } = await supabase
+        .from('wearable_data')
+        .insert(row);
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
       }
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        sessionsImported: parsedData.sessions.length,
-        recordsImported: parsedData.records.length
+        sessionsImported: sessions.length,
+        recordsImported: recordsCount
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -144,6 +142,52 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// Parse FIT using fit-file-parser for higher fidelity
+async function parseFitWithLibrary(arrayBuffer: ArrayBuffer): Promise<{ sessions: any[]; recordsCount: number }> {
+  const parser = new (FitParser as any)({
+    force: true,
+    speedUnit: 'km/h',
+    lengthUnit: 'm',
+    temperatureUnit: 'celsius',
+    elapsedRecordField: true
+  });
+
+  const buffer = new Uint8Array(arrayBuffer);
+
+  const result: any = await new Promise((resolve, reject) => {
+    try {
+      parser.parse(buffer, (error: any, data: any) => {
+        if (error) return reject(error);
+        resolve(data);
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+
+  const sessionsRaw: any[] = Array.isArray(result?.sessions) ? result.sessions : (result?.session ? [result.session] : []);
+  const records: any[] = Array.isArray(result?.records) ? result.records : [];
+
+  const sessions = sessionsRaw.map((s: any) => {
+    const ts = s?.start_time || s?.timestamp || s?.time_created || new Date().toISOString();
+    const duration = Number(s?.total_timer_time || s?.total_elapsed_time || s?.duration || 0);
+    return {
+      timestamp: new Date(ts).toISOString(),
+      activityType: s?.sport || s?.activity || 'activity',
+      totalDistance: Math.round(Number(s?.total_distance || s?.totalDistance || 0)),
+      totalCalories: Math.round(Number(s?.total_calories || s?.totalCalories || 0)),
+      avgHeartRate: Math.round(Number(s?.avg_heart_rate || s?.avgHeartRate || 0)),
+      maxHeartRate: Math.round(Number(s?.max_heart_rate || s?.maxHeartRate || 0)) || null,
+      duration: Math.round(duration),
+      activeMinutes: Math.round(duration / 60),
+      trainingEffect: s?.training_effect ?? null,
+      recoveryTime: s?.recovery_time ?? null,
+    };
+  });
+
+  return { sessions, recordsCount: records.length };
+}
 
 async function parseFitFile(data: Uint8Array) {
   const sessions: any[] = [];

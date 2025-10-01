@@ -163,7 +163,7 @@ async function syncGoogleFitData(token) {
       body: JSON.stringify({
         aggregateBy: [{
           dataTypeName: 'com.google.step_count.delta',
-          dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
+          // Do not force a restricted dataSource; allow Google to choose
         }],
         bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
         startTimeMillis: startOfDay.getTime(),

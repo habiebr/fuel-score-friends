@@ -125,7 +125,7 @@ export function useGoogleFit() {
       const stepsResponse = await aggregate({
         aggregateBy: [{
           dataTypeName: 'com.google.step_count.delta',
-          dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
+          // Let Google select an accessible source (avoids forbidden estimated_steps)
         }],
         bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
         startTimeMillis: startOfDay.getTime(),
@@ -135,7 +135,7 @@ export function useGoogleFit() {
       const caloriesResponse = await aggregate({
         aggregateBy: [{
           dataTypeName: 'com.google.calories.expended',
-          dataSourceId: 'derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended'
+          // Let Google select an accessible source
         }],
         bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
         startTimeMillis: startOfDay.getTime(),
@@ -145,7 +145,7 @@ export function useGoogleFit() {
       const activeMinutesResponse = await aggregate({
         aggregateBy: [{
           dataTypeName: 'com.google.active_minutes',
-          dataSourceId: 'derived:com.google.active_minutes:com.google.android.gms:merge_active_minutes'
+          // Let Google select an accessible source
         }],
         bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
         startTimeMillis: startOfDay.getTime(),

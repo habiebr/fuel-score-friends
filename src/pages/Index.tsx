@@ -4,6 +4,7 @@ import { Dashboard } from '@/components/Dashboard';
 import { BottomNav } from '@/components/BottomNav';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
+import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
@@ -11,6 +12,7 @@ const Index = () => {
   const navigate = useNavigate();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
+  const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -48,11 +50,15 @@ const Index = () => {
       <OnboardingDialog open={showOnboarding} onComplete={handleOnboardingComplete} />
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-7xl mx-auto p-4">
-        <Dashboard onAddMeal={() => setFoodTrackerOpen(true)} />
+        <Dashboard 
+          onAddMeal={() => setFoodTrackerOpen(true)} 
+          onAnalyzeFitness={() => setFitnessScreenshotOpen(true)}
+        />
         </div>
       </div>
       <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
+      <FitnessScreenshotDialog open={fitnessScreenshotOpen} onOpenChange={setFitnessScreenshotOpen} />
     </>
   );
 };

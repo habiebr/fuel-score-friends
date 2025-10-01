@@ -2,7 +2,69 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
-import { calculateTDEE, splitCaloriesToMeals, deriveMacros } from "../_shared/nutrition.ts";
+// Inline minimal nutrition helpers to avoid shared import issues
+type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | string | null | undefined;
+interface TDEEInput {
+  weightKg?: number | null;
+  heightCm?: number | null;
+  ageYears?: number | null;
+  activityLevel?: ActivityLevel;
+  wearableCaloriesToday?: number | null;
+  fitnessGoal?: string | null;
+  weekPlan?: Array<{ day: string; activity?: string; duration?: number }> | null;
+}
+interface TDEEResult {
+  bmr: number;
+  activityMultiplier: number;
+  baseTDEE: number;
+  trainingAdjustment: number;
+  totalDailyCalories: number;
+  trainingIntensity: 'low' | 'moderate' | 'moderate-high' | 'high';
+}
+function inlineCalculateBMR(weightKg?: number | null, heightCm?: number | null, ageYears?: number | null): number {
+  if (!weightKg || !heightCm || !ageYears) return 2000; // safe default to avoid zeroing
+  return Math.round(10 * weightKg + 6.25 * heightCm - 5 * ageYears + 5);
+}
+function inlineGetActivityMultiplier(level?: ActivityLevel): number {
+  const map: Record<string, number> = {
+    sedentary: 1.2,
+    light: 1.375,
+    moderate: 1.55,
+    active: 1.725,
+    very_active: 1.9,
+  };
+  const key = String(level || 'moderate').toLowerCase();
+  return map[key] ?? 1.55;
+}
+function calculateTDEE(input: TDEEInput): TDEEResult {
+  const bmr = inlineCalculateBMR(input.weightKg, input.heightCm, input.ageYears);
+  const activityMultiplier = inlineGetActivityMultiplier(input.activityLevel);
+  let total = Math.round(bmr * activityMultiplier);
+  if (typeof input.wearableCaloriesToday === 'number' && input.wearableCaloriesToday > 0) {
+    total = Math.round(bmr + input.wearableCaloriesToday);
+  }
+  let trainingAdjustment = 0;
+  let trainingIntensity: TDEEResult['trainingIntensity'] = 'moderate';
+  const goal = (input.fitnessGoal || '').toLowerCase();
+  if (goal.includes('marathon')) { trainingAdjustment += 500; trainingIntensity = 'high'; }
+  else if (goal.includes('half')) { trainingAdjustment += 300; trainingIntensity = 'moderate-high'; }
+  else if (goal.includes('5k') || goal.includes('10k')) { trainingAdjustment += 200; trainingIntensity = 'moderate'; }
+  else if (goal === 'lose_weight') { trainingAdjustment -= 500; trainingIntensity = 'moderate'; }
+  else if (goal === 'gain_muscle') { trainingAdjustment += 300; trainingIntensity = 'moderate'; }
+  if (input.weekPlan && Array.isArray(input.weekPlan)) {
+    const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const todayPlan = input.weekPlan.find(d => d && d.day === todayName);
+    if (todayPlan) {
+      const dur = todayPlan.duration || 0;
+      if (todayPlan.activity === 'run' && dur > 60) { trainingAdjustment += 400; trainingIntensity = 'high'; }
+      else if (todayPlan.activity === 'run' && dur > 30) { trainingAdjustment += 200; trainingIntensity = 'moderate-high'; }
+      else if (todayPlan.activity === 'run') { trainingAdjustment += 100; trainingIntensity = 'moderate'; }
+      else if (todayPlan.activity === 'rest') { trainingAdjustment -= 100; trainingIntensity = 'low'; }
+    }
+  }
+  const totalDailyCalories = total + trainingAdjustment;
+  return { bmr, activityMultiplier, baseTDEE: total, trainingAdjustment, totalDailyCalories, trainingIntensity };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -53,6 +115,8 @@ serve(async (req) => {
 
     const { date } = await req.json();
     const requestDate = date || new Date().toISOString().split("T")[0];
+    const requestDateObj = new Date(requestDate + 'T00:00:00');
+    const requestWeekday = requestDateObj.toLocaleDateString('en-US', { weekday: 'long' });
 
     console.log(`3. Generating meal plan for user ${userId} on ${requestDate}`);
 
@@ -90,12 +154,16 @@ serve(async (req) => {
 
     const fitnessGoal = profile?.goal_type || profile?.fitness_goals?.[0];
     const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
+    const dayPlan = Array.isArray(weekPlan) ? weekPlan.find((d: any) => d && d.day === requestWeekday) : null;
+    const distanceKm = typeof dayPlan?.distanceKm === 'number' ? dayPlan.distanceKm : undefined;
+    const distanceBasedKcal = distanceKm && profile?.weight ? Math.round((profile.weight as number) * distanceKm) : undefined;
+    const plannedCalories = distanceBasedKcal ?? (dayPlan?.estimatedCalories || 0);
     const tdee = calculateTDEE({
       weightKg: profile?.weight,
       heightCm: profile?.height,
       ageYears: profile?.age,
       activityLevel: profile?.activity_level,
-      wearableCaloriesToday: wearableData?.calories_burned || 0,
+      wearableCaloriesToday: (wearableData?.calories_burned || 0) || plannedCalories,
       fitnessGoal,
       weekPlan,
     });
@@ -119,11 +187,12 @@ serve(async (req) => {
     const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
     const context = `
+Date: ${requestDate} (${requestWeekday})
 User Profile:
 - Age: ${profile?.age || "unknown"}
 - Weight: ${profile?.weight || "unknown"} kg
 - Height: ${profile?.height || "unknown"} cm
-- BMR (Basal Metabolic Rate): ${bmr} kcal
+- BMR (Basal Metabolic Rate): ${tdee.bmr} kcal
 - Activity Level: ${profile?.activity_level || "moderate"}
 - Fitness Goals: ${fitnessGoal || "general fitness"}
 - Target Race Date: ${targetDate || "not set"}
@@ -136,12 +205,7 @@ Running Goals & Training Plan:
 - Target Date: ${targetDate || "not specified"}
 - Current Fitness Level: ${fitnessLevel || "intermediate"}
 - Weekly Training Plan: ${weekPlan ? JSON.stringify(weekPlan, null, 2) : "not set"}
-- Today's Training: ${(() => {
-  if (!weekPlan) return "not set";
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-  const todayPlan = weekPlan.find(day => day.day === today);
-  return todayPlan ? `${todayPlan.activity} for ${todayPlan.duration} minutes (${todayPlan.estimatedCalories} calories)` : "rest day";
-})()}
+- Today's Training: ${dayPlan ? `${dayPlan.activity}${typeof dayPlan.distanceKm==='number' ? ` ${dayPlan.distanceKm} km` : dayPlan.duration?` for ${dayPlan.duration} minutes`:''} (${plannedCalories} calories est.)` : "rest day"}
 
 Today's Activity Metrics:
 - Calories burned: ${wearableData?.calories_burned || 0} kcal
@@ -162,8 +226,7 @@ ${avgMetrics ? `- Average calories burned: ${avgMetrics.avgCalories} kcal/day
 - Average sleep: ${avgMetrics.avgSleep} hours/night
 - Average distance: ${avgMetrics.avgDistance} km/day` : "- No recent data available"}
 
-Daily Calorie Target: ${totalDailyCalories} kcal
-${calorieAdjustment !== 0 ? `(Adjusted ${calorieAdjustment > 0 ? '+' : ''}${calorieAdjustment} kcal for ${fitnessGoal?.replace('_', ' ')})` : ''}
+Daily Calorie Target: ${totalDailyCalories} kcal (includes planned training load for this day)
 
 IMPORTANT LOCATION-SPECIFIC REQUIREMENTS:
 - User is based in INDONESIA
@@ -333,8 +396,8 @@ Return ONLY valid JSON in this exact format:
     for (const mealType of mealTypes) {
       // Ensure we have a meal object with targets even if AI missed it
       let meal = mealPlan[mealType];
+      const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : 0.30;
       if (!meal) {
-        const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : 0.30;
         meal = {
           target_calories: Math.round(totalDailyCalories * pct),
           target_protein: Math.round((totalDailyCalories * pct * 0.30) / 4),
@@ -342,6 +405,13 @@ Return ONLY valid JSON in this exact format:
           target_fat: Math.round((totalDailyCalories * pct * 0.30) / 9),
           suggestions: [],
         };
+      } else {
+        // Fill any missing target fields with sane defaults
+        if (!Number.isFinite(meal.target_calories) || meal.target_calories <= 0) meal.target_calories = Math.round(totalDailyCalories * pct);
+        if (!Number.isFinite(meal.target_protein) || meal.target_protein <= 0) meal.target_protein = Math.round((totalDailyCalories * pct * 0.30) / 4);
+        if (!Number.isFinite(meal.target_carbs) || meal.target_carbs <= 0) meal.target_carbs = Math.round((totalDailyCalories * pct * 0.40) / 4);
+        if (!Number.isFinite(meal.target_fat) || meal.target_fat <= 0) meal.target_fat = Math.round((totalDailyCalories * pct * 0.30) / 9);
+        if (!Array.isArray(meal.suggestions)) meal.suggestions = [];
       }
 
       console.log(`Inserting ${mealType} plan...`);

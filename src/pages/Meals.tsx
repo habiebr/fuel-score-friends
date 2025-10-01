@@ -10,6 +10,7 @@ import { Calendar, Search, ArrowLeft, Utensils, TrendingUp, Loader2, ChevronLeft
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useGoogleFit } from '@/hooks/useGoogleFit';
 import { format, subDays } from 'date-fns';
 
 interface FoodLog {
@@ -38,6 +39,7 @@ export default function Meals() {
   const { user, session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAuthorized: isGoogleFitAuthorized, fetchTodayData: fetchGoogleFitToday } = useGoogleFit();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -46,6 +48,44 @@ export default function Meals() {
   const [weekData, setWeekData] = useState<DayData[]>([]);
   const [dailyMealPlan, setDailyMealPlan] = useState<any>(null);
   const [loadingMealPlan, setLoadingMealPlan] = useState(false);
+  const [weeklyPlans, setWeeklyPlans] = useState<Record<string, any[]>>({});
+  const [loadingWeeklyPlans, setLoadingWeeklyPlans] = useState(false);
+  const [generatingWeek, setGeneratingWeek] = useState(false);
+  const [trainingDays, setTrainingDays] = useState<Record<string, boolean>>({});
+  
+  // Regenerate the next 7 days: delete existing + generate fresh via AI
+  const regenerateWeek = async () => {
+    if (!user || !session?.access_token) return;
+    setGeneratingWeek(true);
+    try {
+      const start = new Date();
+      const end = new Date();
+      end.setDate(start.getDate() + 6);
+      const startStr = format(start, 'yyyy-MM-dd');
+      const endStr = format(end, 'yyyy-MM-dd');
+
+      // Hard reset the window to avoid stale rows
+      await supabase
+        .from('daily_meal_plans')
+        .delete()
+        .eq('user_id', user.id)
+        .gte('date', startStr)
+        .lte('date', endStr);
+
+      // Generate fresh week (AI driven)
+      await supabase.functions.invoke('generate-meal-plan-range', {
+        body: { startDate: startStr, weeks: 1 },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      // Reload
+      await loadWeeklyMealPlans();
+    } catch (e) {
+      console.warn('Regenerate week failed', e);
+    } finally {
+      setGeneratingWeek(false);
+    }
+  };
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
   const [currentMealType, setCurrentMealType] = useState('breakfast');
   const [activityCaloriesToday, setActivityCaloriesToday] = useState<number>(0);
@@ -86,8 +126,21 @@ export default function Meals() {
       loadWeekData();
       loadDailyMealPlan();
       loadWearableToday();
+      loadWeeklyMealPlans();
     }
   }, [user]);
+
+  // When training plan changes, force recreate the upcoming week
+  useEffect(() => {
+    if (!user || !session?.access_token) return;
+    const channel = (supabase as any)
+      .channel('meals-profiles-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `user_id=eq.${user.id}` }, async () => {
+        await regenerateWeek();
+      })
+      .subscribe();
+    return () => { try { (supabase as any).removeChannel(channel); } catch {} };
+  }, [user, session?.access_token]);
 
   // Reset carousel when meal plans change
   useEffect(() => {
@@ -107,7 +160,21 @@ export default function Meals() {
         .eq('user_id', user.id)
         .eq('date', today);
       const activity = (wearableToday || []).reduce((sum: number, w: any) => sum + (w.calories_burned || 0), 0);
-      setActivityCaloriesToday(activity);
+
+      // Prefer .fit/garmin wearable data when present; otherwise fall back to Google Fit
+      if (activity > 0) {
+        setActivityCaloriesToday(activity);
+      } else if (isGoogleFitAuthorized) {
+        try {
+          const gf = await fetchGoogleFitToday();
+          const gfCalories = Math.max(0, gf?.calories || 0);
+          setActivityCaloriesToday(gfCalories);
+        } catch (_) {
+          setActivityCaloriesToday(0);
+        }
+      } else {
+        setActivityCaloriesToday(0);
+      }
     } catch (e) {
       console.error('Failed to load wearable calories for today', e);
     }
@@ -186,33 +253,6 @@ export default function Meals() {
       if (error) throw error;
 
       if (plans && plans.length > 0) {
-        const ensureThree = (mealType: string, existing: any[] | undefined) => {
-          const baseFallbacks = {
-            breakfast: [
-              { name: 'Nasi Uduk + Ayam Goreng', foods: ['Nasi uduk (150g)','Ayam goreng (100g)','Sambal kacang (30g)'], description: 'Sarapan gurih khas Indonesia', calories: 450, protein: 25, carbs: 45, fat: 18 },
-              { name: 'Bubur Ayam', foods: ['Bubur nasi (200g)','Ayam suwir (80g)','Bawang goreng (5g)'], description: 'Bubur hangat dengan ayam', calories: 380, protein: 22, carbs: 42, fat: 12 },
-              { name: 'Lontong Sayur', foods: ['Lontong (120g)','Sayur labu siam (150g)','Santan (100ml)'], description: 'Sarapan lontong sayur', calories: 320, protein: 18, carbs: 38, fat: 14 },
-            ],
-            lunch: [
-              { name: 'Nasi Padang', foods: ['Nasi (150g)','Rendang (100g)','Sayur singkong (100g)'], description: 'Rendang dan sayur', calories: 650, protein: 35, carbs: 55, fat: 28 },
-              { name: 'Gado-gado', foods: ['Sayuran (200g)','Tahu (80g)','Bumbu kacang (45g)'], description: 'Salad Indonesia', calories: 420, protein: 28, carbs: 35, fat: 22 },
-              { name: 'Soto Ayam', foods: ['Ayam (120g)','Nasi (150g)','Tauge (60g)'], description: 'Sup ayam segar', calories: 480, protein: 32, carbs: 48, fat: 16 },
-            ],
-            dinner: [
-              { name: 'Pecel Lele', foods: ['Lele (200g)','Nasi (150g)','Lalapan (100g)'], description: 'Lele goreng sambal', calories: 520, protein: 38, carbs: 45, fat: 20 },
-              { name: 'Rawon', foods: ['Daging (120g)','Nasi (150g)','Tauge (60g)'], description: 'Sup rawon khas', calories: 480, protein: 35, carbs: 42, fat: 18 },
-              { name: 'Ayam Bakar', foods: ['Ayam (150g)','Nasi (150g)','Tempe (60g)'], description: 'Ayam bakar manis', calories: 450, protein: 30, carbs: 40, fat: 16 },
-            ],
-          } as const;
-
-          const list = Array.isArray(existing) ? [...existing] : [];
-          const fallbacks = baseFallbacks[mealType as 'breakfast'|'lunch'|'dinner'] || [];
-          for (let i = 0; i < fallbacks.length && list.length < 3; i++) {
-            list.push(fallbacks[i]);
-          }
-          return list.slice(0, 3);
-        };
-
         const mealPlanData: any = {};
         plans.forEach(plan => {
           mealPlanData[plan.meal_type] = {
@@ -220,7 +260,7 @@ export default function Meals() {
             target_protein: plan.recommended_protein_grams,
             target_carbs: plan.recommended_carbs_grams,
             target_fat: plan.recommended_fat_grams,
-            suggestions: ensureThree(plan.meal_type, plan.meal_suggestions as any[])
+            suggestions: Array.isArray(plan.meal_suggestions) ? (plan.meal_suggestions as any[]) : []
           };
         });
 
@@ -233,6 +273,119 @@ export default function Meals() {
       // Don't show error toast for meal plan as it's optional
     } finally {
       setLoadingMealPlan(false);
+    }
+  };
+
+  const loadWeeklyMealPlans = async () => {
+    if (!user) return;
+
+    setLoadingWeeklyPlans(true);
+    try {
+      const start = new Date();
+      const end = new Date();
+      end.setDate(start.getDate() + 6);
+
+      const startStr = format(start, 'yyyy-MM-dd');
+      const endStr = format(end, 'yyyy-MM-dd');
+
+      const { data: plans, error } = await supabase
+        .from('daily_meal_plans')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', startStr)
+        .lte('date', endStr)
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+
+      // If no plans found for the next 7 days, attempt on-demand generation then refetch once
+      let allPlans = plans || [];
+      if ((allPlans.length === 0) && session?.access_token) {
+        try {
+          await supabase.functions.invoke('generate-meal-plan-range', {
+            body: { startDate: startStr, weeks: 1 },
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          const retry = await supabase
+            .from('daily_meal_plans')
+            .select('*')
+            .eq('user_id', user.id)
+            .gte('date', startStr)
+            .lte('date', endStr)
+            .order('date', { ascending: true });
+          if (!retry.error && retry.data) {
+            allPlans = retry.data;
+          }
+          // As a final fallback, generate each day individually using the AI-powered single-day function
+          if (allPlans.length === 0) {
+            const days: string[] = [];
+            for (let i = 0; i < 7; i++) {
+              const d = new Date(start);
+              d.setDate(start.getDate() + i);
+              days.push(format(d, 'yyyy-MM-dd'));
+            }
+            for (const day of days) {
+              try {
+                await supabase.functions.invoke('generate-meal-plan', {
+                  body: { date: day },
+                  headers: { Authorization: `Bearer ${session.access_token}` },
+                });
+              } catch (e) {
+                console.warn('Per-day generation failed for', day, e);
+              }
+            }
+            const retry2 = await supabase
+              .from('daily_meal_plans')
+              .select('*')
+              .eq('user_id', user.id)
+              .gte('date', startStr)
+              .lte('date', endStr)
+              .order('date', { ascending: true });
+            if (!retry2.error && retry2.data) {
+              allPlans = retry2.data;
+            }
+          }
+        } catch (genErr) {
+          console.warn('Auto-generation of weekly plans failed:', genErr);
+        }
+      }
+
+      const grouped: Record<string, any[]> = {};
+      (allPlans || []).forEach((p: any) => {
+        const key = p.date;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(p);
+      });
+      setWeeklyPlans(grouped);
+
+      // Color-code by training plan for each day in the 7-day window
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('activity_level')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level as any) : null;
+        const map: Record<string, boolean> = {};
+        if (Array.isArray(weekPlan)) {
+          for (let i = 0; i < 7; i++) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            const dateStr = format(d, 'yyyy-MM-dd');
+            const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+            const dayPlan = weekPlan.find((w: any) => w && w.day === weekday);
+            const hasTraining = !!(dayPlan && dayPlan.activity && dayPlan.activity !== 'rest' && (dayPlan.estimatedCalories || dayPlan.distanceKm || dayPlan.duration));
+            map[dateStr] = !!hasTraining;
+          }
+        }
+        setTrainingDays(map);
+      } catch (_) {
+        setTrainingDays({});
+      }
+    } catch (e) {
+      console.error('Failed to load weekly meal plans', e);
+    } finally {
+      setLoadingWeeklyPlans(false);
     }
   };
 
@@ -564,6 +717,79 @@ export default function Meals() {
 
           {/* Week Overview */}
           <div className="space-y-4">
+            <Card className="shadow-card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-primary" />
+                    7-Day Meal Plan
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={generatingWeek}
+                      onClick={regenerateWeek}
+                      className="flex items-center gap-2"
+                    >
+                      {generatingWeek ? <Loader2 className="h-4 w-4 animate-spin" /> : <Utensils className="h-4 w-4" />}
+                      {generatingWeek ? 'Recreating…' : 'Recreate Week'}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Render each day */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Array.from({ length: 7 }).map((_, idx) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + idx);
+                    const dateStr = format(d, 'yyyy-MM-dd');
+                    const dayPlans = weeklyPlans[dateStr] || [];
+                    const isTraining = !!trainingDays[dateStr];
+                    return (
+                      <Card key={dateStr} className={isTraining ? "border bg-primary/5" : "border"}>
+                        <CardHeader>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Calendar className={isTraining ? "h-4 w-4 text-primary" : "h-4 w-4 text-muted-foreground"} />
+                            {format(d, 'EEEE, MMM dd')}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {dayPlans.length === 0 ? (
+                            <div className={isTraining ? "text-sm text-primary" : "text-sm text-muted-foreground"}>
+                              {isTraining ? 'Training day — generate to tailor meals.' : 'No plan yet. Generate to fill this day.'}
+                            </div>
+                          ) : (
+                            ['breakfast','lunch','dinner'].map((type) => {
+                              const plan = dayPlans.find((p: any) => p.meal_type === type);
+                              if (!plan) return null;
+                              const first = Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0 ? plan.meal_suggestions[0] : null;
+                              return (
+                                <div key={type} className={isTraining ? "p-3 rounded border bg-primary/10 border-primary/20" : "p-3 bg-muted/20 rounded border"}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <div className="font-semibold capitalize">{type}</div>
+                                    <div className="text-xs text-muted-foreground">Target: {plan.recommended_calories} kcal</div>
+                                  </div>
+                                  {first ? (
+                                    <div className="text-sm">
+                                      <div className="font-medium text-primary">{first.name}</div>
+                                      <div className="text-muted-foreground">{first.description}</div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs text-muted-foreground">No suggestions.</div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
             {weekData.map((day) => (
               <Card key={day.date} className="shadow-card">
                 <CardHeader>
