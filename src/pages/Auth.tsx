@@ -65,11 +65,11 @@ export default function Auth() {
             </div>
             <Watch className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-            NutriTracker
+          <h1 className="text-3xl font-bold text-primary">
+            Nutrisync
           </h1>
           <p className="text-muted-foreground mt-2">
-            Your personalized nutrition companion
+            AI-powered nutrition for peak performance
           </p>
         </div>
 
