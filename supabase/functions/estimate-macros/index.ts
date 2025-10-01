@@ -14,21 +14,30 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
 
     const authHeader = req.headers.get("Authorization")!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    
+    // Create client with anon key and user's auth header for proper RLS
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
     const {
       data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
+      error: userError,
+    } = await supabaseClient.auth.getUser();
+    
+    if (userError || !user) {
+      console.error("Auth error:", userError);
+      throw new Error("Unauthorized");
+    }
+
+    console.log("User authenticated:", user.id);
 
     // Get user profile
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseClient
       .from("profiles")
       .select("*")
       .eq("user_id", user.id)
@@ -37,7 +46,7 @@ serve(async (req) => {
     // Get recent wearable data (last 7 days)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const { data: wearableData } = await supabase
+    const { data: wearableData } = await supabaseClient
       .from("wearable_data")
       .select("*")
       .eq("user_id", user.id)
@@ -46,7 +55,7 @@ serve(async (req) => {
 
     // Get today's specific data
     const today = new Date().toISOString().split("T")[0];
-    const { data: todayData } = await supabase
+    const { data: todayData } = await supabaseClient
       .from("wearable_data")
       .select("*")
       .eq("user_id", user.id)
@@ -54,7 +63,7 @@ serve(async (req) => {
       .maybeSingle();
 
     // Get recent food logs
-    const { data: foodLogs } = await supabase
+    const { data: foodLogs } = await supabaseClient
       .from("food_logs")
       .select("*")
       .eq("user_id", user.id)
