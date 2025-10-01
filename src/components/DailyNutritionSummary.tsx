@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { deriveMacrosFromCalories } from '@/lib/nutrition';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, adjustedPlannedCaloriesForActivity } from '@/lib/nutrition';
 
 interface DailyNutritionData {
@@ -94,12 +95,24 @@ export function DailyNutritionSummary() {
       // Adjust planned calories by activity calories
       const adjustedPlannedCalories = adjustedPlannedCaloriesForActivity(plannedNutrition.calories, activityCalories);
 
+      // If planned macros are missing (no meal plan), derive from adjusted daily calories (TDEE-based)
+      const fallbackPlanned = (() => {
+        if ((plannedNutrition.protein || plannedNutrition.carbs || plannedNutrition.fat) > 0) return plannedNutrition;
+        const macros = deriveMacrosFromCalories(adjustedPlannedCalories);
+        return {
+          calories: plannedNutrition.calories || adjustedPlannedCalories,
+          protein: macros.protein,
+          carbs: macros.carbs,
+          fat: macros.fat,
+        };
+      })();
+
       // Calculate remaining nutrition
       const remainingNutrition = {
         calories: Math.max(0, adjustedPlannedCalories - consumedNutrition.calories),
-        protein: Math.max(0, plannedNutrition.protein - consumedNutrition.protein),
-        carbs: Math.max(0, plannedNutrition.carbs - consumedNutrition.carbs),
-        fat: Math.max(0, plannedNutrition.fat - consumedNutrition.fat),
+        protein: Math.max(0, fallbackPlanned.protein - consumedNutrition.protein),
+        carbs: Math.max(0, fallbackPlanned.carbs - consumedNutrition.carbs),
+        fat: Math.max(0, fallbackPlanned.fat - consumedNutrition.fat),
       };
 
       // Determine training intensity based on running goals and training plan
@@ -122,7 +135,7 @@ export function DailyNutritionSummary() {
       }
 
       setData({
-        planned: plannedNutrition,
+        planned: fallbackPlanned,
         activityCalories,
         adjustedPlannedCalories,
         consumed: consumedNutrition,
