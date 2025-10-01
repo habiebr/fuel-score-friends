@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { userProfile, wearableData, foodLogs, type = "suggestion" } = await req.json();
+    const { userProfile, wearableData, foodLogs, type = "suggestion", image, mealType } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -21,8 +21,35 @@ serve(async (req) => {
 
     let systemPrompt = "";
     let prompt = "";
+    let messages: any[] = [];
 
-    if (type === "suggestion") {
+    if (type === "food_photo") {
+      // Food photo analysis
+      if (!image) {
+        throw new Error('Image is required for food photo analysis');
+      }
+
+      systemPrompt = `You are an expert nutritionist. Analyze the food in the image and provide detailed nutritional information. Be as accurate as possible based on typical serving sizes.`;
+      
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { 
+          role: 'user', 
+          content: [
+            {
+              type: 'text',
+              text: 'Analyze this food image and return nutrition data in this exact JSON format: {"food_name": "name of the food", "serving_size": "estimated serving size", "calories": number, "protein_grams": number, "carbs_grams": number, "fat_grams": number}. Only return the JSON, no other text.'
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: image // base64 or URL
+              }
+            }
+          ]
+        }
+      ];
+    } else if (type === "suggestion") {
       systemPrompt = `You are a certified nutritionist and fitness expert. Provide personalized nutrition advice based on user data. Be concise, actionable, and encouraging. Always consider their activity level, goals, and current nutrition intake.`;
       
       prompt = `User Profile:
@@ -51,6 +78,14 @@ Goals: ${userProfile.fitness_goals?.join(', ') || 'maintain weight'}
 Return just the numeric score (0-100) and a brief explanation.`;
     }
 
+    // Prepare messages based on type
+    if (type !== "food_photo") {
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ];
+    }
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -59,11 +94,8 @@ Return just the numeric score (0-100) and a brief explanation.`;
       },
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
+        messages: messages,
+        temperature: type === "food_photo" ? 0.3 : 0.7,
       }),
     });
 
@@ -90,6 +122,27 @@ Return just the numeric score (0-100) and a brief explanation.`;
 
     const data = await response.json();
     const aiResponse = data.choices[0].message.content;
+
+    // For food photo analysis, parse the JSON response
+    if (type === "food_photo") {
+      try {
+        const nutritionData = JSON.parse(aiResponse);
+        return new Response(JSON.stringify({ 
+          nutritionData,
+          type: type 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (parseError) {
+        console.error('Failed to parse nutrition data:', aiResponse);
+        return new Response(JSON.stringify({ 
+          error: 'Failed to parse nutrition data from AI response' 
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     return new Response(JSON.stringify({ 
       suggestion: aiResponse,

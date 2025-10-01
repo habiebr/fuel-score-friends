@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreCard } from '@/components/ScoreCard';
+import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { CalendarDays, Target, Users, Zap, TrendingUp } from 'lucide-react';
+import { CalendarDays, Target, Users, Zap, TrendingUp, Camera } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DashboardData {
@@ -25,6 +26,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -84,6 +86,8 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-background p-3 sm:p-4 pb-20">
+      <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
+      
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -226,6 +230,15 @@ export function Dashboard() {
         </div>
 
       </div>
+
+      {/* Floating Action Button for Food Tracker */}
+      <Button
+        onClick={() => setFoodTrackerOpen(true)}
+        className="fixed bottom-20 right-4 h-14 w-14 rounded-full shadow-lg shadow-primary/50 animate-pulse-glow"
+        size="icon"
+      >
+        <Camera className="h-6 w-6" />
+      </Button>
     </div>
   );
 }
