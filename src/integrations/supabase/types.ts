@@ -164,6 +164,7 @@ export type Database = {
           activity_type: string | null
           avg_cadence: number | null
           avg_power: number | null
+          avg_temperature: number | null
           calories_burned: number | null
           created_at: string
           date: string
@@ -176,8 +177,10 @@ export type Database = {
           id: string
           max_heart_rate: number | null
           max_speed: number | null
+          recovery_time: number | null
           sleep_hours: number | null
           steps: number | null
+          training_effect: number | null
           user_id: string
         }
         Insert: {
@@ -185,6 +188,7 @@ export type Database = {
           activity_type?: string | null
           avg_cadence?: number | null
           avg_power?: number | null
+          avg_temperature?: number | null
           calories_burned?: number | null
           created_at?: string
           date?: string
@@ -197,8 +201,10 @@ export type Database = {
           id?: string
           max_heart_rate?: number | null
           max_speed?: number | null
+          recovery_time?: number | null
           sleep_hours?: number | null
           steps?: number | null
+          training_effect?: number | null
           user_id: string
         }
         Update: {
@@ -206,6 +212,7 @@ export type Database = {
           activity_type?: string | null
           avg_cadence?: number | null
           avg_power?: number | null
+          avg_temperature?: number | null
           calories_burned?: number | null
           created_at?: string
           date?: string
@@ -218,11 +225,66 @@ export type Database = {
           id?: string
           max_heart_rate?: number | null
           max_speed?: number | null
+          recovery_time?: number | null
           sleep_hours?: number | null
           steps?: number | null
+          training_effect?: number | null
           user_id?: string
         }
         Relationships: []
+      }
+      wearable_laps: {
+        Row: {
+          avg_heart_rate: number | null
+          avg_speed: number | null
+          calories: number | null
+          created_at: string
+          id: string
+          lap_index: number
+          max_heart_rate: number | null
+          start_time: string
+          total_distance: number | null
+          total_time: number | null
+          user_id: string
+          wearable_data_id: string | null
+        }
+        Insert: {
+          avg_heart_rate?: number | null
+          avg_speed?: number | null
+          calories?: number | null
+          created_at?: string
+          id?: string
+          lap_index: number
+          max_heart_rate?: number | null
+          start_time: string
+          total_distance?: number | null
+          total_time?: number | null
+          user_id: string
+          wearable_data_id?: string | null
+        }
+        Update: {
+          avg_heart_rate?: number | null
+          avg_speed?: number | null
+          calories?: number | null
+          created_at?: string
+          id?: string
+          lap_index?: number
+          max_heart_rate?: number | null
+          start_time?: string
+          total_distance?: number | null
+          total_time?: number | null
+          user_id?: string
+          wearable_data_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wearable_laps_wearable_data_id_fkey"
+            columns: ["wearable_data_id"]
+            isOneToOne: false
+            referencedRelation: "wearable_data"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
