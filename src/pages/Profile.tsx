@@ -1,17 +1,50 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { WearablesSync } from '@/components/WearablesSync';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { LogOut, User, Target, Activity } from 'lucide-react';
+import { LogOut, User, Target, Activity, Download } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Profile() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+
+    if (outcome === 'accepted') {
+      toast({
+        title: "App installed!",
+        description: "You can now use Nutrisync from your home screen.",
+      });
+      setIsInstallable(false);
+    }
+
+    setDeferredPrompt(null);
+  };
 
   return (
     <>
@@ -88,6 +121,27 @@ export default function Profile() {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Install App */}
+        {isInstallable && (
+          <Card className="shadow-card mb-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="h-5 w-5 text-primary" />
+                Install App
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="default" 
+                className="w-full"
+                onClick={handleInstallClick}
+              >
+                Install Nutrisync
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Logout */}
         <Button
