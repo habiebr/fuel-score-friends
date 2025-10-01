@@ -132,3 +132,17 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .premium-card {
+    @apply shadow-card border border-border/50 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:border-primary/30;
+  }
+  
+  .premium-button {
+    @apply shadow-button hover:shadow-glow transition-all duration-300 hover:scale-105;
+  }
+  
+  .bg-gradient-background {
+    background: var(--gradient-background);
+  }
+}
