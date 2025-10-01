@@ -145,7 +145,11 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
       
       if (error) {
         console.error('Error generating meal plan:', error);
+        throw error;
       }
+
+      // Reload dashboard data after successful generation
+      await loadDashboardData();
     } catch (error) {
       console.error('Error invoking meal plan function:', error);
     } finally {
@@ -553,6 +557,15 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
               >
                 <Target className="h-4 w-4 mr-2" />
                 Profile & Goals
+              </Button>
+              <Button 
+                variant="default" 
+                className="w-full col-span-2"
+                onClick={generateDailyMealPlan}
+                disabled={generatingPlan}
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                {generatingPlan ? 'Generating...' : 'Generate Daily Plan'}
               </Button>
             </CardContent>
           </Card>
