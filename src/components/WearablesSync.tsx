@@ -7,7 +7,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useHealthKit } from '@/hooks/useHealthKit';
 import { Capacitor } from '@capacitor/core';
 import { AppleHealthSync } from './AppleHealthSync';
-import FitParser from 'fit-file-parser';
 
 export function WearablesSync() {
   const [uploading, setUploading] = useState(false);
@@ -32,8 +31,10 @@ export function WearablesSync() {
 
     setUploading(true);
     try {
-      // Parse the FIT file in the browser using fit-file-parser
+      // Dynamically import the FIT parser to avoid bundling issues
       const fileData = await file.arrayBuffer();
+      const FitParser = (await import('fit-file-parser')).default;
+      
       const fitParser = new FitParser({
         force: true,
         speedUnit: 'km/h',
