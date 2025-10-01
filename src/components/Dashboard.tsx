@@ -165,7 +165,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         .select('*')
         .eq('user_id', user.id)
         .eq('date', today)
-        .single();
+        .maybeSingle();
 
       // Fetch wearable data for today
       const { data: wearableData } = await supabase
@@ -173,7 +173,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         .select('*')
         .eq('user_id', user.id)
         .eq('date', today)
-        .single();
+        .maybeSingle();
 
       // Fetch meal plans for today
       const { data: plans } = await supabase
@@ -181,6 +181,14 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         .select('*')
         .eq('user_id', user.id)
         .eq('date', today);
+
+      // Fetch food logs for today (actual consumed)
+      const { data: foodLogs } = await supabase
+        .from('food_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('logged_at', `${today}T00:00:00`)
+        .lte('logged_at', `${today}T23:59:59`);
 
       if (plans) {
         setMealPlans(plans.map(plan => ({
@@ -200,13 +208,24 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         { calories: 0, protein: 0, carbs: 0, fat: 0 }
       ) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
+      // Calculate consumed nutrition from food logs
+      const consumedNutrition = foodLogs?.reduce(
+        (acc, log) => ({
+          calories: acc.calories + (log.calories || 0),
+          protein: acc.protein + (log.protein_grams || 0),
+          carbs: acc.carbs + (log.carbs_grams || 0),
+          fat: acc.fat + (log.fat_grams || 0),
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      ) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
       setData({
         dailyScore: nutritionScore?.daily_score || 0,
-        caloriesConsumed: nutritionScore?.calories_consumed || 0,
-        proteinGrams: nutritionScore?.protein_grams || 0,
-        carbsGrams: nutritionScore?.carbs_grams || 0,
-        fatGrams: nutritionScore?.fat_grams || 0,
-        mealsLogged: nutritionScore?.meals_logged || 0,
+        caloriesConsumed: consumedNutrition.calories,
+        proteinGrams: consumedNutrition.protein,
+        carbsGrams: consumedNutrition.carbs,
+        fatGrams: consumedNutrition.fat,
+        mealsLogged: foodLogs?.length || 0,
         steps: wearableData?.steps || 0,
         caloriesBurned: wearableData?.calories_burned || 0,
         activeMinutes: wearableData?.active_minutes || 0,
