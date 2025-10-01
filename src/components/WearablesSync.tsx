@@ -1,28 +1,19 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Watch, Upload, CheckCircle, AlertCircle, Smartphone, FileCheck, XCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Watch, Upload, CheckCircle, AlertCircle, Smartphone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useHealthKit } from '@/hooks/useHealthKit';
 import { Capacitor } from '@capacitor/core';
 import { AppleHealthSync } from './AppleHealthSync';
-
-type FileProgress = {
-  name: string;
-  status: 'pending' | 'uploading' | 'success' | 'error';
-  error?: string;
-};
+import { useUpload } from '@/contexts/UploadContext';
 
 export function WearablesSync() {
-  const [uploading, setUploading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
-  const [fileProgress, setFileProgress] = useState<FileProgress[]>([]);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
   const { isAvailable, isAuthorized, requestAuthorization, fetchTodayData } = useHealthKit();
+  const { uploading, startUpload } = useUpload();
   const isNative = Capacitor.isNativePlatform();
 
   const handleFitFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,91 +31,10 @@ export function WearablesSync() {
       return;
     }
 
-    setUploading(true);
-    const fileArray = Array.from(files);
-    const progress: FileProgress[] = fileArray.map(f => ({
-      name: f.name,
-      status: 'pending'
-    }));
-    setFileProgress(progress);
-
-    let successCount = 0;
-    let errorCount = 0;
-    const totalFiles = fileArray.length;
-
-    try {
-      // Process files sequentially to avoid overwhelming the server
-      for (let i = 0; i < fileArray.length; i++) {
-        const file = fileArray[i];
-        
-        // Update status to uploading
-        setFileProgress(prev => prev.map((p, idx) => 
-          idx === i ? { ...p, status: 'uploading' } : p
-        ));
-        setUploadProgress(Math.round((i / totalFiles) * 100));
-
-        try {
-          const fileData = await file.arrayBuffer();
-          const base64Data = btoa(
-            new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
-          );
-
-          const { data, error } = await supabase.functions.invoke('parse-fit-data', {
-            body: { fitData: base64Data }
-          });
-
-          if (error) throw error;
-
-          // Update status to success
-          setFileProgress(prev => prev.map((p, idx) => 
-            idx === i ? { ...p, status: 'success' } : p
-          ));
-          successCount++;
-        } catch (error) {
-          console.error(`Error uploading ${file.name}:`, error);
-          // Update status to error
-          setFileProgress(prev => prev.map((p, idx) => 
-            idx === i ? { 
-              ...p, 
-              status: 'error',
-              error: error instanceof Error ? error.message : 'Upload failed'
-            } : p
-          ));
-          errorCount++;
-        }
-      }
-
-      setUploadProgress(100);
-      setLastSync(new Date());
-      
-      // Show summary toast
-      if (successCount > 0 && errorCount === 0) {
-        toast({
-          title: "All files synced successfully!",
-          description: `Successfully imported ${successCount} activity file(s)`,
-        });
-      } else if (successCount > 0 && errorCount > 0) {
-        toast({
-          title: "Partial success",
-          description: `${successCount} file(s) imported, ${errorCount} failed`,
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Upload failed",
-          description: `Failed to process ${errorCount} file(s)`,
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setUploading(false);
-      event.target.value = '';
-      // Clear progress after 5 seconds
-      setTimeout(() => {
-        setFileProgress([]);
-        setUploadProgress(0);
-      }, 5000);
-    }
+    // Start the upload via context
+    await startUpload(Array.from(files));
+    setLastSync(new Date());
+    event.target.value = '';
   };
 
   return (
@@ -169,46 +79,6 @@ export function WearablesSync() {
             </label>
           </div>
 
-          {/* Upload Progress */}
-          {uploading && fileProgress.length > 0 && (
-            <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Uploading {fileProgress.length} file(s)</span>
-                <span className="text-muted-foreground">{uploadProgress}%</span>
-              </div>
-              <Progress value={uploadProgress} className="h-2" />
-              
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {fileProgress.map((file, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-xs">
-                    {file.status === 'pending' && (
-                      <div className="h-4 w-4 rounded-full border-2 border-muted-foreground animate-pulse" />
-                    )}
-                    {file.status === 'uploading' && (
-                      <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    )}
-                    {file.status === 'success' && (
-                      <FileCheck className="h-4 w-4 text-success" />
-                    )}
-                    {file.status === 'error' && (
-                      <XCircle className="h-4 w-4 text-destructive" />
-                    )}
-                    <span className={`flex-1 truncate ${
-                      file.status === 'error' ? 'text-destructive' : 
-                      file.status === 'success' ? 'text-success' : 
-                      'text-muted-foreground'
-                    }`}>
-                      {file.name}
-                    </span>
-                    {file.error && (
-                      <span className="text-destructive text-xs">{file.error}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Last Sync Status */}
           {lastSync && !uploading && (
             <div className="flex items-center gap-2 p-3 bg-success/10 rounded-lg">
@@ -230,6 +100,7 @@ export function WearablesSync() {
                 <li>Export as .fit file(s)</li>
                 <li>Upload here (supports bulk upload)</li>
               </ol>
+              <p className="mt-2 text-info font-medium">💡 Progress persists across pages!</p>
             </div>
           </div>
         </CardContent>
