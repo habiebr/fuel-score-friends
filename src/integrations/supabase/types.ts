@@ -122,6 +122,45 @@ export type Database = {
         }
         Relationships: []
       }
+      marathon_events: {
+        Row: {
+          country: string
+          created_at: string
+          description: string | null
+          distance: string
+          event_date: string
+          event_name: string
+          event_url: string | null
+          id: string
+          location: string
+          registration_deadline: string | null
+        }
+        Insert: {
+          country: string
+          created_at?: string
+          description?: string | null
+          distance: string
+          event_date: string
+          event_name: string
+          event_url?: string | null
+          id?: string
+          location: string
+          registration_deadline?: string | null
+        }
+        Update: {
+          country?: string
+          created_at?: string
+          description?: string | null
+          distance?: string
+          event_date?: string
+          event_name?: string
+          event_url?: string | null
+          id?: string
+          location?: string
+          registration_deadline?: string | null
+        }
+        Relationships: []
+      }
       nutrition_scores: {
         Row: {
           breakfast_score: number | null
