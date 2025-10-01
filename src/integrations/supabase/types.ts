@@ -334,6 +334,8 @@ export type Database = {
           fitness_goals: string[] | null
           fitness_level: string | null
           full_name: string | null
+          goal_type: string | null
+          goal_name: string | null
           height: number | null
           id: string
           location_lat: number | null
@@ -356,6 +358,8 @@ export type Database = {
           fitness_goals?: string[] | null
           fitness_level?: string | null
           full_name?: string | null
+          goal_type?: string | null
+          goal_name?: string | null
           height?: number | null
           id?: string
           location_lat?: number | null
@@ -378,6 +382,8 @@ export type Database = {
           fitness_goals?: string[] | null
           fitness_level?: string | null
           full_name?: string | null
+          goal_type?: string | null
+          goal_name?: string | null
           height?: number | null
           id?: string
           location_lat?: number | null

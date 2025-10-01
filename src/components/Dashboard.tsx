@@ -342,14 +342,14 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('fitness_goals, target_date, fitness_level, activity_level')
+        .select('fitness_goals, goal_type, goal_name, target_date, fitness_level, activity_level')
         .eq('user_id', user.id)
         .maybeSingle();
 
       console.log('Profile data:', profile);
 
-      if (profile && profile.fitness_goals && profile.fitness_goals.length > 0) {
-        const goalName = profile.fitness_goals[0];
+      if (profile) {
+        const goalName = profile.goal_name || (profile.fitness_goals && profile.fitness_goals[0]) || '';
         setRaceGoal(goalName);
         console.log('Race goal set:', goalName);
 
@@ -623,8 +623,8 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                     <Target className="h-4 w-4 text-primary" />
                     <span className="font-semibold text-sm">Race Goal</span>
                   </div>
-                  <div className="text-lg font-bold text-primary capitalize">
-                    {raceGoal.replace('_', ' ')}
+                  <div className="text-lg font-bold text-primary">
+                    {raceGoal}
                   </div>
                   {targetMonths && (
                     <div className="text-xs text-muted-foreground mt-1">

@@ -58,13 +58,20 @@ export default function Goals() {
     }
   }, [user]);
 
+  const formatGoalLabel = (value: string) => {
+    if (!value) return '';
+    return value
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
   const loadExistingGoals = async () => {
     if (!user) return;
 
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('fitness_goals, activity_level, target_date, fitness_level')
+        .select('fitness_goals, activity_level, target_date, fitness_level, goal_type, goal_name')
         .eq('user_id', user.id)
         .single();
 
@@ -73,17 +80,17 @@ export default function Goals() {
         // Don't throw error, just continue with defaults
       } else if (data) {
         // Load Step 1 data
-        if (data.fitness_goals && data.fitness_goals.length > 0) {
+        if (data.goal_type) {
+          setRaceGoal(data.goal_type);
+        } else if (data.fitness_goals && data.fitness_goals.length > 0) {
           const savedGoal = data.fitness_goals[0];
           const predefinedGoals = ['5k', '10k', 'half_marathon', 'full_marathon', 'ultra'];
-          
-          if (predefinedGoals.includes(savedGoal)) {
-            setRaceGoal(savedGoal);
-          } else {
-            // It's a custom goal name
-            setRaceGoal('custom');
-            setCustomGoalName(savedGoal);
-          }
+          setRaceGoal(predefinedGoals.includes(String(savedGoal).toLowerCase()) ? savedGoal : 'custom');
+        }
+        if (data.goal_name) {
+          setCustomGoalName(data.goal_name);
+        } else if (data.fitness_goals && data.fitness_goals.length > 0) {
+          setCustomGoalName(formatGoalLabel(data.fitness_goals[0]));
         }
         if (data.target_date) {
           setTargetDate(data.target_date);
@@ -194,7 +201,10 @@ export default function Goals() {
     try {
       // First, try to update with all fields
       const updateData: any = {
-        fitness_goals: [raceGoal === 'custom' ? customGoalName : raceGoal],
+        // Preserve historical fitness_goals array but prioritize new fields
+        fitness_goals: [customGoalName.trim()],
+        goal_type: raceGoal || null,
+        goal_name: customGoalName.trim() || null,
         activity_level: JSON.stringify(weekPlan)
       };
 
@@ -234,17 +244,11 @@ export default function Goals() {
   };
 
   const canProceedToStep2 = () => {
-    if (raceGoal === 'custom') {
-      return raceGoal && customGoalName.trim() && targetDate && fitnessLevel;
-    }
-    return raceGoal && targetDate && fitnessLevel;
+    return (raceGoal && (customGoalName.trim().length > 0) && targetDate && fitnessLevel);
   };
 
   const isStep1Complete = () => {
-    if (raceGoal === 'custom') {
-      return raceGoal && customGoalName.trim() && targetDate && fitnessLevel;
-    }
-    return raceGoal && targetDate && fitnessLevel;
+    return (raceGoal && (customGoalName.trim().length > 0) && targetDate && fitnessLevel);
   };
 
   const isStep2Complete = () => {
@@ -332,23 +336,21 @@ export default function Goals() {
                   </Select>
                 </div>
 
-                {/* Custom Race/Event Name - Only show when custom is selected */}
-                {raceGoal === 'custom' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="custom-goal-name">Race/Event Name *</Label>
-                    <Input
-                      id="custom-goal-name"
-                      type="text"
-                      placeholder="e.g., Jakarta Marathon 2024, Personal Best 5K, Trail Run Challenge, etc."
-                      value={customGoalName}
-                      onChange={(e) => setCustomGoalName(e.target.value)}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Name your specific race or running event
-                    </p>
-                  </div>
-                )}
+                {/* Race/Event Name - always shown for consistency */}
+                <div className="space-y-2">
+                  <Label htmlFor="custom-goal-name">Race/Event Name *</Label>
+                  <Input
+                    id="custom-goal-name"
+                    type="text"
+                    placeholder="e.g., Jakarta Marathon 2025, Personal Best 5K, Trail Run Challenge, etc."
+                    value={customGoalName}
+                    onChange={(e) => setCustomGoalName(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A readable name for your specific race or running event
+                  </p>
+                </div>
 
                 {/* Target Date */}
                 <div className="space-y-2">

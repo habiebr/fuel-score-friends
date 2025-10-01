@@ -20,7 +20,7 @@ serve(async (req) => {
     // Get all active users
     const { data: users, error: usersError } = await supabaseAdmin
       .from('profiles')
-      .select('user_id, fitness_goals, target_date, fitness_level, activity_level, weight, height, age')
+      .select('user_id, fitness_goals, goal_type, goal_name, target_date, fitness_level, activity_level, weight, height, age')
       .not('fitness_goals', 'is', null);
 
     if (usersError) {
@@ -116,7 +116,7 @@ async function generateMealPlanForUser(user: any, supabaseAdmin: any) {
       .eq('date', today)
       .maybeSingle();
 
-    const fitnessGoal = user.fitness_goals?.[0];
+    const fitnessGoal = user.goal_type || user.fitness_goals?.[0];
     const weekPlan = user.activity_level ? JSON.parse(user.activity_level) : null;
     const tdee = calculateTDEE({
       weightKg: user.weight,

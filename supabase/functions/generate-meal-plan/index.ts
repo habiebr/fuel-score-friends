@@ -88,7 +88,7 @@ serve(async (req) => {
       .order("date", { ascending: false })
       .limit(7);
 
-    const fitnessGoal = profile?.fitness_goals?.[0];
+    const fitnessGoal = profile?.goal_type || profile?.fitness_goals?.[0];
     const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
     const tdee = calculateTDEE({
       weightKg: profile?.weight,
