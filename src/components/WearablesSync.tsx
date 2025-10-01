@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useHealthKit } from '@/hooks/useHealthKit';
 import { Capacitor } from '@capacitor/core';
 import { AppleHealthSync } from './AppleHealthSync';
+import FitParser from 'fit-file-parser';
 
 export function WearablesSync() {
   const [uploading, setUploading] = useState(false);
@@ -31,21 +32,51 @@ export function WearablesSync() {
 
     setUploading(true);
     try {
+      // Parse the FIT file in the browser using fit-file-parser
       const fileData = await file.arrayBuffer();
-      const base64Data = btoa(
-        new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-
-      const { data, error } = await supabase.functions.invoke('parse-fit-data', {
-        body: { fitData: base64Data }
+      const fitParser = new FitParser({
+        force: true,
+        speedUnit: 'km/h',
+        lengthUnit: 'km',
+        temperatureUnit: 'celsius',
+        elapsedRecordField: true,
+        mode: 'both'
       });
 
-      if (error) throw error;
+      // Parse the file
+      fitParser.parse(fileData, async (error: any, data: any) => {
+        if (error) {
+          console.error('FIT parsing error:', error);
+          toast({
+            title: "Parsing failed",
+            description: "Failed to parse .fit file. The file may be corrupted.",
+            variant: "destructive",
+          });
+          setUploading(false);
+          event.target.value = '';
+          return;
+        }
 
-      setLastSync(new Date());
-      toast({
-        title: "Data synced successfully!",
-        description: `Imported ${data.recordsImported} activity records`,
+        console.log('Parsed FIT data:', data);
+
+        // Extract rich data from parsed file
+        const activityData = extractActivityData(data);
+        
+        // Send parsed data to backend
+        const { error: invokeError } = await supabase.functions.invoke('parse-fit-data', {
+          body: { parsedData: activityData }
+        });
+
+        if (invokeError) throw invokeError;
+
+        setLastSync(new Date());
+        toast({
+          title: "Data synced successfully!",
+          description: `Imported ${activityData.sessions.length} activity sessions with detailed metrics`,
+        });
+        
+        setUploading(false);
+        event.target.value = '';
       });
     } catch (error) {
       console.error('Error uploading .fit file:', error);
@@ -54,10 +85,103 @@ export function WearablesSync() {
         description: "Failed to process .fit file. Please try again.",
         variant: "destructive",
       });
-    } finally {
       setUploading(false);
       event.target.value = '';
     }
+  };
+
+  // Extract rich activity data from parsed FIT file
+  const extractActivityData = (fitData: any) => {
+    const sessions: any[] = [];
+    const records: any[] = [];
+    const gpsPoints: any[] = [];
+    
+    // Extract session data (overall activity summary)
+    if (fitData.sessions && fitData.sessions.length > 0) {
+      fitData.sessions.forEach((session: any) => {
+        sessions.push({
+          timestamp: session.start_time || session.timestamp,
+          activityType: session.sport || session.sub_sport || 'unknown',
+          totalDistance: session.total_distance || 0,
+          totalCalories: session.total_calories || 0,
+          avgHeartRate: session.avg_heart_rate || 0,
+          maxHeartRate: session.max_heart_rate || 0,
+          avgCadence: session.avg_cadence || 0,
+          avgPower: session.avg_power || 0,
+          maxSpeed: session.max_speed || 0,
+          totalAscent: session.total_ascent || 0,
+          duration: session.total_elapsed_time || 0,
+          activeMinutes: Math.round((session.total_timer_time || 0) / 60)
+        });
+      });
+    }
+
+    // Extract detailed record data (time-series data points)
+    if (fitData.records && fitData.records.length > 0) {
+      fitData.records.forEach((record: any) => {
+        records.push({
+          timestamp: record.timestamp,
+          heartRate: record.heart_rate,
+          cadence: record.cadence,
+          speed: record.speed,
+          power: record.power,
+          altitude: record.altitude,
+          distance: record.distance
+        });
+
+        // Collect GPS data if available
+        if (record.position_lat && record.position_long) {
+          gpsPoints.push({
+            lat: record.position_lat,
+            lng: record.position_long,
+            altitude: record.altitude,
+            timestamp: record.timestamp
+          });
+        }
+      });
+    }
+
+    // Calculate heart rate zones if we have HR data
+    const heartRateZones = calculateHeartRateZones(records);
+
+    return {
+      sessions,
+      records,
+      gpsPoints,
+      heartRateZones,
+      totalRecords: records.length
+    };
+  };
+
+  // Calculate time spent in different heart rate zones
+  const calculateHeartRateZones = (records: any[]) => {
+    const zones = {
+      zone1: 0, // < 114 bpm (recovery)
+      zone2: 0, // 114-133 (endurance)
+      zone3: 0, // 133-152 (tempo)
+      zone4: 0, // 152-171 (threshold)
+      zone5: 0  // > 171 (max)
+    };
+
+    records.forEach(record => {
+      const hr = record.heartRate;
+      if (!hr) return;
+
+      if (hr < 114) zones.zone1++;
+      else if (hr < 133) zones.zone2++;
+      else if (hr < 152) zones.zone3++;
+      else if (hr < 171) zones.zone4++;
+      else zones.zone5++;
+    });
+
+    // Convert to minutes (assuming 1 record per second)
+    return {
+      zone1: Math.round(zones.zone1 / 60),
+      zone2: Math.round(zones.zone2 / 60),
+      zone3: Math.round(zones.zone3 / 60),
+      zone4: Math.round(zones.zone4 / 60),
+      zone5: Math.round(zones.zone5 / 60)
+    };
   };
 
   return (

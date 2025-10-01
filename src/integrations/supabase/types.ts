@@ -161,33 +161,63 @@ export type Database = {
       wearable_data: {
         Row: {
           active_minutes: number | null
+          activity_type: string | null
+          avg_cadence: number | null
+          avg_power: number | null
           calories_burned: number | null
           created_at: string
           date: string
+          detailed_metrics: Json | null
+          distance_meters: number | null
+          elevation_gain: number | null
+          gps_data: Json | null
           heart_rate_avg: number | null
+          heart_rate_zones: Json | null
           id: string
+          max_heart_rate: number | null
+          max_speed: number | null
           sleep_hours: number | null
           steps: number | null
           user_id: string
         }
         Insert: {
           active_minutes?: number | null
+          activity_type?: string | null
+          avg_cadence?: number | null
+          avg_power?: number | null
           calories_burned?: number | null
           created_at?: string
           date?: string
+          detailed_metrics?: Json | null
+          distance_meters?: number | null
+          elevation_gain?: number | null
+          gps_data?: Json | null
           heart_rate_avg?: number | null
+          heart_rate_zones?: Json | null
           id?: string
+          max_heart_rate?: number | null
+          max_speed?: number | null
           sleep_hours?: number | null
           steps?: number | null
           user_id: string
         }
         Update: {
           active_minutes?: number | null
+          activity_type?: string | null
+          avg_cadence?: number | null
+          avg_power?: number | null
           calories_burned?: number | null
           created_at?: string
           date?: string
+          detailed_metrics?: Json | null
+          distance_meters?: number | null
+          elevation_gain?: number | null
+          gps_data?: Json | null
           heart_rate_avg?: number | null
+          heart_rate_zones?: Json | null
           id?: string
+          max_heart_rate?: number | null
+          max_speed?: number | null
           sleep_hours?: number | null
           steps?: number | null
           user_id?: string
