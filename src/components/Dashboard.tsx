@@ -64,7 +64,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [raceGoal, setRaceGoal] = useState<string>('');
-  const [targetMonths, setTargetMonths] = useState<string>('');
+  // targetMonths is shown as a derived label; compute dynamically from raceDate
   const [raceDate, setRaceDate] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState<{
     days: number;
@@ -369,8 +369,20 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
       console.log('Profile data:', profile);
 
       if (profile) {
-        const goalName = profile.goal_name || (profile.fitness_goals && profile.fitness_goals[0]) || '';
-        setRaceGoal(goalName);
+        const formatLabel = (value?: string | null) => {
+          if (!value) return '';
+          return String(value)
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+        };
+
+        const goalName = profile.goal_name && String(profile.goal_name).trim().length > 0
+          ? profile.goal_name
+          : (Array.isArray(profile.fitness_goals) && profile.fitness_goals.length > 0
+            ? String(profile.fitness_goals[0])
+            : formatLabel(profile.goal_type));
+
+        setRaceGoal(goalName || '');
         console.log('Race goal set:', goalName);
 
         // Use target_date from profile if available
@@ -646,9 +658,9 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                   <div className="text-lg font-bold text-primary">
                     {raceGoal}
                   </div>
-                  {targetMonths && (
+                  {raceDate && (
                     <div className="text-xs text-muted-foreground mt-1">
-                      Target: {targetMonths} months
+                      Target: {Math.max(0, Math.floor(differenceInDays(raceDate, new Date()) / 30))} months
                     </div>
                   )}
                 </div>
@@ -745,11 +757,10 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Generate Meal Plan Button */}
-              {mealPlans.length === 0 && (
+              {mealPlans.length === 0 ? (
                 <div className="text-center py-4">
                   <p className="text-sm text-muted-foreground mb-3">
-                    Belum ada rencana makan untuk hari ini
+                    No meal plan for today.
                   </p>
                   <Button 
                     onClick={generateDailyMealPlan}
@@ -769,129 +780,37 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                     )}
                   </Button>
                 </div>
-              )}
-
-              {/* Swipeable Meal Carousel */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    Current Meal Recommendation
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={prevMeal}
-                      disabled={getAvailableMeals().length <= 1}
-                      className="h-8 w-8 p-0"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                      {currentMealIndex + 1} / {getAvailableMeals().length}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={nextMeal}
-                      disabled={getAvailableMeals().length <= 1}
-                      className="h-8 w-8 p-0"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                
-                {(() => {
-                  const currentMealType = getCurrentMealType();
-                  const plan = mealPlans.find(p => p.meal_type === currentMealType);
-                  const score = currentMealType === 'breakfast' ? data?.breakfastScore 
-                    : currentMealType === 'lunch' ? data?.lunchScore 
-                    : data?.dinnerScore;
-                  
-                  const availableMeals = getAvailableMeals();
-                  const currentMeal = availableMeals[currentMealIndex];
-                  
-                  // Get current time for display
-                  const now = new Date();
-                  const currentTime = now.toLocaleTimeString('id-ID', { 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    hour12: false 
-                  });
-                  
-                  return (
-                    <div className="p-4 bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-lg">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <div className="font-medium text-lg capitalize flex items-center gap-2">
-                            <Clock className="h-4 w-4" />
-                            {currentMealType} - {currentTime}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {(() => {
-                              const baseTarget = plan?.recommended_calories || 400;
-                              const activityTotal = (data as any)?.caloriesBurned || (data as any)?.wearableData?.calories_burned || 0;
-                              const mealsCount = 3; // breakfast, lunch, dinner
-                              const activityShare = Math.max(0, Math.round(activityTotal / mealsCount));
-                              const adjustedTarget = baseTarget + activityShare;
-                              return (
-                                <>
-                                  Target: {adjustedTarget} kcal
-                                  {activityTotal > 0 && (
-                                    <span className="ml-2 text-xs">
-                                      (+{activityShare} from today's activity)
-                                    </span>
-                                  )}
-                                </>
-                              );
-                            })()}
-                            {data && (
-                              <span className="ml-2 text-xs">
-                                (Based on {data.steps} steps, {data.caloriesBurned} cal burned)
-                              </span>
-                            )}
-                          </div>
+              ) : (
+                <div className="space-y-3">
+                  {(['breakfast','lunch','dinner'] as const).map((type) => {
+                    const plan = mealPlans.find(p => p.meal_type === type);
+                    if (!plan) return null;
+                    const first = Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0 ? plan.meal_suggestions[0] : null;
+                    return (
+                      <div key={type} className="p-4 bg-muted/20 rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-semibold capitalize">{type}</div>
+                          <div className="text-xs text-muted-foreground">Target: {plan.recommended_calories} kcal</div>
                         </div>
-                        {score !== null && (
-                          <div className={`text-sm font-medium px-3 py-1 rounded-full ${
-                            score >= 80 ? 'bg-success/20 text-success' :
-                            score >= 60 ? 'bg-warning/20 text-warning' :
-                            'bg-destructive/20 text-destructive'
-                          }`}>
-                            Score: {score}
+                        {first ? (
+                          <div className="space-y-2 text-sm">
+                            <div className="font-medium text-primary">{first.name}</div>
+                            <div className="text-muted-foreground">{first.description}</div>
+                            <div className="flex gap-4 text-muted-foreground">
+                              <span>🔥 {first.calories} cal</span>
+                              <span>🥩 {first.protein}g</span>
+                              <span>🍚 {first.carbs}g</span>
+                              <span>🥑 {first.fat}g</span>
+                            </div>
                           </div>
+                        ) : (
+                          <div className="text-sm text-muted-foreground">No suggestion available.</div>
                         )}
                       </div>
-                      
-                      {/* Current Meal Suggestion */}
-                      <div className="space-y-3">
-                        <div className="text-lg font-semibold text-primary">
-                          🇮🇩 {currentMeal.name}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {currentMeal.description}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          <div className="font-medium mb-2">📋 Bahan & Porsi:</div>
-                          <ul className="list-disc list-inside space-y-1">
-                            {currentMeal.foods.map((food: string, index: number) => (
-                              <li key={index}>{food}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className="flex gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">🔥 {currentMeal.calories} cal</span>
-                          <span className="flex items-center gap-1">🥩 {currentMeal.protein}g protein</span>
-                          <span className="flex items-center gap-1">🍚 {currentMeal.carbs}g carbs</span>
-                          <span className="flex items-center gap-1">🥑 {currentMeal.fat}g fat</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
 
