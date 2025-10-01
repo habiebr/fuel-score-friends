@@ -11,6 +11,10 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 0
+    },
+    Health: {
+      read: ['steps', 'calories', 'heartRate', 'distance', 'activeMinutes'],
+      write: []
     }
   }
 };

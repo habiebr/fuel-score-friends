@@ -1,0 +1,25 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Apple shape with gradient -->
+  <defs>
+    <linearGradient id="appleGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4ade80;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16a34a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Apple body -->
+  <path d="M96 10C80 10 60 25 60 45C60 65 70 85 80 100C90 115 96 130 96 130C96 130 102 115 112 100C122 85 132 65 132 45C132 25 112 10 96 10Z" fill="url(#appleGradient)"/>
+  
+  <!-- Apple stem and leaf -->
+  <rect x="90" y="5" width="12" height="18" fill="#16a34a"/>
+  <path d="M102 5C102 5 108 0 114 5C120 10 114 15 108 10C102 5 102 5 102 5Z" fill="#4ade80"/>
+  
+  <!-- DNA helix inside apple -->
+  <path d="M75 40C75 40 80 45 85 40C90 35 95 40 100 35C105 30 110 35 115 30" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M75 50C75 50 80 55 85 50C90 45 95 50 100 45C105 40 110 45 115 40" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M75 60C75 60 80 65 85 60C90 55 95 60 100 55C105 50 110 55 115 50" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M75 70C75 70 80 75 85 70C90 65 95 70 100 65C105 60 110 65 115 60" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M75 80C75 80 80 85 85 80C90 75 95 80 100 75C105 70 110 75 115 70" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M75 90C75 90 80 95 85 90C90 85 95 90 100 85C105 80 110 85 115 80" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M75 100C75 100 80 105 85 100C90 95 95 100 100 95C105 90 110 95 115 90" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+</svg>

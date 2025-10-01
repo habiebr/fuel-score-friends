@@ -1,4 +1,5 @@
 import { WearablesSync } from '@/components/WearablesSync';
+import { GoogleFitTest } from '@/components/GoogleFitTest';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -30,6 +31,9 @@ export default function Import() {
           </div>
         </div>
 
+        {/* Google Fit Test Component */}
+        <GoogleFitTest />
+
         {/* Wearables Sync Component */}
         <WearablesSync />
 
@@ -37,9 +41,9 @@ export default function Import() {
         <div className="mt-6 p-4 bg-card border border-border rounded-lg">
           <h3 className="font-semibold mb-2">Supported Devices & Formats</h3>
           <ul className="text-sm text-muted-foreground space-y-1">
+            <li>• Google Fit (Real-time API integration)</li>
             <li>• Garmin devices (.fit files)</li>
-            <li>• Apple Health (iOS native app)</li>
-            <li>• Google Fit (Android native app)</li>
+            <li>• Apple Health (XML export)</li>
             <li>• Bulk import support for multiple files</li>
           </ul>
         </div>

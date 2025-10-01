@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useHealthKit } from '@/hooks/useHealthKit';
 import { Capacitor } from '@capacitor/core';
 import { AppleHealthSync } from './AppleHealthSync';
+import { GoogleFitIntegration } from './GoogleFitIntegration';
 import { useUpload } from '@/contexts/UploadContext';
 
 export function WearablesSync() {
@@ -105,6 +106,9 @@ export function WearablesSync() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Google Fit Integration */}
+      <GoogleFitIntegration />
 
       {/* Apple Health for PWA */}
       {!isNative && <AppleHealthSync />}

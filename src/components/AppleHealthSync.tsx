@@ -1,16 +1,109 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Apple, Upload, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Apple, Upload, CheckCircle, AlertCircle, Info, RefreshCw, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useHealthKit } from '@/hooks/useHealthKit';
 import { useToast } from '@/hooks/use-toast';
+import { HealthPermissionsDialog } from './HealthPermissionsDialog';
 
 export function AppleHealthSync() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { 
+    isAvailable, 
+    isAuthorized, 
+    permissions, 
+    fetchTodayData, 
+    fetchHistoricalData 
+  } = useHealthKit();
   const [uploading, setUploading] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Auto-sync when component mounts if authorized
+  useEffect(() => {
+    if (isAuthorized && isAvailable) {
+      handleRealTimeSync();
+    }
+  }, [isAuthorized, isAvailable]);
+
+  const handleRealTimeSync = async () => {
+    if (!isAuthorized || !isAvailable) {
+      toast({
+        title: "Not Authorized",
+        description: "Please connect to Apple Health first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const todayData = await fetchTodayData();
+      const historicalData = await fetchHistoricalData(7);
+
+      if (todayData) {
+        // Save today's data
+        const { error: todayError } = await supabase
+          .from('wearable_data')
+          .upsert({
+            user_id: user?.id,
+            date: todayData.date,
+            steps: todayData.steps,
+            calories_burned: todayData.calories,
+            active_minutes: todayData.activeMinutes,
+            heart_rate_avg: todayData.heartRate,
+            distance_km: todayData.distance,
+            source: todayData.source
+          }, {
+            onConflict: 'user_id,date'
+          });
+
+        if (todayError) throw todayError;
+      }
+
+      // Save historical data
+      if (historicalData.length > 0) {
+        const historicalRecords = historicalData.map(data => ({
+          user_id: user?.id,
+          date: data.date,
+          steps: data.steps,
+          calories_burned: data.calories,
+          active_minutes: data.activeMinutes,
+          heart_rate_avg: data.heartRate,
+          distance_km: data.distance,
+          source: data.source
+        }));
+
+        const { error: historicalError } = await supabase
+          .from('wearable_data')
+          .upsert(historicalRecords, {
+            onConflict: 'user_id,date'
+          });
+
+        if (historicalError) throw historicalError;
+      }
+
+      setLastSync(new Date());
+      toast({
+        title: "Apple Health Synced!",
+        description: `Successfully synced ${todayData ? 'today\'s data' : 'historical data'} from Apple Health`,
+      });
+    } catch (error) {
+      console.error('Error syncing Apple Health:', error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync data from Apple Health",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleAppleHealthXML = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -133,28 +226,92 @@ export function AppleHealthSync() {
   };
 
   return (
-    <Card className="shadow-card">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Apple className="h-5 w-5 text-foreground" />
-          Apple Health (PWA)
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Instructions */}
-        <div className="flex items-start gap-2 p-3 bg-info/10 rounded-lg">
-          <Info className="h-4 w-4 text-info mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-muted-foreground">
-            <p className="font-semibold text-foreground mb-2">How to export from Apple Health:</p>
-            <ol className="list-decimal list-inside space-y-1">
-              <li>Open Health app on iPhone</li>
-              <li>Tap profile picture (top right)</li>
-              <li>Scroll down, tap "Export All Health Data"</li>
-              <li>Share the export.zip file to this device</li>
-              <li>Extract export.xml and upload here</li>
-            </ol>
+    <>
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Apple className="h-5 w-5 text-foreground" />
+              Apple Health
+            </div>
+            <div className="flex items-center gap-2">
+              {isAvailable && (
+                <Badge variant={isAuthorized ? 'default' : 'secondary'}>
+                  {isAuthorized ? 'Connected' : 'Not Connected'}
+                </Badge>
+              )}
+              {isAvailable && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowPermissions(true)}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Real-time Sync Section */}
+          {isAvailable && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">Real-time Sync</h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRealTimeSync}
+                  disabled={!isAuthorized || isSyncing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Syncing...' : 'Sync Now'}
+                </Button>
+              </div>
+              
+              {!isAuthorized ? (
+                <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
+                  <span className="text-sm text-yellow-700">
+                    Connect to Apple Health to enable real-time sync
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowPermissions(true)}
+                    className="ml-auto"
+                  >
+                    Connect
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-green-700">
+                    Connected to Apple Health - data syncs automatically
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Manual Upload Section */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium">Manual Upload (PWA)</h4>
+            <div className="flex items-start gap-2 p-3 bg-info/10 rounded-lg">
+              <Info className="h-4 w-4 text-info mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-muted-foreground">
+                <p className="font-semibold text-foreground mb-2">How to export from Apple Health:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Open Health app on iPhone</li>
+                  <li>Tap profile picture (top right)</li>
+                  <li>Scroll down, tap "Export All Health Data"</li>
+                  <li>Share the export.zip file to this device</li>
+                  <li>Extract export.xml and upload here</li>
+                </ol>
+              </div>
+            </div>
           </div>
-        </div>
 
         {/* Upload Button */}
         <label htmlFor="apple-health-xml">
@@ -189,14 +346,61 @@ export function AppleHealthSync() {
           </div>
         )}
 
-        {/* Note */}
-        <div className="flex items-start gap-2 p-3 bg-muted/30 rounded-lg">
-          <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5" />
-          <p className="text-xs text-muted-foreground">
-            This imports data from your Apple Health export XML. For real-time sync, use the mobile app.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+          {/* Upload Button */}
+          <label htmlFor="apple-health-xml">
+            <Button 
+              variant="secondary" 
+              className="w-full" 
+              disabled={uploading}
+              asChild
+            >
+              <span>
+                <Upload className="h-4 w-4 mr-2" />
+                {uploading ? 'Processing...' : 'Upload export.xml'}
+              </span>
+            </Button>
+            <input
+              id="apple-health-xml"
+              type="file"
+              accept=".xml"
+              className="hidden"
+              onChange={handleAppleHealthXML}
+              disabled={uploading}
+            />
+          </label>
+
+          {/* Last Sync Status */}
+          {lastSync && (
+            <div className="flex items-center gap-2 p-3 bg-success/10 rounded-lg">
+              <CheckCircle className="h-4 w-4 text-success" />
+              <span className="text-xs text-success">
+                Last synced: {lastSync.toLocaleString()}
+              </span>
+            </div>
+          )}
+
+          {/* Note */}
+          <div className="flex items-start gap-2 p-3 bg-muted/30 rounded-lg">
+            <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5" />
+            <p className="text-xs text-muted-foreground">
+              {isAvailable 
+                ? "Real-time sync is available on mobile devices. Manual upload works on all platforms."
+                : "This imports data from your Apple Health export XML. For real-time sync, use the mobile app."
+              }
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Permissions Dialog */}
+      <HealthPermissionsDialog
+        open={showPermissions}
+        onOpenChange={setShowPermissions}
+        onComplete={() => {
+          setShowPermissions(false);
+          handleRealTimeSync();
+        }}
+      />
+    </>
   );
 }
