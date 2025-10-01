@@ -216,10 +216,26 @@ export default function Goals() {
         updateData.fitness_level = fitnessLevel;
       }
 
-      const { error } = await supabase
+      let { error } = await supabase
         .from('profiles')
         .update(updateData)
         .eq('user_id', user.id);
+
+      // If the new columns don't exist yet, retry without them
+      if (error && (String(error.message).includes('goal_name') || String(error.message).includes('goal_type') || String((error as any).code) === '42703')) {
+        const fallbackData: any = {
+          fitness_goals: [customGoalName.trim()],
+          activity_level: JSON.stringify(weekPlan)
+        };
+        if (targetDate) fallbackData.target_date = targetDate;
+        if (fitnessLevel) fallbackData.fitness_level = fitnessLevel;
+
+        const retry = await supabase
+          .from('profiles')
+          .update(fallbackData)
+          .eq('user_id', user.id);
+        error = retry.error;
+      }
 
       if (error) {
         console.error('Supabase error:', error);
