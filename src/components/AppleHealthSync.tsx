@@ -25,15 +25,33 @@ export function AppleHealthSync() {
       return;
     }
 
+    // Check file size (warn if > 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast({
+        title: "File too large",
+        description: "Please use a smaller export or the mobile app for large files (max 10MB)",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setUploading(true);
     try {
       const text = await file.text();
+      
+      // Check for parsing errors
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(text, "text/xml");
       
+      const parserError = xmlDoc.querySelector('parsererror');
+      if (parserError) {
+        throw new Error('Invalid XML format');
+      }
+      
       // Extract health records
-      const records = xmlDoc.querySelectorAll('Record');
-      const workouts = xmlDoc.querySelectorAll('Workout');
+      const records = Array.from(xmlDoc.querySelectorAll('Record'));
+      const workouts = Array.from(xmlDoc.querySelectorAll('Workout'));
       
       let totalSteps = 0;
       let totalCalories = 0;
@@ -41,21 +59,31 @@ export function AppleHealthSync() {
       let heartRateCount = 0;
       let activeMinutes = 0;
       
-      // Parse records
-      records.forEach(record => {
-        const type = record.getAttribute('type');
-        const value = parseFloat(record.getAttribute('value') || '0');
-        const startDate = record.getAttribute('startDate');
+      // Process records in chunks to avoid blocking UI
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < records.length; i += CHUNK_SIZE) {
+        const chunk = records.slice(i, i + CHUNK_SIZE);
         
-        if (type?.includes('StepCount')) {
-          totalSteps += value;
-        } else if (type?.includes('ActiveEnergyBurned')) {
-          totalCalories += value;
-        } else if (type?.includes('HeartRate')) {
-          heartRateSum += value;
-          heartRateCount++;
+        // Process chunk
+        chunk.forEach(record => {
+          const type = record.getAttribute('type');
+          const value = parseFloat(record.getAttribute('value') || '0');
+          
+          if (type?.includes('StepCount')) {
+            totalSteps += value;
+          } else if (type?.includes('ActiveEnergyBurned')) {
+            totalCalories += value;
+          } else if (type?.includes('HeartRate')) {
+            heartRateSum += value;
+            heartRateCount++;
+          }
+        });
+        
+        // Yield to UI thread every chunk
+        if (i + CHUNK_SIZE < records.length) {
+          await new Promise(resolve => setTimeout(resolve, 0));
         }
-      });
+      }
       
       // Parse workouts
       workouts.forEach(workout => {
@@ -90,9 +118,12 @@ export function AppleHealthSync() {
       });
     } catch (error) {
       console.error('Error parsing Apple Health XML:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       toast({
         title: "Upload failed",
-        description: "Failed to parse Apple Health data. Please try again.",
+        description: errorMessage.includes('Invalid XML') 
+          ? "Invalid XML format. Please upload a valid Apple Health export."
+          : "Failed to parse Apple Health data. Try a smaller date range export.",
         variant: "destructive",
       });
     } finally {
