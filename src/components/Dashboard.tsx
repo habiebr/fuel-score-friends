@@ -219,8 +219,45 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         { calories: 0, protein: 0, carbs: 0, fat: 0 }
       ) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
+      // Calculate daily score based on how well consumed matches planned
+      const calculateScore = () => {
+        if (plannedNutrition.calories === 0) return 0;
+
+        // Calculate percentage for each macro (capped at 100%)
+        const calorieScore = Math.min(100, (consumedNutrition.calories / plannedNutrition.calories) * 100);
+        const proteinScore = plannedNutrition.protein > 0 
+          ? Math.min(100, (consumedNutrition.protein / plannedNutrition.protein) * 100) 
+          : 100;
+        const carbsScore = plannedNutrition.carbs > 0 
+          ? Math.min(100, (consumedNutrition.carbs / plannedNutrition.carbs) * 100) 
+          : 100;
+        const fatScore = plannedNutrition.fat > 0 
+          ? Math.min(100, (consumedNutrition.fat / plannedNutrition.fat) * 100) 
+          : 100;
+
+        // Weighted average: calories 40%, protein 30%, carbs 20%, fat 10%
+        const weightedScore = (
+          calorieScore * 0.4 +
+          proteinScore * 0.3 +
+          carbsScore * 0.2 +
+          fatScore * 0.1
+        );
+
+        // Penalize if over-consuming (>110% of target)
+        const calorieOverage = consumedNutrition.calories > plannedNutrition.calories * 1.1;
+        const proteinOverage = consumedNutrition.protein > plannedNutrition.protein * 1.1;
+        
+        let finalScore = weightedScore;
+        if (calorieOverage) finalScore *= 0.9;
+        if (proteinOverage) finalScore *= 0.95;
+
+        return Math.round(Math.max(0, Math.min(100, finalScore)));
+      };
+
+      const dailyScore = calculateScore();
+
       setData({
-        dailyScore: nutritionScore?.daily_score || 0,
+        dailyScore,
         caloriesConsumed: consumedNutrition.calories,
         proteinGrams: consumedNutrition.protein,
         carbsGrams: consumedNutrition.carbs,
