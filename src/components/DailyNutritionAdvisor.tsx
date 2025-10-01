@@ -89,9 +89,17 @@ export function DailyNutritionAdvisor() {
       }
     } catch (error) {
       console.error('Error generating nutrition advice:', error);
+      
+      // Show more detailed error to user
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Detailed error:', {
+        message: errorMessage,
+        error: error,
+      });
+      
       toast({
         title: 'Generation failed',
-        description: 'Failed to generate nutrition advice. Please try again.',
+        description: `Error: ${errorMessage}. Check console for details.`,
         variant: 'destructive',
       });
     } finally {

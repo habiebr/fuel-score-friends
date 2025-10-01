@@ -239,8 +239,15 @@ CRITICAL: Return ONLY the JSON object, no other text.
   } catch (error) {
     console.error("Error in estimate-macros function:", error);
     const errorMessage = error instanceof Error ? error.message : "Internal server error";
+    const errorStack = error instanceof Error ? error.stack : "";
+    console.error("Error details:", { message: errorMessage, stack: errorStack });
+    
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: errorMessage,
+        details: errorStack,
+        debug: "Check edge function logs for more information"
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

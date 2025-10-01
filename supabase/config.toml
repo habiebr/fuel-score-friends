@@ -3,6 +3,9 @@ project_id = "qiwndzsrmtxmgngnupml"
 [functions.generate-meal-plan]
 verify_jwt = true
 
+[functions.generate-daily-nutrition]
+verify_jwt = false
+
 [functions.estimate-macros]
 verify_jwt = true
 
