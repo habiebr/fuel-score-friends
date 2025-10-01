@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ScoreCard } from '@/components/ScoreCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, Clock } from 'lucide-react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 
@@ -53,6 +54,7 @@ interface DashboardProps {
 
 export function Dashboard({ onAddMeal }: DashboardProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
@@ -139,19 +141,36 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     
     setGeneratingPlan(true);
     try {
-      const { error } = await supabase.functions.invoke('generate-meal-plan', {
+      console.log('Generating meal plan...');
+      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
         body: { date: format(new Date(), 'yyyy-MM-dd') }
       });
       
       if (error) {
         console.error('Error generating meal plan:', error);
-        throw error;
+        toast({
+          title: 'Generation failed',
+          description: error.message || 'Unable to generate meal plan. Please try again.',
+          variant: 'destructive',
+        });
+        return;
       }
+
+      console.log('Meal plan generated:', data);
+      toast({
+        title: 'Success!',
+        description: 'Your daily meal plan has been generated',
+      });
 
       // Reload dashboard data after successful generation
       await loadDashboardData();
     } catch (error) {
       console.error('Error invoking meal plan function:', error);
+      toast({
+        title: 'Error',
+        description: 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setGeneratingPlan(false);
     }

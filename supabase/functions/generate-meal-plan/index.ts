@@ -115,6 +115,7 @@ User Profile:
 - BMR (Basal Metabolic Rate): ${bmr} kcal
 - Activity Level: ${profile?.activity_level || "moderate"}
 - Fitness Goals: ${fitnessGoal || "general fitness"}
+- Location: Melbourne, Australia
 
 Today's Activity Metrics:
 - Calories burned: ${wearableData?.calories_burned || 0} kcal
@@ -138,7 +139,18 @@ ${avgMetrics ? `- Average calories burned: ${avgMetrics.avgCalories} kcal/day
 Daily Calorie Target: ${totalDailyCalories} kcal
 ${calorieAdjustment !== 0 ? `(Adjusted ${calorieAdjustment > 0 ? '+' : ''}${calorieAdjustment} kcal for ${fitnessGoal?.replace('_', ' ')})` : ''}
 
-IMPORTANT: This meal plan must match the user's fitness goal and activity level:
+IMPORTANT LOCATION-SPECIFIC REQUIREMENTS:
+- User is based in MELBOURNE, AUSTRALIA
+- Suggest locally available Australian ingredients and foods
+- Include Melbourne café culture options (e.g., smashed avo, flat whites, grain bowls)
+- Use Australian produce that's in season
+- Include multicultural Melbourne options (Asian fusion, Mediterranean, etc.)
+- Suggest realistic portions and foods available at local supermarkets (Coles, Woolworths)
+- Consider Australian dietary preferences and local food culture
+- Use metric measurements (grams, ml)
+
+MEAL PLANNING REQUIREMENTS:
+This meal plan must match the user's fitness goal and activity level:
 ${fitnessGoal === 'lose_weight' ? '- Focus on high protein, moderate carbs, filling foods with controlled portions' : ''}
 ${fitnessGoal === 'gain_muscle' ? '- Emphasize high protein (2g per kg body weight), sufficient carbs for energy, healthy fats' : ''}
 ${fitnessGoal === 'improve_endurance' ? '- Balance carbs for energy, adequate protein for recovery' : ''}
@@ -153,12 +165,17 @@ Consider the user's wearable data:
 Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), and dinner (30%).
 
 For each meal, provide 2-3 realistic meal options with:
-- Specific meal name
-- List of foods/ingredients
+- Specific meal name (Melbourne-style where appropriate)
+- List of locally available foods/ingredients
 - Brief appetizing description
 - Accurate macros (calories, protein, carbs, fat)
 
-Make suggestions practical, tasty, and culturally diverse.
+Make suggestions practical, tasty, culturally diverse, and SPECIFICALLY tailored to Melbourne/Australian availability.
+
+Examples of Melbourne-appropriate meals:
+- Breakfast: Smashed avocado on sourdough with poached eggs and feta
+- Lunch: Poke bowl with sushi-grade salmon from Melbourne Fish Market
+- Dinner: Grilled barramundi with roasted vegetables and quinoa
 
 Return ONLY valid JSON in this exact format:
 {
@@ -169,8 +186,8 @@ Return ONLY valid JSON in this exact format:
     "target_fat": ${Math.round((totalDailyCalories * 0.30 * 0.30) / 9)},
     "suggestions": [
       {
-        "name": "Meal name",
-        "foods": ["ingredient 1", "ingredient 2", "ingredient 3"],
+        "name": "Meal name (Melbourne-style)",
+        "foods": ["locally available ingredient 1", "ingredient 2", "ingredient 3"],
         "description": "Brief description",
         "calories": ${Math.round(totalDailyCalories * 0.30)},
         "protein": ${Math.round((totalDailyCalories * 0.30 * 0.30) / 4)},
