@@ -6,8 +6,8 @@ import { ScoreCard } from '@/components/ScoreCard';
 import { MealSuggestions } from '@/components/MealSuggestions';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { CalendarDays, Target, Users, Zap, TrendingUp } from 'lucide-react';
-import { format } from 'date-fns';
+import { CalendarDays, Target, Users, Zap, TrendingUp, Clock } from 'lucide-react';
+import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 
 interface MealSuggestion {
   name: string;
@@ -61,6 +61,13 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [raceGoal, setRaceGoal] = useState<string>('');
   const [targetMonths, setTargetMonths] = useState<string>('');
+  const [raceDate, setRaceDate] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState<{
+    days: number;
+    hours: number;
+    minutes: number;
+    seconds: number;
+  } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -69,6 +76,34 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
       loadGoals();
     }
   }, [user]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (!raceDate) return;
+
+    const updateCountdown = () => {
+      const now = new Date();
+      const target = new Date(raceDate);
+      
+      if (target <= now) {
+        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      const totalSeconds = differenceInSeconds(target, now);
+      const days = Math.floor(totalSeconds / (24 * 60 * 60));
+      const hours = differenceInHours(target, now) % 24;
+      const minutes = differenceInMinutes(target, now) % 60;
+      const seconds = differenceInSeconds(target, now) % 60;
+
+      setCountdown({ days, hours, minutes, seconds });
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [raceDate]);
 
   const loadGoals = async () => {
     if (!user) return;
@@ -81,7 +116,19 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         .maybeSingle();
 
       if (profile && profile.fitness_goals && profile.fitness_goals.length > 0) {
-        setRaceGoal(profile.fitness_goals[0]);
+        const goalName = profile.fitness_goals[0];
+        setRaceGoal(goalName);
+
+        // Try to find the marathon event matching this goal
+        const { data: marathonEvent } = await supabase
+          .from('marathon_events')
+          .select('event_date, event_name')
+          .ilike('event_name', `%${goalName}%`)
+          .maybeSingle();
+
+        if (marathonEvent) {
+          setRaceDate(new Date(marathonEvent.event_date));
+        }
       }
     } catch (error) {
       console.error('Error loading goals:', error);
@@ -207,7 +254,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         {raceGoal && (
           <Card className="shadow-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <Target className="h-4 w-4 text-primary" />
@@ -231,6 +278,47 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                   Update
                 </Button>
               </div>
+
+              {/* Countdown Timer */}
+              {countdown && raceDate && (
+                <div className="pt-3 border-t border-primary/10">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="h-3 w-3 text-primary" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Time until race:
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="text-center bg-primary/10 rounded-lg p-2">
+                      <div className="text-xl font-bold text-primary">
+                        {countdown.days}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Days</div>
+                    </div>
+                    <div className="text-center bg-primary/10 rounded-lg p-2">
+                      <div className="text-xl font-bold text-primary">
+                        {countdown.hours}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Hours</div>
+                    </div>
+                    <div className="text-center bg-primary/10 rounded-lg p-2">
+                      <div className="text-xl font-bold text-primary">
+                        {countdown.minutes}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Mins</div>
+                    </div>
+                    <div className="text-center bg-primary/10 rounded-lg p-2">
+                      <div className="text-xl font-bold text-primary">
+                        {countdown.seconds}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Secs</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-center text-muted-foreground mt-2">
+                    Race date: {format(raceDate, 'MMM dd, yyyy')}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
