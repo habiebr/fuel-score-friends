@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { WearablePerformanceGraph } from '@/components/WearablePerformanceGraph';
+import { BodyMetricsForm } from '@/components/BodyMetricsForm';
 import { LogOut, User, Target, Activity as ActivityIcon, Download, TrendingUp, Flame, Heart, Zap, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -177,6 +178,11 @@ export default function Profile() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Body Metrics */}
+          <div className="mb-6">
+            <BodyMetricsForm />
+          </div>
 
           {/* Goals Section */}
           <Card className="premium-card mb-6">

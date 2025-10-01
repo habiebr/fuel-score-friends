@@ -47,7 +47,7 @@ serve(async (req) => {
       .eq("date", targetDate)
       .single();
 
-    // Calculate daily calorie needs
+    // Calculate daily calorie needs with enhanced logic
     const bmr = profile?.weight && profile?.height && profile?.age
       ? 10 * profile.weight + 6.25 * profile.height - 5 * profile.age + 5
       : 2000;
@@ -61,7 +61,28 @@ serve(async (req) => {
     };
     const activityMultiplier = activityMultipliers[profile?.activity_level || "moderate"] || 1.55;
 
-    const totalDailyCalories = Math.round(bmr * activityMultiplier);
+    // Calculate TDEE (Total Daily Energy Expenditure)
+    let totalDailyCalories = Math.round(bmr * activityMultiplier);
+
+    // If wearable data exists, incorporate actual calories burned
+    if (wearableData?.calories_burned) {
+      // Use actual burned calories + BMR as baseline
+      totalDailyCalories = Math.round(bmr + wearableData.calories_burned);
+    }
+
+    // Adjust based on fitness goal
+    const fitnessGoal = profile?.fitness_goals?.[0];
+    let calorieAdjustment = 0;
+    
+    if (fitnessGoal === 'lose_weight') {
+      calorieAdjustment = -500; // 500 calorie deficit for weight loss
+    } else if (fitnessGoal === 'gain_muscle') {
+      calorieAdjustment = 300; // 300 calorie surplus for muscle gain
+    }
+    
+    totalDailyCalories += calorieAdjustment;
+
+    console.log(`Calculated nutrition needs - BMR: ${bmr}, TDEE: ${totalDailyCalories}, Goal: ${fitnessGoal}`);
 
     // Use AI to generate detailed meal suggestions
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -71,15 +92,22 @@ User Profile:
 - Age: ${profile?.age || "unknown"}
 - Weight: ${profile?.weight || "unknown"} kg
 - Height: ${profile?.height || "unknown"} cm
+- BMR (Basal Metabolic Rate): ${bmr} kcal
 - Activity Level: ${profile?.activity_level || "moderate"}
-- Fitness Goals: ${profile?.fitness_goals?.join(", ") || "general fitness"}
+- Fitness Goals: ${fitnessGoal || "general fitness"}
 
 Today's Activity:
-- Calories burned: ${wearableData?.calories_burned || 0}
+- Calories burned from exercise: ${wearableData?.calories_burned || 0}
 - Steps: ${wearableData?.steps || 0}
 - Active minutes: ${wearableData?.active_minutes || 0}
 
 Daily Calorie Target: ${totalDailyCalories} kcal
+${calorieAdjustment !== 0 ? `(Adjusted ${calorieAdjustment > 0 ? '+' : ''}${calorieAdjustment} kcal for ${fitnessGoal?.replace('_', ' ')})` : ''}
+
+IMPORTANT: This meal plan must match the user's fitness goal:
+${fitnessGoal === 'lose_weight' ? '- Focus on high protein, moderate carbs, filling foods with controlled portions' : ''}
+${fitnessGoal === 'gain_muscle' ? '- Emphasize high protein (2g per kg body weight), sufficient carbs for energy, healthy fats' : ''}
+${fitnessGoal === 'improve_endurance' ? '- Balance carbs for energy, adequate protein for recovery' : ''}
 
 Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), and dinner (30%).
 
