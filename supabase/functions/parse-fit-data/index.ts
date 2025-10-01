@@ -108,84 +108,182 @@ async function parseFitFile(data: Uint8Array): Promise<FitRecord[]> {
       throw new Error('Invalid FIT file signature');
     }
     
-    console.log('Valid FIT file detected, extracting metadata...');
+    console.log('Valid FIT file detected, parsing data...');
     
-    // Extract basic file info
-    const dataSize = data[4] | (data[5] << 8) | (data[6] << 16) | (data[7] << 24);
-    console.log(`FIT file data size: ${dataSize} bytes`);
+    // Parse FIT file using proper message definitions
+    const messages = await parseFitMessages(data, headerSize);
     
-    // Parse messages - simplified approach for key metrics
-    let offset = headerSize;
-    let totalCalories = 0;
-    let totalDistance = 0;
-    let maxHeartRate = 0;
-    let avgHeartRate = 0;
-    let maxSpeed = 0;
-    let totalTime = 0;
-    let recordCount = 0;
-    
-    // Scan through the file looking for session summary messages
-    // This is a simplified parser that extracts key metrics
-    while (offset < data.length - 2) {
-      const byte = data[offset];
-      
-      // Check if this is a definition message or data message
-      if ((byte & 0x40) === 0x40) {
-        // Compressed timestamp header
-        offset++;
-        continue;
+    // Extract records from parsed messages
+    for (const msg of messages) {
+      if (msg.type === 'record' || msg.type === 'session') {
+        const record: FitRecord = {
+          timestamp: msg.timestamp || new Date().toISOString(),
+          heartRate: msg.heart_rate,
+          calories: msg.total_calories || msg.calories,
+          steps: msg.total_steps || msg.steps,
+          distance: msg.total_distance ? msg.total_distance / 100 : undefined, // cm to m
+          speed: msg.speed ? msg.speed / 1000 : undefined, // mm/s to m/s
+          cadence: msg.cadence,
+          power: msg.power,
+          altitude: msg.altitude,
+          duration: msg.total_elapsed_time,
+        };
+        records.push(record);
       }
-      
-      const isDefinitionMessage = (byte & 0x40) === 0x40;
-      const messageType = byte & 0x0F;
-      
-      offset++;
-      
-      // Skip message content (simplified - real parser would decode fields)
-      if (offset < data.length - 20) {
-        // Try to extract some basic values from common positions
-        // This is a heuristic approach for demo purposes
-        const value16 = data[offset] | (data[offset + 1] << 8);
-        const value32 = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
-        
-        // Common ranges for different metrics
-        if (value16 > 0 && value16 < 250) {
-          // Likely heart rate
-          if (value16 > maxHeartRate) maxHeartRate = value16;
-          avgHeartRate = (avgHeartRate + value16) / 2;
-        }
-        
-        if (value32 > 100 && value32 < 10000) {
-          // Likely calories or distance (cm)
-          totalCalories = Math.max(totalCalories, value32);
-          totalDistance = Math.max(totalDistance, value32 / 100000); // Convert to km
-        }
-        
-        recordCount++;
-      }
-      
-      offset += 10; // Skip ahead
     }
     
-    // Generate aggregated record
-    const timestamp = new Date().toISOString();
-    records.push({
-      timestamp,
-      heartRate: Math.round(avgHeartRate) || undefined,
-      calories: totalCalories || undefined,
-      distance: Math.round(totalDistance * 100) / 100 || undefined,
-      speed: maxSpeed || undefined,
-    });
-    
-    console.log(`Extracted ${recordCount} data points from FIT file`);
-    console.log(`Summary - HR: ${Math.round(avgHeartRate)}, Calories: ${totalCalories}, Distance: ${totalDistance}km`);
-    
+    console.log(`Parsed ${records.length} records from FIT file`);
     return records;
     
   } catch (error) {
     console.error('Error parsing FIT file:', error);
     throw new Error(`FIT file parsing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+}
+
+async function parseFitMessages(data: Uint8Array, headerSize: number): Promise<any[]> {
+  const messages: any[] = [];
+  let offset = headerSize;
+  const definitions = new Map();
+  
+  // Read data size from header
+  const dataSize = data[4] | (data[5] << 8) | (data[6] << 16) | (data[7] << 24);
+  const endOffset = Math.min(headerSize + dataSize, data.length - 2);
+  
+  while (offset < endOffset) {
+    if (offset >= data.length) break;
+    
+    const recordHeader = data[offset];
+    offset++;
+    
+    // Check for compressed timestamp header
+    if ((recordHeader & 0x80) === 0x80) {
+      const localMessageType = (recordHeader >> 5) & 0x03;
+      const timeOffset = recordHeader & 0x1F;
+      
+      const def = definitions.get(localMessageType);
+      if (def) {
+        const fields = readFields(data, offset, def.fields);
+        offset += def.size;
+        messages.push({ type: def.globalType, ...fields });
+      }
+      continue;
+    }
+    
+    const isDefinitionMessage = (recordHeader & 0x40) === 0x40;
+    const localMessageType = recordHeader & 0x0F;
+    
+    if (isDefinitionMessage) {
+      // Parse definition message
+      if (offset + 5 >= data.length) break;
+      
+      offset++; // Skip reserved byte
+      offset++; // Skip architecture byte
+      
+      const globalMessageNumber = data[offset] | (data[offset + 1] << 8);
+      offset += 2;
+      
+      const numFields = data[offset];
+      offset++;
+      
+      const fields = [];
+      for (let i = 0; i < numFields && offset + 3 <= data.length; i++) {
+        const fieldDef = data[offset];
+        const fieldSize = data[offset + 1];
+        const fieldType = data[offset + 2];
+        offset += 3;
+        
+        fields.push({ def: fieldDef, size: fieldSize, type: fieldType });
+      }
+      
+      const totalSize = fields.reduce((sum, f) => sum + f.size, 0);
+      definitions.set(localMessageType, {
+        globalType: getMessageType(globalMessageNumber),
+        fields,
+        size: totalSize
+      });
+    } else {
+      // Parse data message
+      const def = definitions.get(localMessageType);
+      if (def && offset + def.size <= data.length) {
+        const fields = readFields(data, offset, def.fields);
+        offset += def.size;
+        messages.push({ type: def.globalType, ...fields });
+      } else {
+        offset += 10; // Skip if we can't parse
+      }
+    }
+  }
+  
+  return messages;
+}
+
+function readFields(data: Uint8Array, offset: number, fieldDefs: any[]): any {
+  const fields: any = {};
+  let currentOffset = offset;
+  
+  for (const fieldDef of fieldDefs) {
+    if (currentOffset + fieldDef.size > data.length) break;
+    
+    let value;
+    switch (fieldDef.size) {
+      case 1:
+        value = data[currentOffset];
+        break;
+      case 2:
+        value = data[currentOffset] | (data[currentOffset + 1] << 8);
+        break;
+      case 4:
+        value = data[currentOffset] | (data[currentOffset + 1] << 8) | 
+                (data[currentOffset + 2] << 16) | (data[currentOffset + 3] << 24);
+        break;
+      default:
+        currentOffset += fieldDef.size;
+        continue;
+    }
+    
+    currentOffset += fieldDef.size;
+    
+    // Map field definitions to field names (simplified mapping)
+    const fieldName = getFieldName(fieldDef.def);
+    if (fieldName && value !== 0xFFFF && value !== 0xFFFFFFFF) {
+      fields[fieldName] = value;
+    }
+  }
+  
+  return fields;
+}
+
+function getMessageType(globalMessageNumber: number): string {
+  const types: Record<number, string> = {
+    0: 'file_id',
+    18: 'session',
+    19: 'lap',
+    20: 'record',
+    21: 'event',
+    23: 'device_info',
+    34: 'activity',
+  };
+  return types[globalMessageNumber] || 'unknown';
+}
+
+function getFieldName(fieldDef: number): string | null {
+  const names: Record<number, string> = {
+    253: 'timestamp',
+    0: 'start_time',
+    2: 'altitude',
+    3: 'heart_rate',
+    5: 'total_distance',
+    6: 'speed',
+    7: 'total_calories',
+    8: 'cadence',
+    9: 'total_elapsed_time',
+    11: 'total_steps',
+    13: 'avg_heart_rate',
+    14: 'max_heart_rate',
+    15: 'power',
+  };
+  return names[fieldDef] || null;
 }
 
 function aggregateDailyData(records: FitRecord[]) {
