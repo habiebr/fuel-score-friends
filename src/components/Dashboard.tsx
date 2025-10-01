@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ScoreCard } from '@/components/ScoreCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { CalendarDays, Target, Users, Zap } from 'lucide-react';
+import { CalendarDays, Target, Users, Zap, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DashboardData {
@@ -20,6 +22,7 @@ interface DashboardData {
 
 export function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -189,6 +192,34 @@ export function Dashboard() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Quick Actions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-3">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => navigate('/goals')}
+              >
+                <Target className="h-4 w-4 mr-2" />
+                Goals
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => navigate('/activity')}
+              >
+                <CalendarDays className="h-4 w-4 mr-2" />
+                Activity
+              </Button>
             </CardContent>
           </Card>
 

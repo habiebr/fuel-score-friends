@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BottomNav } from '@/components/BottomNav';
-import { Target, Upload, Calendar, Zap } from 'lucide-react';
+import { Target, Upload, Calendar, Zap, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,11 +14,47 @@ import { useAuth } from '@/hooks/useAuth';
 export default function Goals() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [raceGoal, setRaceGoal] = useState('');
   const [targetMonths, setTargetMonths] = useState('');
   const [weeklyRuns, setWeeklyRuns] = useState('');
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      loadExistingGoals();
+    }
+  }, [user]);
+
+  const loadExistingGoals = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('fitness_goals, activity_level')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        if (data.fitness_goals && data.fitness_goals.length > 0) {
+          setRaceGoal(data.fitness_goals[0]);
+        }
+        if (data.activity_level && data.activity_level.includes('runs_per_week')) {
+          const runs = data.activity_level.split('_')[0];
+          setWeeklyRuns(runs);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading goals:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -99,6 +136,19 @@ export default function Goals() {
     }
   };
 
+  if (loading) {
+    return (
+      <>
+        <div className="min-h-screen bg-gradient-background flex items-center justify-center pb-20">
+          <div className="animate-pulse">
+            <div className="w-12 h-12 bg-primary rounded-full"></div>
+          </div>
+        </div>
+        <BottomNav />
+      </>
+    );
+  }
+
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
@@ -107,6 +157,12 @@ export default function Goals() {
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-foreground mb-2">Training Goals</h1>
             <p className="text-muted-foreground text-sm">Set your race goals and training schedule</p>
+            {raceGoal && (
+              <div className="flex items-center gap-2 mt-2 text-success text-sm">
+                <CheckCircle className="h-4 w-4" />
+                <span>Goal saved: {raceGoal.replace('_', ' ').toUpperCase()}</span>
+              </div>
+            )}
           </div>
 
           {/* Race Goal */}
@@ -214,7 +270,11 @@ export default function Goals() {
               <p className="text-sm text-muted-foreground mb-3">
                 Based on your training data, AI will automatically suggest optimal nutrition timing and amounts
               </p>
-              <Button variant="outline" className="w-full">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => navigate('/')}
+              >
                 View Nutrition Insights
               </Button>
             </CardContent>

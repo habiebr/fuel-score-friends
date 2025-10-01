@@ -1,4 +1,5 @@
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { WearablesSync } from '@/components/WearablesSync';
@@ -7,6 +8,7 @@ import { LogOut, User, Target, Activity } from 'lucide-react';
 
 export default function Profile() {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <>
@@ -54,7 +56,11 @@ export default function Profile() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Button variant="secondary" className="w-full">
+            <Button 
+              variant="secondary" 
+              className="w-full"
+              onClick={() => navigate('/goals')}
+            >
               Set Your Goals
             </Button>
           </CardContent>
@@ -69,7 +75,11 @@ export default function Profile() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Button variant="secondary" className="w-full">
+            <Button 
+              variant="secondary" 
+              className="w-full"
+              onClick={() => navigate('/activity')}
+            >
               View Activity History
             </Button>
           </CardContent>
