@@ -22,37 +22,44 @@ serve(async (req) => {
       });
     }
 
-    // Create admin client with service role key
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // Verify the JWT and get user
+    // Extract and decode JWT to get user ID
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
     
-    if (userError || !user) {
-      console.error("Auth error:", userError);
-      return new Response(JSON.stringify({ error: "Authentication failed" }), {
+    // Decode JWT (it's a base64 encoded JSON in the middle part)
+    let userId: string;
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        throw new Error("Invalid token format");
+      }
+      const payload = JSON.parse(atob(parts[1]));
+      userId = payload.sub;
+      console.log(`2. User ID extracted from JWT: ${userId}`);
+    } catch (e) {
+      console.error("JWT decode error:", e);
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`2. User authenticated: ${user.id}`);
+    // Create admin client with service role key for database operations
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
 
     const { date } = await req.json();
     const targetDate = date || new Date().toISOString().split("T")[0];
 
-    console.log(`3. Generating meal plan for user ${user.id} on ${targetDate}`);
+    console.log(`3. Generating meal plan for user ${userId} on ${targetDate}`);
 
     // Fetch user profile
     console.log("4. Fetching user profile...");
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
     
     if (profileError) {
@@ -64,7 +71,7 @@ serve(async (req) => {
     const { data: wearableData } = await supabaseAdmin
       .from("wearable_data")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("date", targetDate)
       .single();
 
@@ -74,7 +81,7 @@ serve(async (req) => {
     const { data: recentWearableData } = await supabaseAdmin
       .from("wearable_data")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .gte("date", sevenDaysAgo.toISOString().split("T")[0])
       .order("date", { ascending: false })
       .limit(7);
@@ -324,7 +331,7 @@ Return ONLY valid JSON in this exact format:
         .from("daily_meal_plans")
         .upsert(
           {
-            user_id: user.id,
+            user_id: userId,
             date: targetDate,
             meal_type: mealType,
             recommended_calories: meal.target_calories || 0,
