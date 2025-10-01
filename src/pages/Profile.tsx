@@ -4,10 +4,9 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { WearablesSync } from '@/components/WearablesSync';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { LogOut, User, Target, Activity as ActivityIcon, Download, TrendingUp, Flame, Heart, Zap } from 'lucide-react';
+import { LogOut, User, Target, Activity as ActivityIcon, Download, TrendingUp, Flame, Heart, Zap, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -158,8 +157,25 @@ export default function Profile() {
             </Card>
           </div>
 
-          {/* Wearables Sync */}
-          <WearablesSync />
+          {/* Import Data Section */}
+          <Card className="premium-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg mb-1">Import Activity Data</h3>
+                  <p className="text-sm text-muted-foreground">Sync data from Garmin & health apps</p>
+                </div>
+                <Button 
+                  variant="default" 
+                  onClick={() => navigate('/import')}
+                  className="premium-button"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Goals Section */}
           <Card className="premium-card mb-6">
