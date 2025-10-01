@@ -3,10 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreCard } from '@/components/ScoreCard';
+import { MealSuggestions } from '@/components/MealSuggestions';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { CalendarDays, Target, Users, Zap, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
+
+interface MealSuggestion {
+  name: string;
+  foods: string[];
+  description: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
 
 interface MealPlan {
   meal_type: string;
@@ -14,7 +25,7 @@ interface MealPlan {
   recommended_protein_grams: number;
   recommended_carbs_grams: number;
   recommended_fat_grams: number;
-  meal_suggestions: unknown;
+  meal_suggestions: MealSuggestion[];
   meal_score: number | null;
 }
 
@@ -126,7 +137,10 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         .eq('date', today);
 
       if (plans) {
-        setMealPlans(plans);
+        setMealPlans(plans.map(plan => ({
+          ...plan,
+          meal_suggestions: (plan.meal_suggestions as unknown as MealSuggestion[]) || []
+        })));
       }
 
       setData({
@@ -221,8 +235,32 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
           </Card>
         )}
 
-        {/* Mobile-First Main Content */}
+        {/* AI Meal Suggestions */}
         <div className="space-y-4 sm:space-y-6">
+          <MealSuggestions 
+            mealPlans={mealPlans}
+            actualMeals={{
+              breakfast: {
+                calories: data?.breakfastScore ? data.caloriesConsumed / 3 : 0,
+                protein: data?.proteinGrams || 0,
+                carbs: data?.carbsGrams || 0,
+                fat: data?.fatGrams || 0
+              },
+              lunch: {
+                calories: data?.lunchScore ? data.caloriesConsumed / 3 : 0,
+                protein: data?.proteinGrams || 0,
+                carbs: data?.carbsGrams || 0,
+                fat: data?.fatGrams || 0
+              },
+              dinner: {
+                calories: data?.dinnerScore ? data.caloriesConsumed / 3 : 0,
+                protein: data?.proteinGrams || 0,
+                carbs: data?.carbsGrams || 0,
+                fat: data?.fatGrams || 0
+              }
+            }}
+          />
+
           {/* Today's Nutrition - Priority Section */}
           <Card className="shadow-card">
             <CardHeader className="pb-4">
