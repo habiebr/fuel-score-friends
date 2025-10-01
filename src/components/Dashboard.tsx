@@ -532,6 +532,42 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
           />
         </div>
 
+        {/* Daily Nutrient Needs (TDEE-based) */}
+        <Card className="shadow-card mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Daily Nutrient Needs</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {data ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <div className="text-xs text-muted-foreground">Calories Target</div>
+                  <div className="font-semibold">
+                    {Math.max(0, (data.plannedCalories || 0) + (data.caloriesBurned || 0))} kcal
+                  </div>
+                  {data.caloriesBurned > 0 && (
+                    <div className="text-[11px] text-muted-foreground">includes +{data.caloriesBurned} activity</div>
+                  )}
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <div className="text-xs text-muted-foreground">Protein</div>
+                  <div className="font-semibold">{data.plannedProtein} g</div>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <div className="text-xs text-muted-foreground">Carbs</div>
+                  <div className="font-semibold">{data.plannedCarbs} g</div>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <div className="text-xs text-muted-foreground">Fat</div>
+                  <div className="font-semibold">{data.plannedFat} g</div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">No targets yet — generate a meal plan first.</div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Race Goals Widget */}
         {raceGoal ? (
           <Card className="shadow-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">
