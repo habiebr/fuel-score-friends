@@ -78,12 +78,14 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
       setStage('analyzing');
       setProgress(50);
       
+      const session = (await supabase.auth.getSession()).data.session;
       const { data, error } = await supabase.functions.invoke('nutrition-ai', {
         body: { 
           type: 'food_photo',
           image: base64Image,
           mealType
-        }
+        },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       });
 
       if (error) {
@@ -153,8 +155,10 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
       // Calculate nutrition score after logging food
       try {
+        const session = (await supabase.auth.getSession()).data.session;
         await supabase.functions.invoke('calculate-nutrition-score', {
-          body: { date: format(new Date(), 'yyyy-MM-dd') }
+          body: { date: format(new Date(), 'yyyy-MM-dd') },
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         });
       } catch (scoreError) {
         console.error('Error calculating nutrition score:', scoreError);
