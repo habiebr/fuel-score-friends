@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Dashboard } from '@/components/Dashboard';
 import { BottomNav } from '@/components/BottomNav';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
+import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -44,8 +46,9 @@ const Index = () => {
   return (
     <>
       <OnboardingDialog open={showOnboarding} onComplete={handleOnboardingComplete} />
-      <Dashboard />
-      <BottomNav />
+      <Dashboard onAddMeal={() => setFoodTrackerOpen(true)} />
+      <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />
+      <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
     </>
   );
 };

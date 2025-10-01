@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BottomNav } from '@/components/BottomNav';
+import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { Activity as ActivityIcon, TrendingUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,6 +13,7 @@ export default function Activity() {
   const [loading, setLoading] = useState(true);
   const [activityData, setActivityData] = useState<any[]>([]);
   const [nutritionData, setNutritionData] = useState<any[]>([]);
+  const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -78,13 +80,15 @@ export default function Activity() {
             <div className="w-12 h-12 bg-primary rounded-full"></div>
           </div>
         </div>
-        <BottomNav />
+        <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />
+        <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       </>
     );
   }
 
   return (
     <>
+      <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-7xl mx-auto p-4">
           {/* Header */}
@@ -159,7 +163,7 @@ export default function Activity() {
           </Card>
         </div>
       </div>
-      <BottomNav />
+      <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />
     </>
   );
 }

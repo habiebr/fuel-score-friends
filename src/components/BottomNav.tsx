@@ -1,8 +1,12 @@
-import { Home, User, Plus, Target, Activity } from 'lucide-react';
+import { Home, User, Camera, Target, Activity } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
-export function BottomNav() {
+interface BottomNavProps {
+  onAddMeal?: () => void;
+}
+
+export function BottomNav({ onAddMeal }: BottomNavProps) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50">
       <div className="max-w-7xl mx-auto px-2">
@@ -33,13 +37,14 @@ export function BottomNav() {
             <span className="text-xs font-medium">Goals</span>
           </NavLink>
 
-          {/* Center Record Button */}
+          {/* Center Add Meal Button */}
           <div className="absolute left-1/2 -translate-x-1/2 -top-6">
             <Button
               size="lg"
-              className="h-14 w-14 rounded-full shadow-elegant"
+              onClick={onAddMeal}
+              className="h-14 w-14 rounded-full shadow-elegant animate-pulse-glow"
             >
-              <Plus className="h-6 w-6" />
+              <Camera className="h-6 w-6" />
             </Button>
           </div>
 
