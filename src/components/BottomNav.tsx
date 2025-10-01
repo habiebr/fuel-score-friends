@@ -1,4 +1,4 @@
-import { Home, User, Camera, Target, Activity } from 'lucide-react';
+import { Home, User, Camera, Target, Users } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
@@ -48,17 +48,17 @@ export function BottomNav({ onAddMeal }: BottomNavProps) {
             </Button>
           </div>
 
-          {/* Activity */}
+          {/* Community */}
           <NavLink
-            to="/activity"
+            to="/community"
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                 isActive ? 'text-primary' : 'text-muted-foreground'
               }`
             }
           >
-            <Activity className="h-5 w-5" />
-            <span className="text-xs font-medium">Activity</span>
+            <Users className="h-5 w-5" />
+            <span className="text-xs font-medium">Community</span>
           </NavLink>
 
           {/* Profile */}
