@@ -758,28 +758,54 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
             </CardHeader>
             <CardContent className="space-y-4">
               {mealPlans.length === 0 ? (
-                <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    No meal plan for today.
-                  </p>
-                  <Button 
-                    onClick={generateDailyMealPlan}
-                    disabled={generatingPlan}
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    {generatingPlan ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Target className="mr-2 h-4 w-4" />
-                        Generate Meal Plan
-                      </>
-                    )}
-                  </Button>
-                </div>
+                <>
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      No meal plan found for today. Showing default runner-friendly suggestions.
+                    </p>
+                    <Button 
+                      onClick={generateDailyMealPlan}
+                      disabled={generatingPlan}
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      {generatingPlan ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Target className="mr-2 h-4 w-4" />
+                          Generate Meal Plan
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {([
+                      { meal_type: 'breakfast', target: 400, suggestion: getIndonesianMealSuggestions('breakfast', 400) },
+                      { meal_type: 'lunch', target: 600, suggestion: getIndonesianMealSuggestions('lunch', 600) },
+                      { meal_type: 'dinner', target: 600, suggestion: getIndonesianMealSuggestions('dinner', 600) },
+                    ] as const).map((m) => (
+                      <div key={m.meal_type} className="p-4 bg-muted/20 rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-semibold capitalize">{m.meal_type}</div>
+                          <div className="text-xs text-muted-foreground">Target: {m.target} kcal</div>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="font-medium text-primary">{m.suggestion.name}</div>
+                          <div className="text-muted-foreground">{m.suggestion.description}</div>
+                          <div className="flex gap-4 text-muted-foreground">
+                            <span>🔥 {m.suggestion.calories} cal</span>
+                            <span>🥩 {m.suggestion.protein}g</span>
+                            <span>🍚 {m.suggestion.carbs}g</span>
+                            <span>🥑 {m.suggestion.fat}g</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               ) : (
                 <div className="space-y-3">
                   {(['breakfast','lunch','dinner'] as const).map((type) => {
