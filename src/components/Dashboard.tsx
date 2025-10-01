@@ -299,10 +299,30 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     }
   }, [user]);
 
-  // Reset meal index when meal plans change
+  // Realtime: refresh when profile or meal plans change
   useEffect(() => {
-    setCurrentMealIndex(0);
-  }, [mealPlans]);
+    if (!user) return;
+
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `user_id=eq.${user.id}` }, () => {
+        loadGoals();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_meal_plans', filter: `user_id=eq.${user.id}` }, () => {
+        loadDashboardData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'food_logs', filter: `user_id=eq.${user.id}` }, () => {
+        loadDashboardData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wearable_data', filter: `user_id=eq.${user.id}` }, () => {
+        loadDashboardData();
+      })
+      .subscribe();
+
+    return () => {
+      try { supabase.removeChannel(channel); } catch {}
+    };
+  }, [user]);
 
   // Countdown timer effect
   useEffect(() => {

@@ -27,7 +27,8 @@ export function useMealCron() {
         const { localHour: h } = await getLocalTimeInfo();
         if (h === 6) {
           try {
-            await supabase.functions.invoke('generate-daily-nutrition', { body: {} });
+            const today = new Date().toISOString().split('T')[0];
+            await supabase.functions.invoke('generate-meal-plan-range', { body: { startDate: today, weeks: 7 } });
           } catch (e) {
             // ignore transient errors; will retry next hour
           }

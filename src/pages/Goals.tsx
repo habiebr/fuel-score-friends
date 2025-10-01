@@ -17,6 +17,7 @@ interface DayPlan {
   day: string;
   activity: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
   duration: number;
+  distanceKm?: number;
   estimatedCalories: number;
 }
 
@@ -118,7 +119,7 @@ export default function Goals() {
     }
   };
 
-  const calculateCalories = (activity: string, duration: number): number => {
+  const calculateCalories = (activity: string, duration: number, distanceKm?: number): number => {
     const caloriesPerMinute: { [key: string]: number } = {
       rest: 0,
       run: 10,
@@ -126,6 +127,10 @@ export default function Goals() {
       cardio: 8,
       other: 7,
     };
+    // For running, prefer distance-based rough estimate if distance is provided (≈ 60 kcal/km baseline)
+    if (activity === 'run' && typeof distanceKm === 'number' && distanceKm > 0) {
+      return Math.round(60 * distanceKm);
+    }
     return Math.round((caloriesPerMinute[activity] || 0) * duration);
   };
 
@@ -134,11 +139,16 @@ export default function Goals() {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
       
-      if (field === 'activity' || field === 'duration') {
-        updated[index].estimatedCalories = calculateCalories(
-          field === 'activity' ? value : updated[index].activity,
-          field === 'duration' ? Number(value) : updated[index].duration
-        );
+      // Ensure distanceKm is numeric when editing
+      if (field === 'distanceKm') {
+        updated[index].distanceKm = value === '' ? undefined : Number(value);
+      }
+      
+      if (field === 'activity' || field === 'duration' || field === 'distanceKm') {
+        const activity = field === 'activity' ? value : updated[index].activity;
+        const duration = field === 'duration' ? Number(value) : updated[index].duration;
+        const distanceKm = field === 'distanceKm' ? (value === '' ? undefined : Number(value)) : updated[index].distanceKm;
+        updated[index].estimatedCalories = calculateCalories(activity, duration, distanceKm);
       }
       
       return updated;
@@ -178,8 +188,15 @@ export default function Goals() {
           description: data.message || "Your training schedule has been imported",
         });
 
-        // Optionally set the parsed data
-        if (data.weeklyRuns) setWeeklyRuns(data.weeklyRuns.toString());
+        // Trigger regeneration for affected dates (next 7 weeks)
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          await supabase.functions.invoke('generate-meal-plan-range', {
+            body: { startDate: today, weeks: 7 }
+          });
+        } catch (regenErr) {
+          console.error('Failed to refresh daily_meal_plans:', regenErr);
+        }
       };
     } catch (error) {
       console.error('Error parsing training plan:', error);
@@ -199,8 +216,9 @@ export default function Goals() {
 
     setUploading(true);
     try {
-      // First, try to update with all fields
+      // Prepare payload for upsert (insert or update by user_id)
       const updateData: any = {
+        user_id: user.id,
         // Preserve historical fitness_goals array but prioritize new fields
         fitness_goals: [customGoalName.trim()],
         goal_type: raceGoal || null,
@@ -216,14 +234,15 @@ export default function Goals() {
         updateData.fitness_level = fitnessLevel;
       }
 
+      // Upsert so brand-new users get a row created
       let { error } = await supabase
         .from('profiles')
-        .update(updateData)
-        .eq('user_id', user.id);
+        .upsert(updateData, { onConflict: 'user_id' });
 
       // If the new columns don't exist yet, retry without them
       if (error && (String(error.message).includes('goal_name') || String(error.message).includes('goal_type') || String((error as any).code) === '42703')) {
         const fallbackData: any = {
+          user_id: user.id,
           fitness_goals: [customGoalName.trim()],
           activity_level: JSON.stringify(weekPlan)
         };
@@ -232,8 +251,7 @@ export default function Goals() {
 
         const retry = await supabase
           .from('profiles')
-          .update(fallbackData)
-          .eq('user_id', user.id);
+          .upsert(fallbackData, { onConflict: 'user_id' });
         error = retry.error;
       }
 
@@ -246,6 +264,16 @@ export default function Goals() {
         title: "Goals & Plan saved!",
         description: "Your running goal and training plan have been updated",
       });
+
+      // Regenerate meal plans for the next 7 weeks so Dashboard shows updated data
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        await supabase.functions.invoke('generate-meal-plan-range', {
+          body: { startDate: today, weeks: 7 }
+        });
+      } catch (regenErr) {
+        console.error('Failed to refresh daily_meal_plans after save:', regenErr);
+      }
     } catch (error) {
       console.error('Error saving goals:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -492,7 +520,7 @@ export default function Goals() {
                           </Select>
                         </div>
 
-                        {dayPlan.activity !== 'rest' && (
+                        {dayPlan.activity !== 'rest' && dayPlan.activity !== 'run' && (
                           <div className="space-y-1">
                             <Label className="text-xs">Duration (minutes)</Label>
                             <Input
@@ -502,6 +530,20 @@ export default function Goals() {
                               value={dayPlan.duration || ''}
                               onChange={(e) => updateDayPlan(index, 'duration', e.target.value)}
                               placeholder="0"
+                              className="h-9"
+                            />
+                          </div>
+                        )}
+                        {dayPlan.activity === 'run' && (
+                          <div className="space-y-1">
+                            <Label className="text-xs">Distance (km)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={typeof dayPlan.distanceKm === 'number' ? dayPlan.distanceKm : ''}
+                              onChange={(e) => updateDayPlan(index, 'distanceKm', e.target.value)}
+                              placeholder="0.0"
                               className="h-9"
                             />
                           </div>
