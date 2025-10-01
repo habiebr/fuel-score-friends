@@ -50,4 +50,34 @@ export function computeDailyScore(planned: PlannedNutrition, consumed: PlannedNu
   return Math.max(0, Math.min(100, Math.round(weighted)));
 }
 
+// ---- TDEE helpers for client fallback ----
+export function calculateBMR(weightKg?: number | null, heightCm?: number | null, ageYears?: number | null): number {
+  if (!weightKg || !heightCm || !ageYears) return 0;
+  return Math.round(10 * weightKg + 6.25 * heightCm - 5 * ageYears + 5);
+}
+
+export function getActivityMultiplier(level?: string | null): number {
+  const map: Record<string, number> = {
+    sedentary: 1.2,
+    light: 1.375,
+    moderate: 1.55,
+    active: 1.725,
+    very_active: 1.9,
+  };
+  if (!level) return 1.55;
+  const key = String(level).toLowerCase();
+  return map[key] || 1.55;
+}
+
+export function deriveMacrosFromCalories(totalCalories: number) {
+  const proteinCalories = Math.round(totalCalories * 0.30);
+  const carbsCalories = Math.round(totalCalories * 0.40);
+  const fatCalories = Math.round(totalCalories * 0.30);
+  return {
+    protein: Math.round(proteinCalories / 4),
+    carbs: Math.round(carbsCalories / 4),
+    fat: Math.round(fatCalories / 9),
+  };
+}
+
 

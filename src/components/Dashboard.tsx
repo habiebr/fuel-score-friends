@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
-import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore } from '@/lib/nutrition';
+import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 
 interface MealSuggestion {
   name: string;
@@ -532,6 +532,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
           />
         </div>
 
+
         {/* Daily Nutrient Needs (TDEE-based) */}
         <Card className="shadow-card mb-6">
           <CardHeader className="pb-3">
@@ -543,7 +544,18 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <div className="text-xs text-muted-foreground">Calories Target</div>
                   <div className="font-semibold">
-                    {Math.max(0, (data.plannedCalories || 0) + (data.caloriesBurned || 0))} kcal
+                    {(() => {
+                      const hasPlanned = (data.plannedCalories || 0) > 0;
+                      const total = hasPlanned
+                        ? Math.max(0, (data.plannedCalories || 0) + (data.caloriesBurned || 0))
+                        : (() => {
+                            const bmr = calculateBMR((user as any)?.user_metadata?.weight || null, (user as any)?.user_metadata?.height || null, (user as any)?.user_metadata?.age || null);
+                            const mult = getActivityMultiplier((user as any)?.user_metadata?.activity_level || 'moderate');
+                            const base = bmr > 0 ? Math.round(bmr * mult) : 0;
+                            return Math.max(0, base + (data.caloriesBurned || 0));
+                          })();
+                      return `${total} kcal`;
+                    })()}
                   </div>
                   {data.caloriesBurned > 0 && (
                     <div className="text-[11px] text-muted-foreground">includes +{data.caloriesBurned} activity</div>
@@ -551,15 +563,48 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <div className="text-xs text-muted-foreground">Protein</div>
-                  <div className="font-semibold">{data.plannedProtein} g</div>
+                  <div className="font-semibold">
+                    {(() => {
+                      const hasPlanned = (data.plannedProtein || 0) > 0;
+                      if (hasPlanned) return `${data.plannedProtein} g`;
+                      const bmr = calculateBMR((user as any)?.user_metadata?.weight || null, (user as any)?.user_metadata?.height || null, (user as any)?.user_metadata?.age || null);
+                      const mult = getActivityMultiplier((user as any)?.user_metadata?.activity_level || 'moderate');
+                      const base = bmr > 0 ? Math.round(bmr * mult) : 0;
+                      const total = Math.max(0, base + (data.caloriesBurned || 0));
+                      const macros = deriveMacrosFromCalories(total);
+                      return `${macros.protein} g`;
+                    })()}
+                  </div>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <div className="text-xs text-muted-foreground">Carbs</div>
-                  <div className="font-semibold">{data.plannedCarbs} g</div>
+                  <div className="font-semibold">
+                    {(() => {
+                      const hasPlanned = (data.plannedCarbs || 0) > 0;
+                      if (hasPlanned) return `${data.plannedCarbs} g`;
+                      const bmr = calculateBMR((user as any)?.user_metadata?.weight || null, (user as any)?.user_metadata?.height || null, (user as any)?.user_metadata?.age || null);
+                      const mult = getActivityMultiplier((user as any)?.user_metadata?.activity_level || 'moderate');
+                      const base = bmr > 0 ? Math.round(bmr * mult) : 0;
+                      const total = Math.max(0, base + (data.caloriesBurned || 0));
+                      const macros = deriveMacrosFromCalories(total);
+                      return `${macros.carbs} g`;
+                    })()}
+                  </div>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <div className="text-xs text-muted-foreground">Fat</div>
-                  <div className="font-semibold">{data.plannedFat} g</div>
+                  <div className="font-semibold">
+                    {(() => {
+                      const hasPlanned = (data.plannedFat || 0) > 0;
+                      if (hasPlanned) return `${data.plannedFat} g`;
+                      const bmr = calculateBMR((user as any)?.user_metadata?.weight || null, (user as any)?.user_metadata?.height || null, (user as any)?.user_metadata?.age || null);
+                      const mult = getActivityMultiplier((user as any)?.user_metadata?.activity_level || 'moderate');
+                      const base = bmr > 0 ? Math.round(bmr * mult) : 0;
+                      const total = Math.max(0, base + (data.caloriesBurned || 0));
+                      const macros = deriveMacrosFromCalories(total);
+                      return `${macros.fat} g`;
+                    })()}
+                  </div>
                 </div>
               </div>
             ) : (
