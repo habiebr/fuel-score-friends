@@ -210,6 +210,18 @@ export default function Goals() {
                   placeholder="e.g., 6 months"
                 />
               </div>
+
+              {/* Marathon Calendar Link */}
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate('/marathons')}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Browse Marathon Calendar
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

@@ -12,6 +12,7 @@ import Community from "./pages/Community";
 import Auth from "./pages/Auth";
 import Import from "./pages/Import";
 import Meals from "./pages/Meals";
+import MarathonCalendarPage from "./pages/MarathonCalendarPage";
 import NotFound from "./pages/NotFound";
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 
@@ -38,6 +39,7 @@ function App() {
               <Route path="/" element={<Index />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/goals" element={<Goals />} />
+              <Route path="/marathons" element={<MarathonCalendarPage />} />
               <Route path="/community" element={<Community />} />
               <Route path="/import" element={<Import />} />
               <Route path="/meals" element={<Meals />} />

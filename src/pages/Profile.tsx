@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { WearablePerformanceGraph } from '@/components/WearablePerformanceGraph';
-import { MarathonCalendar } from '@/components/MarathonCalendar';
 import { LogOut, User, Target, Activity as ActivityIcon, Download, TrendingUp, Flame, Heart, Zap, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -198,11 +197,6 @@ export default function Profile() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Marathon Calendar */}
-          <div className="mb-6">
-            <MarathonCalendar />
-          </div>
 
           {/* Activity Metrics with Premium Tabs */}
           <div className="mb-6">
