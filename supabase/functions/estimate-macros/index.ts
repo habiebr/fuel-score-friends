@@ -44,6 +44,15 @@ serve(async (req) => {
       .gte("date", sevenDaysAgo.toISOString().split("T")[0])
       .order("date", { ascending: false });
 
+    // Get today's specific data
+    const today = new Date().toISOString().split("T")[0];
+    const { data: todayData } = await supabase
+      .from("wearable_data")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("date", today)
+      .single();
+
     // Get recent food logs
     const { data: foodLogs } = await supabase
       .from("food_logs")
@@ -67,6 +76,23 @@ serve(async (req) => {
         )
       : 0;
 
+    const avgHeartRate = wearableData && wearableData.length > 0
+      ? Math.round(
+          wearableData.reduce((sum, d) => sum + (d.heart_rate_avg || 0), 0) /
+            wearableData.length
+        )
+      : 0;
+
+    const avgSleep = wearableData && wearableData.length > 0
+      ? (wearableData.reduce((sum, d) => sum + (d.sleep_hours || 0), 0) /
+          wearableData.length).toFixed(1)
+      : 0;
+
+    const avgDistance = wearableData && wearableData.length > 0
+      ? (wearableData.reduce((sum, d) => sum + (d.distance_meters || 0), 0) /
+          wearableData.length / 1000).toFixed(1)
+      : 0;
+
     const avgFoodCalories = foodLogs && foodLogs.length > 0
       ? Math.round(
           foodLogs.reduce((sum, log) => sum + log.calories, 0) / foodLogs.length
@@ -75,43 +101,63 @@ serve(async (req) => {
 
     // Build context for AI
     const context = `
+You are an expert sports nutritionist and performance coach. Analyze the following comprehensive data to create personalized daily nutrition recommendations.
+
 User Profile:
-- Age: ${profile?.age || "unknown"}
-- Weight: ${profile?.weight || "unknown"} kg
-- Height: ${profile?.height || "unknown"} cm
-- Activity Level: ${profile?.activity_level || "moderate"}
-- Fitness Goals: ${profile?.fitness_goals?.join(", ") || "general fitness"}
+- Age: ${profile?.age || "Not provided"}
+- Weight: ${profile?.weight || "Not provided"} kg
+- Height: ${profile?.height || "Not provided"} cm
+- Activity Level: ${profile?.activity_level || "Not provided"}
+- Fitness Goals: ${profile?.fitness_goals?.join(", ") || "Not provided"}
 
-Recent Activity (7 days):
-- Average calories burned: ${avgCalories} per day
-- Average steps: ${avgSteps} per day
-- Number of tracked workouts: ${wearableData?.length || 0}
+Today's Activity Metrics:
+- Calories burned: ${todayData?.calories_burned || 0} kcal
+- Steps: ${todayData?.steps || 0}
+- Distance: ${todayData?.distance_meters ? (todayData.distance_meters / 1000).toFixed(2) : 0} km
+- Average heart rate: ${todayData?.heart_rate_avg || "N/A"} bpm
+- Max heart rate: ${todayData?.max_heart_rate || "N/A"} bpm
+- Sleep hours: ${todayData?.sleep_hours || "N/A"}
+- Training effect: ${todayData?.training_effect || "N/A"}
+- Recovery time needed: ${todayData?.recovery_time || "N/A"} hours
+- Activity type: ${todayData?.activity_type || "general"}
 
-Recent Nutrition (7 days):
-- Average calorie intake: ${avgFoodCalories} per day
-- Number of meals logged: ${foodLogs?.length || 0}
+7-Day Activity Trends:
+- Average calories burned: ${avgCalories} kcal/day
+- Average steps: ${avgSteps} steps/day
+- Average heart rate: ${avgHeartRate} bpm
+- Average sleep: ${avgSleep} hours/night
+- Average distance: ${avgDistance} km/day
 
-Task: Based on this data, provide personalized daily macronutrient recommendations. Consider:
-1. Their activity level and calorie expenditure
-2. Their fitness goals
-3. Current nutrition habits
-4. Standard nutrition guidelines for athletes
+Recent Nutrition (Last 7 days average):
+- Average food calories: ${avgFoodCalories} kcal/day
 
-Respond with:
-1. Daily calorie target
-2. Protein grams
-3. Carbs grams
-4. Fat grams
-5. Brief explanation (2-3 sentences) of why these numbers make sense
+IMPORTANT: Provide specific, actionable macronutrient targets and insights based on:
+1. Their stated fitness goals and today's specific activity level
+2. Wearable metrics (training load, recovery status, sleep quality)
+3. Industry-standard macro ratios for their goal
+4. Any gaps between their current intake and needs
+5. Recovery needs based on training effect and heart rate data
 
-Format your response as JSON:
+Return your response as a JSON object with this EXACT structure:
 {
-  "dailyCalories": number,
-  "protein": number,
-  "carbs": number,
-  "fat": number,
-  "explanation": "string"
+  "dailyCalories": <number>,
+  "protein": <number in grams>,
+  "carbs": <number in grams>,
+  "fat": <number in grams>,
+  "insights": [
+    "<insight about their current activity level>",
+    "<insight about recovery needs if training effect is high>",
+    "<insight about sleep and its impact on nutrition needs>"
+  ],
+  "recommendations": [
+    "<specific actionable nutrition recommendation for today>",
+    "<food timing or type recommendation based on activity>",
+    "<hydration or supplement suggestion if relevant>"
+  ],
+  "explanation": "<single paragraph explaining the overall strategy>"
 }
+
+CRITICAL: Return ONLY the JSON object, no other text.
 `;
 
     console.log("Calling AI for macro estimation");

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dashboard } from '@/components/Dashboard';
+import { DailyNutritionAdvisor } from '@/components/DailyNutritionAdvisor';
 import { BottomNav } from '@/components/BottomNav';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
@@ -46,7 +47,14 @@ const Index = () => {
   return (
     <>
       <OnboardingDialog open={showOnboarding} onComplete={handleOnboardingComplete} />
-      <Dashboard onAddMeal={() => setFoodTrackerOpen(true)} />
+      <div className="min-h-screen bg-gradient-background pb-20">
+        <div className="max-w-7xl mx-auto p-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Dashboard onAddMeal={() => setFoodTrackerOpen(true)} />
+            <DailyNutritionAdvisor />
+          </div>
+        </div>
+      </div>
       <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
     </>
