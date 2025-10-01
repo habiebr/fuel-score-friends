@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreCard } from '@/components/ScoreCard';
-import { MealSuggestions } from '@/components/MealSuggestions';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { CalendarDays, Target, Users, Zap, TrendingUp, Clock } from 'lucide-react';
@@ -323,33 +322,8 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
           </Card>
         )}
 
-        {/* AI Meal Suggestions */}
+        {/* Today's Nutrition - Priority Section */}
         <div className="space-y-4 sm:space-y-6">
-          <MealSuggestions 
-            mealPlans={mealPlans}
-            actualMeals={{
-              breakfast: {
-                calories: data?.breakfastScore ? data.caloriesConsumed / 3 : 0,
-                protein: data?.proteinGrams || 0,
-                carbs: data?.carbsGrams || 0,
-                fat: data?.fatGrams || 0
-              },
-              lunch: {
-                calories: data?.lunchScore ? data.caloriesConsumed / 3 : 0,
-                protein: data?.proteinGrams || 0,
-                carbs: data?.carbsGrams || 0,
-                fat: data?.fatGrams || 0
-              },
-              dinner: {
-                calories: data?.dinnerScore ? data.caloriesConsumed / 3 : 0,
-                protein: data?.proteinGrams || 0,
-                carbs: data?.carbsGrams || 0,
-                fat: data?.fatGrams || 0
-              }
-            }}
-          />
-
-          {/* Today's Nutrition - Priority Section */}
           <Card className="shadow-card">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">

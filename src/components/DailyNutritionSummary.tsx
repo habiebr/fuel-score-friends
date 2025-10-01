@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Activity, TrendingUp, Heart, Footprints, Flame } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Activity, TrendingUp, Heart, Footprints, Flame, RefreshCw, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
 interface TodayMetrics {
@@ -23,9 +25,11 @@ interface NutritionTargets {
 
 export function DailyNutritionSummary() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [metrics, setMetrics] = useState<TodayMetrics | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -85,6 +89,43 @@ export function DailyNutritionSummary() {
     }
   };
 
+  const generateTodayPlan = async () => {
+    if (!user) return;
+
+    setGenerating(true);
+    try {
+      console.log('Manually triggering nutrition generation for today...');
+      
+      const { data, error } = await supabase.functions.invoke('generate-daily-nutrition', {
+        body: {}
+      });
+
+      if (error) {
+        console.error('Error generating plan:', error);
+        throw error;
+      }
+
+      console.log('Generation result:', data);
+      
+      toast({
+        title: 'Success!',
+        description: 'Daily nutrition plan generated',
+      });
+
+      // Reload the data
+      await loadDailyData();
+    } catch (error) {
+      console.error('Error generating today plan:', error);
+      toast({
+        title: 'Generation failed',
+        description: 'Please make sure you have set up your profile with weight, height, and age.',
+        variant: 'destructive',
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   if (loading) {
     return (
       <Card className="shadow-card">
@@ -101,10 +142,32 @@ export function DailyNutritionSummary() {
   return (
     <Card className="shadow-card">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Daily Nutrition Plan
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Daily Nutrition Plan
+          </CardTitle>
+          {!loading && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={generateTodayPlan}
+              disabled={generating}
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Generate Plan
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Today's Activity Snapshot */}
@@ -178,10 +241,24 @@ export function DailyNutritionSummary() {
             </p>
           </div>
         ) : (
-          <div className="p-4 bg-muted/30 rounded-lg text-center">
+          <div className="p-4 bg-muted/30 rounded-lg text-center space-y-3">
             <p className="text-sm text-muted-foreground">
-              No nutrition plan generated yet. Plans are automatically created daily based on your data.
+              No nutrition plan for today yet. Plans are automatically generated daily at 6 AM, or you can generate one now.
             </p>
+            <Button 
+              onClick={generateTodayPlan}
+              disabled={generating}
+              className="w-full"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating Plan...
+                </>
+              ) : (
+                'Generate Today\'s Plan'
+              )}
+            </Button>
           </div>
         )}
       </CardContent>
