@@ -1,1 +1,19 @@
 project_id = "qiwndzsrmtxmgngnupml"
+
+[functions.generate-meal-plan]
+verify_jwt = true
+
+[functions.estimate-macros]
+verify_jwt = true
+
+[functions.nutrition-ai]
+verify_jwt = true
+
+[functions.calculate-nutrition-score]
+verify_jwt = true
+
+[functions.parse-fit-data]
+verify_jwt = true
+
+[functions.parse-training-plan]
+verify_jwt = true
