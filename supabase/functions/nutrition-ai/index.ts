@@ -140,7 +140,15 @@ Return just the numeric score (0-100) and a brief explanation.`;
     // For food photo analysis or food search, parse the JSON response
     if (type === "food_photo" || type === "food_search") {
       try {
-        const nutritionData = JSON.parse(aiResponse);
+        // Remove markdown code blocks if present
+        let cleanedResponse = aiResponse.trim();
+        if (cleanedResponse.startsWith('```json')) {
+          cleanedResponse = cleanedResponse.replace(/^```json\s*\n/, '').replace(/\n```\s*$/, '');
+        } else if (cleanedResponse.startsWith('```')) {
+          cleanedResponse = cleanedResponse.replace(/^```\s*\n/, '').replace(/\n```\s*$/, '');
+        }
+        
+        const nutritionData = JSON.parse(cleanedResponse);
         return new Response(JSON.stringify({ 
           nutritionData,
           type: type 
