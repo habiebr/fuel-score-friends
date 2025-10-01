@@ -13,7 +13,7 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -47,6 +47,29 @@ export default function Auth() {
       toast({
         title: "Error",
         description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) {
+        toast({
+          title: "Google sign-in failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+      // Redirect handled by Supabase; on return, session listener will route
+    } catch (err) {
+      toast({
+        title: "Google sign-in failed",
+        description: "Unexpected error. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -128,6 +151,30 @@ export default function Auth() {
                 }
               </button>
             </div>
+        
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-background px-2 text-muted-foreground">or</span>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={loading}
+          onClick={handleGoogleSignIn}
+        >
+          <img
+            alt="Google"
+            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+            className="h-4 w-4 mr-2"
+          />
+          Sign in with Google
+        </Button>
           </CardContent>
         </Card>
       </div>

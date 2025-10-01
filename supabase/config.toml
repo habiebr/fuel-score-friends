@@ -20,3 +20,6 @@ verify_jwt = true
 
 [functions.parse-training-plan]
 verify_jwt = true
+
+[functions.refresh-meal-plan]
+verify_jwt = false

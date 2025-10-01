@@ -106,6 +106,8 @@ export function AppleHealthSync() {
   };
 
   const handleAppleHealthXML = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Capture the input element reference BEFORE any awaits to avoid React synthetic event reuse issues
+    const inputEl = event.target as HTMLInputElement;
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -144,6 +146,7 @@ export function AppleHealthSync() {
       
       // Extract health records
       const records = Array.from(xmlDoc.querySelectorAll('Record'));
+      const meTag = xmlDoc.querySelector('Me');
       const workouts = Array.from(xmlDoc.querySelectorAll('Workout'));
       
       let totalSteps = 0;
@@ -151,6 +154,29 @@ export function AppleHealthSync() {
       let heartRateSum = 0;
       let heartRateCount = 0;
       let activeMinutes = 0;
+      let latestWeightKg: number | null = null;
+      let latestWeightDate: number = 0;
+      let latestHeightCm: number | null = null;
+      let latestHeightDate: number = 0;
+      let derivedAge: number | null = null;
+      
+      // Try to derive age from Me tag if available
+      if (meTag) {
+        const dob = meTag.getAttribute('HKCharacteristicTypeIdentifierDateOfBirth')
+          || meTag.getAttribute('HKCharacteristicTypeIdentifierDateOfBirthComponents');
+        if (dob) {
+          const birth = new Date(dob);
+          if (!isNaN(birth.getTime())) {
+            const today = new Date();
+            let ageYears = today.getFullYear() - birth.getFullYear();
+            const m = today.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+              ageYears--;
+            }
+            derivedAge = Math.max(0, Math.min(150, ageYears));
+          }
+        }
+      }
       
       // Process records in chunks to avoid blocking UI
       const CHUNK_SIZE = 100;
@@ -161,6 +187,9 @@ export function AppleHealthSync() {
         chunk.forEach(record => {
           const type = record.getAttribute('type');
           const value = parseFloat(record.getAttribute('value') || '0');
+          const startDateStr = record.getAttribute('startDate') || record.getAttribute('startDateComponents') || '';
+          const startTs = startDateStr ? Date.parse(startDateStr) : 0;
+          const unit = record.getAttribute('unit') || '';
           
           if (type?.includes('StepCount')) {
             totalSteps += value;
@@ -169,6 +198,29 @@ export function AppleHealthSync() {
           } else if (type?.includes('HeartRate')) {
             heartRateSum += value;
             heartRateCount++;
+          } else if (type?.includes('BodyMass')) {
+            // Prefer the most recent weight
+            if (startTs >= latestWeightDate && !Number.isNaN(value)) {
+              let v = value;
+              // Apple usually reports kg; if lbs detected, convert
+              if (unit.toLowerCase().includes('lb')) {
+                v = Math.round((value * 0.45359237) * 10) / 10;
+              }
+              latestWeightKg = Math.round(v * 10) / 10;
+              latestWeightDate = startTs;
+            }
+          } else if (type?.includes('Height')) {
+            // Prefer the most recent height
+            if (startTs >= latestHeightDate && !Number.isNaN(value)) {
+              let cm = value;
+              if (unit.toLowerCase().includes('m') && !unit.toLowerCase().includes('cm')) {
+                cm = value * 100;
+              } else if (unit.toLowerCase().includes('in')) {
+                cm = value * 2.54;
+              }
+              latestHeightCm = Math.round(cm);
+              latestHeightDate = startTs;
+            }
           }
         });
         
@@ -204,10 +256,26 @@ export function AppleHealthSync() {
 
       if (error) throw error;
 
+      // If body metrics were found in the import, update the user's profile
+      if (user?.id && (latestWeightKg !== null || latestHeightCm !== null || derivedAge !== null)) {
+        const updates: Record<string, number | null> = {};
+        if (latestWeightKg !== null) updates.weight = Math.round(latestWeightKg);
+        if (latestHeightCm !== null) updates.height = Math.round(latestHeightCm);
+        if (derivedAge !== null) updates.age = Math.round(derivedAge);
+
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('user_id', user.id);
+        if (profileError) {
+          console.warn('Failed updating profile body metrics from Apple Health import:', profileError);
+        }
+      }
+
       setLastSync(new Date());
       toast({
         title: "Apple Health data synced!",
-        description: `Imported ${records.length} records and ${workouts.length} workouts`,
+        description: `Imported ${records.length} records and ${workouts.length} workouts${(latestWeightKg||latestHeightCm||derivedAge) ? ' • Body metrics updated' : ''}`,
       });
     } catch (error) {
       console.error('Error parsing Apple Health XML:', error);
@@ -221,7 +289,8 @@ export function AppleHealthSync() {
       });
     } finally {
       setUploading(false);
-      event.target.value = '';
+      // Use the captured input element reference
+      if (inputEl) inputEl.value = '';
     }
   };
 

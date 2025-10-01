@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMealCron } from '@/hooks/useMealCron';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,8 @@ interface DayData {
 }
 
 export default function Meals() {
-  const { user } = useAuth();
+  useMealCron();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
@@ -46,6 +48,7 @@ export default function Meals() {
   const [loadingMealPlan, setLoadingMealPlan] = useState(false);
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
   const [currentMealType, setCurrentMealType] = useState('breakfast');
+  const [activityCaloriesToday, setActivityCaloriesToday] = useState<number>(0);
 
   // Carousel navigation functions
   const nextMeal = () => {
@@ -82,6 +85,7 @@ export default function Meals() {
     if (user) {
       loadWeekData();
       loadDailyMealPlan();
+      loadWearableToday();
     }
   }, [user]);
 
@@ -92,6 +96,22 @@ export default function Meals() {
       setCurrentMealIndex(0);
     }
   }, [dailyMealPlan]);
+
+  const loadWearableToday = async () => {
+    if (!user) return;
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const { data: wearableToday } = await (supabase as any)
+        .from('wearable_data')
+        .select('calories_burned')
+        .eq('user_id', user.id)
+        .eq('date', today);
+      const activity = (wearableToday || []).reduce((sum: number, w: any) => sum + (w.calories_burned || 0), 0);
+      setActivityCaloriesToday(activity);
+    } catch (e) {
+      console.error('Failed to load wearable calories for today', e);
+    }
+  };
 
   const loadWeekData = async () => {
     if (!user) return;
@@ -317,7 +337,8 @@ export default function Meals() {
                     setLoadingMealPlan(true);
                     try {
                       const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-                        body: { date: format(new Date(), 'yyyy-MM-dd') }
+                        body: { date: format(new Date(), 'yyyy-MM-dd') },
+                        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
                       });
                       if (error) throw error;
                       if (data.success) {
@@ -369,7 +390,8 @@ export default function Meals() {
                       setLoadingMealPlan(true);
                       try {
                         const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-                          body: { date: format(new Date(), 'yyyy-MM-dd') }
+                          body: { date: format(new Date(), 'yyyy-MM-dd') },
+                          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
                         });
                         if (error) throw error;
                         if (data.success) {
@@ -467,7 +489,20 @@ export default function Meals() {
                               {currentMealType} - {currentTime}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              Target: {plan?.target_calories || 400} kcal
+                              {(() => {
+                                const baseTarget = plan?.target_calories || 400;
+                                const mealsCount = 3;
+                                const activityShare = Math.max(0, Math.round(activityCaloriesToday / mealsCount));
+                                const adjustedTarget = baseTarget + activityShare;
+                                return (
+                                  <>
+                                    Target: {adjustedTarget} kcal
+                                    {activityCaloriesToday > 0 && (
+                                      <span className="ml-2 text-xs">(+{activityShare} from today's activity)</span>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>

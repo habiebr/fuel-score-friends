@@ -331,7 +331,7 @@ export type Database = {
           created_at: string
           dietary_restrictions: string[] | null
           email: string | null
-          fitness_goals: string | null
+          fitness_goals: string[] | null
           fitness_level: string | null
           full_name: string | null
           height: number | null
@@ -343,6 +343,8 @@ export type Database = {
           updated_at: string
           user_id: string
           weight: number | null
+          meal_plan_refresh_mode: string | null
+          timezone: string | null
         }
         Insert: {
           activity_level?: string | null
@@ -351,7 +353,7 @@ export type Database = {
           created_at?: string
           dietary_restrictions?: string[] | null
           email?: string | null
-          fitness_goals?: string | null
+          fitness_goals?: string[] | null
           fitness_level?: string | null
           full_name?: string | null
           height?: number | null
@@ -363,6 +365,8 @@ export type Database = {
           updated_at?: string
           user_id: string
           weight?: number | null
+          meal_plan_refresh_mode?: string | null
+          timezone?: string | null
         }
         Update: {
           activity_level?: string | null
@@ -371,7 +375,7 @@ export type Database = {
           created_at?: string
           dietary_restrictions?: string[] | null
           email?: string | null
-          fitness_goals?: string | null
+          fitness_goals?: string[] | null
           fitness_level?: string | null
           full_name?: string | null
           height?: number | null
@@ -383,6 +387,8 @@ export type Database = {
           updated_at?: string
           user_id?: string
           weight?: number | null
+          meal_plan_refresh_mode?: string | null
+          timezone?: string | null
         }
         Relationships: []
       }

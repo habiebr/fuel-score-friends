@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
+import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore } from '@/lib/nutrition';
 
 interface MealSuggestion {
   name: string;
@@ -40,6 +41,7 @@ interface DashboardData {
   steps: number;
   caloriesBurned: number;
   activeMinutes: number;
+  heartRateAvg?: number | null;
   plannedCalories: number;
   plannedProtein: number;
   plannedCarbs: number;
@@ -54,7 +56,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onAddMeal }: DashboardProps) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -77,9 +79,11 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     const now = new Date();
     const currentHour = now.getHours();
     
-    // Check if we have wearable data to determine patterns
-    if (data?.wearableData) {
-      const { steps, calories_burned, heart_rate_avg } = data.wearableData;
+    // Check if we have wearable stats to determine patterns
+    if (data) {
+      const steps = data.steps || 0;
+      const calories_burned = data.caloriesBurned || 0;
+      const heart_rate_avg = data.heartRateAvg || 0;
       
       // If user has been very active (high steps, high calories), they might need more frequent meals
       if (steps > 8000 || calories_burned > 500) {
@@ -384,7 +388,8 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
     try {
       console.log('Generating meal plan...');
       const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-        body: { date: format(new Date(), 'yyyy-MM-dd') }
+        body: { date: format(new Date(), 'yyyy-MM-dd') },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       });
       
       if (error) {
@@ -432,12 +437,13 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         .maybeSingle();
 
       // Fetch wearable data for today
-      const { data: wearableData } = await supabase
+      const { data: wearableRaw } = await (supabase as any)
         .from('wearable_data')
         .select('*')
         .eq('user_id', user.id)
         .eq('date', today)
         .maybeSingle();
+      const wearableData: any = wearableRaw as any;
 
       // Fetch meal plans for today
       const { data: plans } = await supabase
@@ -461,64 +467,9 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         })));
       }
 
-      // Calculate planned nutrition from meal plans
-      const plannedNutrition = plans?.reduce(
-        (acc, plan) => ({
-          calories: acc.calories + (plan.recommended_calories || 0),
-          protein: acc.protein + (plan.recommended_protein_grams || 0),
-          carbs: acc.carbs + (plan.recommended_carbs_grams || 0),
-          fat: acc.fat + (plan.recommended_fat_grams || 0),
-        }),
-        { calories: 0, protein: 0, carbs: 0, fat: 0 }
-      ) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
-
-      // Calculate consumed nutrition from food logs
-      const consumedNutrition = foodLogs?.reduce(
-        (acc, log) => ({
-          calories: acc.calories + (log.calories || 0),
-          protein: acc.protein + (log.protein_grams || 0),
-          carbs: acc.carbs + (log.carbs_grams || 0),
-          fat: acc.fat + (log.fat_grams || 0),
-        }),
-        { calories: 0, protein: 0, carbs: 0, fat: 0 }
-      ) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
-
-      // Calculate daily score based on how well consumed matches planned
-      const calculateScore = () => {
-        if (plannedNutrition.calories === 0) return 0;
-
-        // Calculate percentage for each macro (capped at 100%)
-        const calorieScore = Math.min(100, (consumedNutrition.calories / plannedNutrition.calories) * 100);
-        const proteinScore = plannedNutrition.protein > 0 
-          ? Math.min(100, (consumedNutrition.protein / plannedNutrition.protein) * 100) 
-          : 100;
-        const carbsScore = plannedNutrition.carbs > 0 
-          ? Math.min(100, (consumedNutrition.carbs / plannedNutrition.carbs) * 100) 
-          : 100;
-        const fatScore = plannedNutrition.fat > 0 
-          ? Math.min(100, (consumedNutrition.fat / plannedNutrition.fat) * 100) 
-          : 100;
-
-        // Weighted average: calories 40%, protein 30%, carbs 20%, fat 10%
-        const weightedScore = (
-          calorieScore * 0.4 +
-          proteinScore * 0.3 +
-          carbsScore * 0.2 +
-          fatScore * 0.1
-        );
-
-        // Penalize if over-consuming (>110% of target)
-        const calorieOverage = consumedNutrition.calories > plannedNutrition.calories * 1.1;
-        const proteinOverage = consumedNutrition.protein > plannedNutrition.protein * 1.1;
-        
-        let finalScore = weightedScore;
-        if (calorieOverage) finalScore *= 0.9;
-        if (proteinOverage) finalScore *= 0.95;
-
-        return Math.round(Math.max(0, Math.min(100, finalScore)));
-      };
-
-      const dailyScore = calculateScore();
+      const plannedNutrition = accumulatePlannedFromMealPlans(plans || []);
+      const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs || []);
+      const dailyScore = computeDailyScore(plannedNutrition, consumedNutrition, wearableData?.calories_burned || 0);
 
       setData({
         dailyScore,
@@ -530,6 +481,7 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
         steps: wearableData?.steps || 0,
         caloriesBurned: wearableData?.calories_burned || 0,
         activeMinutes: wearableData?.active_minutes || 0,
+        heartRateAvg: wearableData?.heart_rate_avg ?? null,
         plannedCalories: plannedNutrition.calories,
         plannedProtein: plannedNutrition.protein,
         plannedCarbs: plannedNutrition.carbs,
@@ -777,10 +729,26 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
                             {currentMealType} - {currentTime}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            Target: {plan?.recommended_calories || 400} kcal
-                            {data?.wearableData && (
+                            {(() => {
+                              const baseTarget = plan?.recommended_calories || 400;
+                              const activityTotal = (data as any)?.caloriesBurned || (data as any)?.wearableData?.calories_burned || 0;
+                              const mealsCount = 3; // breakfast, lunch, dinner
+                              const activityShare = Math.max(0, Math.round(activityTotal / mealsCount));
+                              const adjustedTarget = baseTarget + activityShare;
+                              return (
+                                <>
+                                  Target: {adjustedTarget} kcal
+                                  {activityTotal > 0 && (
+                                    <span className="ml-2 text-xs">
+                                      (+{activityShare} from today's activity)
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
+                            {data && (
                               <span className="ml-2 text-xs">
-                                (Based on {data.wearableData.steps} steps, {data.wearableData.calories_burned} cal burned)
+                                (Based on {data.steps} steps, {data.caloriesBurned} cal burned)
                               </span>
                             )}
                           </div>

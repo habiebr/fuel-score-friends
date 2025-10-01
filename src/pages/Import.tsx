@@ -1,5 +1,4 @@
 import { WearablesSync } from '@/components/WearablesSync';
-import { GoogleFitTest } from '@/components/GoogleFitTest';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -30,9 +29,6 @@ export default function Import() {
             </p>
           </div>
         </div>
-
-        {/* Google Fit Test Component */}
-        <GoogleFitTest />
 
         {/* Wearables Sync Component */}
         <WearablesSync />

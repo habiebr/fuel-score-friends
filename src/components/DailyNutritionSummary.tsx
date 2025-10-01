@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, adjustedPlannedCaloriesForActivity } from '@/lib/nutrition';
 
 interface DailyNutritionData {
   planned: {
@@ -15,6 +16,10 @@ interface DailyNutritionData {
     carbs: number;
     fat: number;
   };
+  // Additional calories from activity (tracker)
+  activityCalories: number;
+  // Planned calories adjusted by activityCalories
+  adjustedPlannedCalories: number;
   consumed: {
     calories: number;
     protein: number;
@@ -73,25 +78,25 @@ export function DailyNutritionSummary() {
         .gte('logged_at', `${today}T00:00:00`)
         .lte('logged_at', `${today}T23:59:59`);
 
-      // Calculate planned nutrition from meal plans
-      const plannedNutrition = mealPlans?.reduce((acc, plan) => ({
-        calories: acc.calories + (plan.recommended_calories || 0),
-        protein: acc.protein + (plan.recommended_protein_grams || 0),
-        carbs: acc.carbs + (plan.recommended_carbs_grams || 0),
-        fat: acc.fat + (plan.recommended_fat_grams || 0),
-      }), { calories: 0, protein: 0, carbs: 0, fat: 0 }) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      // Fetch today's wearable calories burned
+      const { data: wearableToday } = await supabase
+        .from('wearable_data')
+        .select('calories_burned')
+        .eq('user_id', user.id)
+        .eq('date', today);
 
-      // Calculate consumed nutrition from food logs
-      const consumedNutrition = foodLogs?.reduce((acc, log) => ({
-        calories: acc.calories + log.calories,
-        protein: acc.protein + log.protein_grams,
-        carbs: acc.carbs + log.carbs_grams,
-        fat: acc.fat + log.fat_grams,
-      }), { calories: 0, protein: 0, carbs: 0, fat: 0 }) || { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      const plannedNutrition = accumulatePlannedFromMealPlans(mealPlans || []);
+      const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs || []);
+
+      // Sum activity calories for today
+      const activityCalories = (wearableToday || []).reduce((sum: number, w: any) => sum + (w.calories_burned || 0), 0);
+
+      // Adjust planned calories by activity calories
+      const adjustedPlannedCalories = adjustedPlannedCaloriesForActivity(plannedNutrition.calories, activityCalories);
 
       // Calculate remaining nutrition
       const remainingNutrition = {
-        calories: Math.max(0, plannedNutrition.calories - consumedNutrition.calories),
+        calories: Math.max(0, adjustedPlannedCalories - consumedNutrition.calories),
         protein: Math.max(0, plannedNutrition.protein - consumedNutrition.protein),
         carbs: Math.max(0, plannedNutrition.carbs - consumedNutrition.carbs),
         fat: Math.max(0, plannedNutrition.fat - consumedNutrition.fat),
@@ -118,6 +123,8 @@ export function DailyNutritionSummary() {
 
       setData({
         planned: plannedNutrition,
+        activityCalories,
+        adjustedPlannedCalories,
         consumed: consumedNutrition,
         remaining: remainingNutrition,
         mealPlan: mealPlans,
@@ -202,14 +209,26 @@ export function DailyNutritionSummary() {
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <span className="text-sm font-medium">Calories</span>
-            <span className="text-sm text-muted-foreground">
-              {data.consumed.calories} / {data.planned.calories}
+            <span className="text-sm text-muted-foreground flex items-center gap-2">
+              <span>
+                {data.consumed.calories} / {data.adjustedPlannedCalories}
+              </span>
+              {data.activityCalories > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] uppercase tracking-wide">
+                  +activity
+                </span>
+              )}
             </span>
           </div>
           <Progress 
-            value={getProgressPercentage(data.consumed.calories, data.planned.calories)} 
+            value={getProgressPercentage(data.consumed.calories, data.adjustedPlannedCalories)} 
             className="h-2"
           />
+          {data.activityCalories > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Includes +{data.activityCalories} kcal from today's activity
+            </p>
+          )}
           {data.remaining.calories > 0 && (
             <p className="text-xs text-muted-foreground">
               {data.remaining.calories} calories remaining

@@ -23,7 +23,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const [fileProgress, setFileProgress] = useState<FileProgress[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
 
   const startUpload = async (files: File[]) => {
     if (uploading) {
@@ -77,7 +77,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
 
           console.log(`Calling parse-fit-data function for ${file.name}`);
           const { data, error } = await supabase.functions.invoke('parse-fit-data', {
-            body: { fitData: base64Data }
+            body: { fitData: base64Data },
+            headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
           });
 
           if (error) {

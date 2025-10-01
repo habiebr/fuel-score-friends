@@ -12,7 +12,7 @@ interface HealthData {
   heartRate: number;
   distance: number;
   date: string;
-  source: 'google_fit' | 'apple_health' | 'manual';
+  source: 'wearable_fit' | 'google_fit' | 'apple_health' | 'manual';
 }
 
 interface SyncStatus {
@@ -68,7 +68,7 @@ export function useHealthSync() {
     }
   }, [user]);
 
-  // Load today's data from database
+  // Load today's data from database (prioritize wearable .fit entries if present)
   const loadTodayData = async () => {
     if (!user) return;
 
@@ -86,6 +86,7 @@ export function useHealthSync() {
       }
 
       if (data) {
+        const dbSource = (data.source as string) || 'manual';
         setHealthData({
           steps: data.steps || 0,
           calories: data.calories_burned || 0,
@@ -93,7 +94,7 @@ export function useHealthSync() {
           heartRate: data.heart_rate_avg || 0,
           distance: data.distance || 0,
           date: data.date,
-          source: data.source || 'manual'
+          source: dbSource === 'fit' || dbSource === 'garmin' ? 'wearable_fit' : (dbSource as any)
         });
       }
     } catch (error) {
@@ -110,10 +111,34 @@ export function useHealthSync() {
 
     try {
       let newData: HealthData | null = null;
-      let source: 'google_fit' | 'apple_health' | 'manual' = 'manual';
+      let source: HealthData['source'] = 'manual';
 
-      // Try Google Fit first (if authorized)
-      if (googleFit.isAuthorized) {
+      // 1) Prefer existing wearable .fit data for today if present
+      {
+        const today = new Date().toISOString().split('T')[0];
+        const { data, error } = await supabase
+          .from('wearable_data')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .in('source', ['fit', 'garmin'])
+          .single();
+        if (!error && data) {
+          newData = {
+            steps: data.steps || 0,
+            calories: data.calories_burned || 0,
+            activeMinutes: data.active_minutes || 0,
+            heartRate: data.heart_rate_avg || 0,
+            distance: data.distance || 0,
+            date: data.date,
+            source: 'wearable_fit'
+          };
+          source = 'wearable_fit';
+        }
+      }
+
+      // 2) If no wearable .fit, try Google Fit (if authorized)
+      if (!newData && googleFit.isAuthorized) {
         const googleData = await googleFit.fetchTodayData();
         if (googleData) {
           newData = {
@@ -124,7 +149,7 @@ export function useHealthSync() {
         }
       }
 
-      // Try Apple Health (if available and authorized)
+      // 3) If still no data, try Apple Health (if available and authorized)
       if (!newData && healthKit.isAuthorized) {
         const appleData = await healthKit.fetchTodayData();
         if (appleData) {
@@ -148,7 +173,7 @@ export function useHealthSync() {
 
         toast({
           title: "Health data synced!",
-          description: `Updated from ${source === 'google_fit' ? 'Google Fit' : 'Apple Health'}`,
+          description: `Updated from ${source === 'wearable_fit' ? '.fit files' : source === 'google_fit' ? 'Google Fit' : 'Apple Health'}`,
         });
       } else if (force) {
         toast({

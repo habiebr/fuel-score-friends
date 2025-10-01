@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
+import { calculateTDEE, deriveMacros } from "../_shared/nutrition.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -115,65 +116,19 @@ async function generateMealPlanForUser(user: any, supabaseAdmin: any) {
       .eq('date', today)
       .maybeSingle();
 
-    // Calculate BMR and daily calories
-    const weight = user.weight || 70;
-    const height = user.height || 170;
-    const age = user.age || 30;
-    const bmr = 88.362 + (13.397 * weight) + (4.799 * height) - (5.677 * age);
-    let totalDailyCalories = Math.round(bmr * 1.4); // Base activity multiplier
-
-    // Adjust based on running goals and training plan
     const fitnessGoal = user.fitness_goals?.[0];
-    const targetDate = user.target_date;
-    const fitnessLevel = user.fitness_level;
     const weekPlan = user.activity_level ? JSON.parse(user.activity_level) : null;
-    
-    let calorieAdjustment = 0;
-    let trainingIntensity = "moderate";
-    
-    // Check if user has a running goal
-    if (fitnessGoal) {
-      if (fitnessGoal.includes('marathon')) {
-        calorieAdjustment = 500;
-        trainingIntensity = "high";
-      } else if (fitnessGoal.includes('half')) {
-        calorieAdjustment = 300;
-        trainingIntensity = "moderate-high";
-      } else if (fitnessGoal.includes('5k') || fitnessGoal.includes('10k')) {
-        calorieAdjustment = 200;
-        trainingIntensity = "moderate";
-      } else if (fitnessGoal === 'lose_weight') {
-        calorieAdjustment = -500;
-        trainingIntensity = "moderate";
-      } else if (fitnessGoal === 'gain_muscle') {
-        calorieAdjustment = 300;
-        trainingIntensity = "moderate";
-      }
-    }
-    
-    // Adjust based on today's training plan
-    if (weekPlan && Array.isArray(weekPlan)) {
-      const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-      const todayPlan = weekPlan.find(day => day.day === today);
-      
-      if (todayPlan) {
-        if (todayPlan.activity === 'run' && todayPlan.duration > 60) {
-          calorieAdjustment += 400;
-          trainingIntensity = "high";
-        } else if (todayPlan.activity === 'run' && todayPlan.duration > 30) {
-          calorieAdjustment += 200;
-          trainingIntensity = "moderate-high";
-        } else if (todayPlan.activity === 'run') {
-          calorieAdjustment += 100;
-          trainingIntensity = "moderate";
-        } else if (todayPlan.activity === 'rest') {
-          calorieAdjustment -= 100;
-          trainingIntensity = "low";
-        }
-      }
-    }
-    
-    totalDailyCalories += calorieAdjustment;
+    const tdee = calculateTDEE({
+      weightKg: user.weight,
+      heightCm: user.height,
+      ageYears: user.age,
+      activityLevel: user.activity_level,
+      wearableCaloriesToday: wearableData?.calories_burned || 0,
+      fitnessGoal,
+      weekPlan,
+    });
+    const totalDailyCalories = tdee.totalDailyCalories;
+    const trainingIntensity = tdee.trainingIntensity;
 
     // Generate meal plans for each meal type
     const mealTypes = ['breakfast', 'lunch', 'dinner'];
@@ -181,9 +136,7 @@ async function generateMealPlanForUser(user: any, supabaseAdmin: any) {
 
     for (const mealType of mealTypes) {
       const mealCalories = Math.round(totalDailyCalories * (mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : 0.30));
-      const mealProtein = Math.round((mealCalories * 0.30) / 4);
-      const mealCarbs = Math.round((mealCalories * 0.40) / 4);
-      const mealFat = Math.round((mealCalories * 0.30) / 9);
+      const macros = deriveMacros(mealCalories);
 
       // Generate Indonesian meal suggestions
       const suggestions = generateIndonesianMealSuggestions(mealType, mealCalories);
@@ -193,9 +146,9 @@ async function generateMealPlanForUser(user: any, supabaseAdmin: any) {
         date: today,
         meal_type: mealType,
         recommended_calories: mealCalories,
-        recommended_protein_grams: mealProtein,
-        recommended_carbs_grams: mealCarbs,
-        recommended_fat_grams: mealFat,
+        recommended_protein_grams: macros.proteinGrams,
+        recommended_carbs_grams: macros.carbsGrams,
+        recommended_fat_grams: macros.fatGrams,
         meal_suggestions: suggestions,
         created_at: new Date().toISOString()
       });

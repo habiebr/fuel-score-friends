@@ -8,6 +8,9 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
+
+  signInWithGoogle: () => Promise<{ error: any }>;
+  getGoogleAccessToken: () => Promise<string | null>;
   signOut: () => Promise<void>;
 }
 
@@ -59,6 +62,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  const signInWithGoogle = async () => {
+    const redirectUrl = `${window.location.origin}/`;
+    const scopes = [
+      'https://www.googleapis.com/auth/fitness.activity.read',
+      'https://www.googleapis.com/auth/fitness.body.read',
+      'https://www.googleapis.com/auth/fitness.location.read',
+    ].join(' ');
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        scopes,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+          include_granted_scopes: 'true',
+        },
+      },
+    });
+    return { error };
+  };
+
+  const getGoogleAccessToken = async () => {
+    const { data } = await supabase.auth.getSession();
+    // Supabase exposes the provider token on OAuth sessions
+    // @ts-ignore provider_token is present for OAuth providers
+    const s = (data?.session as any) || {};
+    // Try both common fields
+    return s.provider_token || s.provider_access_token || null;
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -70,6 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signUp,
       signIn,
+      signInWithGoogle,
+      getGoogleAccessToken,
       signOut,
     }}>
       {children}

@@ -13,6 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { format, subDays } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 export default function Profile() {
   const { user, signOut } = useAuth();
@@ -23,7 +26,31 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [activityData, setActivityData] = useState<any[]>([]);
   const [nutritionData, setNutritionData] = useState<any[]>([]);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { toast } = useToast();
+  const [refreshMode, setRefreshMode] = useState<string>('daily_6am');
+  const [timezone, setTimezone] = useState<string>('UTC');
+
+  const handleSignOut = async () => {
+    try {
+      setIsLoggingOut(true);
+      await signOut();
+      toast({
+        title: "Signed out successfully",
+        description: "You have been logged out of your account.",
+      });
+      navigate('/auth');
+    } catch (error) {
+      console.error('Sign out error:', error);
+      toast({
+        title: "Sign out failed",
+        description: "There was an error signing out. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -40,8 +67,39 @@ export default function Profile() {
   useEffect(() => {
     if (user) {
       loadActivityData();
+      loadRefreshSettings();
     }
   }, [user]);
+  const loadRefreshSettings = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('meal_plan_refresh_mode, timezone')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!error && data) {
+        if (data.meal_plan_refresh_mode) setRefreshMode(data.meal_plan_refresh_mode);
+        if (data.timezone) setTimezone(data.timezone);
+      }
+    } catch (e) {
+      // noop
+    }
+  };
+
+  const saveRefreshSettings = async () => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ meal_plan_refresh_mode: refreshMode, timezone })
+      .eq('user_id', user.id);
+    if (error) {
+      toast({ title: 'Failed to save', description: 'Could not save refresh settings', variant: 'destructive' });
+    } else {
+      toast({ title: 'Saved', description: 'Refresh settings updated' });
+    }
+  };
+
 
   const loadActivityData = async () => {
     if (!user) return;
@@ -68,7 +126,7 @@ export default function Profile() {
         .order('date', { ascending: true });
 
       // Format data for charts
-      const formattedActivity = (wearableData || []).map(d => ({
+      const formattedActivity = ((wearableData as any[]) || []).map((d: any) => ({
         date: format(new Date(d.date), 'MMM dd'),
         steps: d.steps,
         calories: d.calories_burned,
@@ -125,10 +183,12 @@ export default function Profile() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={signOut}
+                onClick={handleSignOut}
+                disabled={isLoggingOut}
                 className="hover:bg-destructive/10 hover:text-destructive"
+                title="Sign out"
               >
-                <LogOut className="h-5 w-5" />
+                <LogOut className={`h-5 w-5 ${isLoggingOut ? 'animate-spin' : ''}`} />
               </Button>
             </div>
             <p className="text-muted-foreground">{user?.email}</p>
@@ -200,6 +260,34 @@ export default function Profile() {
                   <Target className="h-4 w-4 mr-2" />
                   Set Goals
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Meal Plan Refresh Settings */}
+          <Card className="premium-card mb-6">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="font-semibold text-lg">Meal Plan Refresh</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm">Refresh cadence</Label>
+                  <Select value={refreshMode} onValueChange={setRefreshMode}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select refresh mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily_6am">Daily at 6:00 (user timezone)</SelectItem>
+                      <SelectItem value="every_15m">Every 15 minutes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">Timezone</Label>
+                  <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="e.g., Asia/Jakarta" />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={saveRefreshSettings} className="premium-button">Save</Button>
               </div>
             </CardContent>
           </Card>

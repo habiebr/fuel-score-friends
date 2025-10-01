@@ -18,13 +18,13 @@ interface GoogleFitConfig {
 }
 
 export function useGoogleFit() {
-  const { user } = useAuth();
+  const { user, signInWithGoogle, getGoogleAccessToken } = useAuth();
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Google Fit configuration
+  // Google Fit configuration (scopes used with Supabase Google OAuth)
   const config: GoogleFitConfig = {
     clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
     apiKey: import.meta.env.VITE_GOOGLE_API_KEY || '',
@@ -36,65 +36,24 @@ export function useGoogleFit() {
     ]
   };
 
-  // Load Google APIs
+  // Lazy loader for Google APIs (initialize on demand)
+  // For Supabase OAuth path, we don't require gapi at all; keep stub to maintain API
+  const initGoogleAPIs = useCallback(async (): Promise<boolean> => {
+    setIsLoaded(true);
+    return true;
+  }, []);
+
+  // Mark as loaded on mount since we don't need gapi anymore
   useEffect(() => {
-    const loadGoogleAPIs = async () => {
-      if (window.gapi) {
-        setIsLoaded(true);
-        return;
-      }
-
-      try {
-        // Load Google API script
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://apis.google.com/js/api.js';
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-
-        // Load GAPI
-        await new Promise((resolve, reject) => {
-          window.gapi.load('client:auth2', { callback: resolve, onerror: reject });
-        });
-
-        // Initialize client
-        await window.gapi.client.init({
-          apiKey: config.apiKey,
-          clientId: config.clientId,
-          discoveryDocs: config.discoveryDocs,
-          scope: config.scopes.join(' ')
-        });
-
-        setIsLoaded(true);
-      } catch (err) {
-        console.error('Failed to load Google APIs:', err);
-        setError('Failed to load Google Fit API. Please check your API credentials.');
-      }
-    };
-
-    // Only load if we have the required credentials
-    if (config.clientId) {
-      if (config.apiKey) {
-        loadGoogleAPIs();
-      } else {
-        setError('Google Fit API key not configured. Please add VITE_GOOGLE_API_KEY to your environment variables.');
-      }
-    } else {
-      setError('Google Fit Client ID not configured. Please add VITE_GOOGLE_CLIENT_ID to your environment variables.');
-    }
-  }, [config.clientId, config.apiKey]);
+    setIsLoaded(true);
+  }, []);
 
   // Check authorization status
-  const checkAuthStatus = useCallback(() => {
-    if (!isLoaded || !window.gapi) return;
-
-    const authInstance = window.gapi.auth2.getAuthInstance();
-    if (authInstance) {
-      setIsAuthorized(authInstance.isSignedIn.get());
-    }
-  }, [isLoaded]);
+  const checkAuthStatus = useCallback(async () => {
+    if (!isLoaded) return;
+    const token = await getGoogleAccessToken();
+    setIsAuthorized(!!token);
+  }, [isLoaded, getGoogleAccessToken]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -104,26 +63,20 @@ export function useGoogleFit() {
 
   // Authorize Google Fit
   const authorize = async (): Promise<boolean> => {
-    if (!isLoaded || !window.gapi) {
-      setError('Google APIs not loaded');
-      return false;
-    }
-
+    // Use Supabase OAuth Google sign-in requesting Fitness scopes
     setIsLoading(true);
     setError(null);
-
     try {
-      const authInstance = window.gapi.auth2.getAuthInstance();
-      const user = await authInstance.signIn();
-      
-      if (user.isSignedIn()) {
-        setIsAuthorized(true);
-        return true;
+      const { error } = await signInWithGoogle();
+      if (error) {
+        setError(error.message || 'Failed to initiate Google sign-in');
+        return false;
       }
-      return false;
-    } catch (err) {
+      return true; // Redirect will occur
+    } catch (err: any) {
       console.error('Authorization failed:', err);
-      setError('Failed to authorize Google Fit');
+      const msg = typeof err === 'string' ? err : (err?.error || err?.message || 'Failed to authorize Google Fit');
+      setError(msg);
       return false;
     } finally {
       setIsLoading(false);
@@ -132,22 +85,13 @@ export function useGoogleFit() {
 
   // Sign out
   const signOut = async () => {
-    if (!isLoaded || !window.gapi) return;
-
-    try {
-      const authInstance = window.gapi.auth2.getAuthInstance();
-      await authInstance.signOut();
-      setIsAuthorized(false);
-    } catch (err) {
-      console.error('Sign out failed:', err);
-    }
+    // Supabase sign out handled elsewhere; here we just flip state
+    setIsAuthorized(false);
   };
 
   // Fetch today's data
   const fetchTodayData = async (): Promise<GoogleFitData | null> => {
-    if (!isLoaded || !isAuthorized || !window.gapi) {
-      return null;
-    }
+    if (!isAuthorized) return null;
 
     setIsLoading(true);
     setError(null);
@@ -156,53 +100,62 @@ export function useGoogleFit() {
       const today = new Date();
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+      const accessToken = await getGoogleAccessToken();
+      if (!accessToken) {
+        setError('Missing Google access token. Please sign in with Google.');
+        return null;
+      }
 
-      // Fetch steps
-      const stepsResponse = await window.gapi.client.fitness.users.dataset.aggregate({
-        userId: 'me',
-        requestBody: {
-          aggregateBy: [{
-            dataTypeName: 'com.google.step_count.delta',
-            dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
-          }],
-          bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
-          startTimeMillis: startOfDay.getTime(),
-          endTimeMillis: endOfDay.getTime()
+      const aggregate = async (requestBody: any) => {
+        const res = await fetch('/fitness', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Fitness API error ${res.status}: ${text}`);
         }
+        return await res.json();
+      };
+
+      const stepsResponse = await aggregate({
+        aggregateBy: [{
+          dataTypeName: 'com.google.step_count.delta',
+          dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
+        }],
+        bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
+        startTimeMillis: startOfDay.getTime(),
+        endTimeMillis: endOfDay.getTime()
       });
 
-      // Fetch calories
-      const caloriesResponse = await window.gapi.client.fitness.users.dataset.aggregate({
-        userId: 'me',
-        requestBody: {
-          aggregateBy: [{
-            dataTypeName: 'com.google.calories.expended',
-            dataSourceId: 'derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended'
-          }],
-          bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
-          startTimeMillis: startOfDay.getTime(),
-          endTimeMillis: endOfDay.getTime()
-        }
+      const caloriesResponse = await aggregate({
+        aggregateBy: [{
+          dataTypeName: 'com.google.calories.expended',
+          dataSourceId: 'derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended'
+        }],
+        bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
+        startTimeMillis: startOfDay.getTime(),
+        endTimeMillis: endOfDay.getTime()
       });
 
-      // Fetch active minutes
-      const activeMinutesResponse = await window.gapi.client.fitness.users.dataset.aggregate({
-        userId: 'me',
-        requestBody: {
-          aggregateBy: [{
-            dataTypeName: 'com.google.active_minutes',
-            dataSourceId: 'derived:com.google.active_minutes:com.google.android.gms:merge_active_minutes'
-          }],
-          bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
-          startTimeMillis: startOfDay.getTime(),
-          endTimeMillis: endOfDay.getTime()
-        }
+      const activeMinutesResponse = await aggregate({
+        aggregateBy: [{
+          dataTypeName: 'com.google.active_minutes',
+          dataSourceId: 'derived:com.google.active_minutes:com.google.android.gms:merge_active_minutes'
+        }],
+        bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
+        startTimeMillis: startOfDay.getTime(),
+        endTimeMillis: endOfDay.getTime()
       });
 
       // Process responses
-      const steps = stepsResponse.result.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-      const calories = Math.round(caloriesResponse.result.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0);
-      const activeMinutes = Math.round(activeMinutesResponse.result.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0);
+      const steps = stepsResponse?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
+      const calories = Math.round(caloriesResponse?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0);
+      const activeMinutes = Math.round(activeMinutesResponse?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0);
 
       return {
         steps,
@@ -223,9 +176,7 @@ export function useGoogleFit() {
 
   // Fetch historical data
   const fetchHistoricalData = async (days: number = 7): Promise<GoogleFitData[]> => {
-    if (!isLoaded || !isAuthorized || !window.gapi) {
-      return [];
-    }
+    if (!isAuthorized) return [];
 
     setIsLoading(true);
     setError(null);
@@ -233,7 +184,7 @@ export function useGoogleFit() {
     try {
       const endDate = new Date();
       const startDate = new Date(endDate.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
-      
+      // TODO: implement ranges with the REST API similar to fetchTodayData
       // Similar to fetchTodayData but with date range
       // Implementation would be similar but with different time ranges
       
@@ -252,6 +203,7 @@ export function useGoogleFit() {
     isAuthorized,
     isLoading,
     error,
+    initGoogleAPIs,
     authorize,
     signOut,
     fetchTodayData,
