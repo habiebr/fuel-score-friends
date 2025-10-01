@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 import { Camera, Upload, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,13 +15,25 @@ interface FoodTrackerDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+type ProcessStage = 'idle' | 'uploading' | 'analyzing' | 'saving' | 'complete';
+
 export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [analyzing, setAnalyzing] = useState(false);
+  const [stage, setStage] = useState<ProcessStage>('idle');
+  const [progress, setProgress] = useState(0);
   const [mealType, setMealType] = useState('lunch');
   const [nutritionData, setNutritionData] = useState<any>(null);
-  const [saving, setSaving] = useState(false);
+
+  const getStageMessage = (currentStage: ProcessStage) => {
+    switch (currentStage) {
+      case 'uploading': return 'Uploading image...';
+      case 'analyzing': return 'Analyzing food with AI...';
+      case 'saving': return 'Saving to your log...';
+      case 'complete': return 'Complete!';
+      default: return '';
+    }
+  };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -35,44 +48,70 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
       return;
     }
 
-    setAnalyzing(true);
+    setStage('uploading');
+    setProgress(10);
     setNutritionData(null);
 
     try {
+      // Simulate upload progress
+      setProgress(30);
+      
       // Convert image to base64
       const reader = new FileReader();
       reader.readAsDataURL(file);
       
       reader.onload = async () => {
-        const base64Image = reader.result as string;
-        
-        const { data, error } = await supabase.functions.invoke('nutrition-ai', {
-          body: { 
-            type: 'food_photo',
-            image: base64Image,
-            mealType
-          }
-        });
-
-        if (error) throw error;
-
-        if (data.nutritionData) {
-          setNutritionData(data.nutritionData);
-          toast({
-            title: "Food analyzed!",
-            description: `Found: ${data.nutritionData.food_name}`,
+        try {
+          const base64Image = reader.result as string;
+          setStage('analyzing');
+          setProgress(50);
+          
+          const { data, error } = await supabase.functions.invoke('nutrition-ai', {
+            body: { 
+              type: 'food_photo',
+              image: base64Image,
+              mealType
+            }
           });
+
+          if (error) {
+            console.error('Nutrition AI error:', error);
+            throw new Error(error.message || 'Failed to analyze food');
+          }
+
+          setProgress(90);
+
+          if (data?.nutritionData) {
+            setNutritionData(data.nutritionData);
+            setStage('complete');
+            setProgress(100);
+            toast({
+              title: "Food analyzed!",
+              description: `Found: ${data.nutritionData.food_name}`,
+            });
+          } else {
+            throw new Error('No nutrition data received from AI');
+          }
+        } catch (innerError) {
+          console.error('Error in reader.onload:', innerError);
+          throw innerError;
         }
+      };
+
+      reader.onerror = () => {
+        throw new Error('Failed to read image file');
       };
     } catch (error) {
       console.error('Error analyzing food:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast({
         title: "Analysis failed",
-        description: "Failed to analyze food. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
+      setStage('idle');
+      setProgress(0);
     } finally {
-      setAnalyzing(false);
       event.target.value = '';
     }
   };
@@ -80,7 +119,9 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
   const handleSaveLog = async () => {
     if (!user || !nutritionData) return;
 
-    setSaving(true);
+    setStage('saving');
+    setProgress(70);
+    
     try {
       const { error } = await supabase
         .from('food_logs')
@@ -95,7 +136,12 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           fat_grams: nutritionData.fat_grams,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error inserting food log:', error);
+        throw new Error(error.message || 'Failed to save food log');
+      }
+
+      setProgress(90);
 
       toast({
         title: "Meal logged!",
@@ -111,18 +157,26 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         console.error('Error calculating nutrition score:', scoreError);
       }
       
-      // Reset and close
-      setNutritionData(null);
-      onOpenChange(false);
+      setProgress(100);
+      setStage('complete');
+      
+      // Reset and close after a brief delay
+      setTimeout(() => {
+        setNutritionData(null);
+        setStage('idle');
+        setProgress(0);
+        onOpenChange(false);
+      }, 1000);
     } catch (error) {
       console.error('Error saving food log:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast({
         title: "Save failed",
-        description: "Failed to save meal. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
-    } finally {
-      setSaving(false);
+      setStage('idle');
+      setProgress(0);
     }
   };
 
@@ -135,10 +189,24 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Progress Indicator */}
+          {stage !== 'idle' && stage !== 'complete' && (
+            <div className="space-y-2 p-3 bg-primary/5 border border-primary/20 rounded-lg animate-fade-in">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-primary flex items-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {getStageMessage(stage)}
+                </span>
+                <span className="text-muted-foreground">{progress}%</span>
+              </div>
+              <Progress value={progress} className="h-2" />
+            </div>
+          )}
+
           {/* Meal Type */}
           <div className="space-y-2">
             <Label htmlFor="meal-type">Meal Type</Label>
-            <Select value={mealType} onValueChange={setMealType}>
+            <Select value={mealType} onValueChange={setMealType} disabled={stage !== 'idle' && stage !== 'complete'}>
               <SelectTrigger id="meal-type">
                 <SelectValue />
               </SelectTrigger>
@@ -156,14 +224,14 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
             <Button 
               variant="secondary" 
               className="w-full" 
-              disabled={analyzing}
+              disabled={stage !== 'idle' && stage !== 'complete'}
               asChild
             >
               <span>
-                {analyzing ? (
+                {stage === 'uploading' || stage === 'analyzing' ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analyzing...
+                    Processing...
                   </>
                 ) : (
                   <>
@@ -180,7 +248,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
               capture="environment"
               className="hidden"
               onChange={handleImageUpload}
-              disabled={analyzing}
+              disabled={stage !== 'idle' && stage !== 'complete'}
             />
           </label>
 
@@ -215,10 +283,10 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
               
               <Button 
                 onClick={handleSaveLog}
-                disabled={saving}
+                disabled={stage === 'saving'}
                 className="w-full mt-2"
               >
-                {saving ? (
+                {stage === 'saving' ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Saving...
