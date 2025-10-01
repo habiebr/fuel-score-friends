@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreCard } from '@/components/ScoreCard';
+import { PerformanceGraph } from '@/components/PerformanceGraph';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { CalendarDays, Target, Users, Zap, TrendingUp } from 'lucide-react';
@@ -166,6 +167,11 @@ export function Dashboard({ onAddMeal }: DashboardProps) {
             variant="success"
             className="animate-fade-in"
           />
+        </div>
+
+        {/* Performance Graph */}
+        <div className="mb-6">
+          <PerformanceGraph />
         </div>
 
         {/* Mobile-First Main Content */}
