@@ -1,0 +1,49 @@
+name = "fuel-score-friends"
+compatibility_date = "2024-01-01"
+
+[env.production]
+name = "fuel-score-friends"
+
+[env.staging]
+name = "fuel-score-friends-staging"
+
+# Pages configuration
+pages_build_output_dir = "dist"
+
+# Environment variables (set these in Cloudflare dashboard or via CLI)
+# [vars]
+# VITE_SUPABASE_URL = "your-supabase-url"
+# VITE_SUPABASE_ANON_KEY = "your-supabase-anon-key"
+# GROQ_API_KEY = "your-groq-api-key"
+
+# Build configuration
+[build]
+command = "npm run build:cf"
+cwd = "."
+
+# Headers for better caching and security
+[[headers]]
+for = "/*"
+[headers.values]
+X-Frame-Options = "DENY"
+X-Content-Type-Options = "nosniff"
+X-XSS-Protection = "1; mode=block"
+Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Cache static assets
+[[headers]]
+for = "/assets/*"
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+
+# Cache service worker
+[[headers]]
+for = "/sw.js"
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
+
+# SPA routing - redirect all routes to index.html
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
