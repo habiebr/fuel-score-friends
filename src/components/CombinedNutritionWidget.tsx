@@ -38,8 +38,6 @@ interface CombinedNutritionData {
   // Activity data
   activityCalories: number;
   adjustedPlannedCalories: number;
-  runningGoal: string;
-  trainingIntensity: string;
 }
 
 export function CombinedNutritionWidget() {
@@ -60,10 +58,10 @@ export function CombinedNutritionWidget() {
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
 
-      // Fetch user profile for running goals
+      // Fetch user profile for activity level
       const { data: profile } = await supabase
         .from('profiles')
-        .select('fitness_goals, target_date, fitness_level, activity_level')
+        .select('activity_level')
         .eq('user_id', user.id)
         .single();
 
@@ -149,8 +147,6 @@ export function CombinedNutritionWidget() {
         // Activity data
         activityCalories,
         adjustedPlannedCalories,
-        runningGoal: profile?.fitness_goals?.[0] || 'general fitness',
-        trainingIntensity: 'moderate', // Could be calculated from activity level
       });
     } catch (error) {
       console.error('Error loading nutrition data:', error);
@@ -343,20 +339,6 @@ export function CombinedNutritionWidget() {
           </div>
         </div>
 
-        {/* Training Context */}
-        {data.runningGoal && data.runningGoal !== 'general fitness' && (
-          <div className="mt-4 p-3 bg-primary/10 rounded-lg">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                <Target className="h-3 w-3 text-primary" />
-              </div>
-              <div>
-                <div className="text-sm font-medium text-primary">Training Goal</div>
-                <div className="text-xs text-muted-foreground capitalize">{data.runningGoal}</div>
-              </div>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
