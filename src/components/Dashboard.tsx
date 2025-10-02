@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
-import { CaloriesWidget } from '@/components/CaloriesWidget';
+import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 
@@ -434,9 +434,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           <RaceGoalWidget />
         </div>
 
-        {/* 3. Calories Widget */}
+        {/* 3. Combined Nutrition Widget */}
         <div className="mb-6">
-          <CaloriesWidget />
+          <CombinedNutritionWidget />
         </div>
 
         {/* 4. Quick Recovery Plan Button */}
@@ -461,89 +461,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           </CardContent>
         </Card>
 
-        {/* 5. Daily Nutrient Needs (TDEE-based) */}
-        <Card className="shadow-card mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Daily Nutrition Needs</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {data ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <div className="text-xs text-muted-foreground">Calories Target</div>
-                  <div className="font-semibold">
-                    {(() => {
-                      const hasPlanned = (data.plannedCalories || 0) > 0;
-                      const total = hasPlanned
-                        ? Math.max(0, (data.plannedCalories || 0) + (data.caloriesBurned || 0))
-                        : (() => {
-                            const bmr = calculateBMR((user as any)?.user_metadata?.weight || null, (user as any)?.user_metadata?.height || null, (user as any)?.user_metadata?.age || null);
-                            const mult = getActivityMultiplier((user as any)?.user_metadata?.activity_level || 'moderate');
-                            const base = bmr > 0 ? Math.round(bmr * mult) : 0;
-                            return Math.max(0, base + (data.caloriesBurned || 0));
-                          })();
-                      return `${total} kcal`;
-                    })()}
-                  </div>
-                  {data.caloriesBurned > 0 && (
-                    <div className="text-[11px] text-muted-foreground">includes +{data.caloriesBurned} activity</div>
-                  )}
-                </div>
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <div className="text-xs text-muted-foreground">Protein</div>
-                  <div className="font-semibold">
-                    {(() => {
-                      const hasPlanned = (data.plannedProtein || 0) > 0;
-                      if (hasPlanned) return `${data.plannedProtein} g`;
-                      const bmr = calculateBMR((user as any)?.user_metadata?.weight || null, (user as any)?.user_metadata?.height || null, (user as any)?.user_metadata?.age || null);
-                      const mult = getActivityMultiplier((user as any)?.user_metadata?.activity_level || 'moderate');
-                      const base = bmr > 0 ? Math.round(bmr * mult) : 0;
-                      const total = Math.max(0, base + (data.caloriesBurned || 0));
-                      const macros = deriveMacrosFromCalories(total);
-                      return `${macros.protein} g`;
-                    })()}
-                  </div>
-                </div>
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <div className="text-xs text-muted-foreground">Carbs</div>
-                  <div className="font-semibold">
-                    {(() => {
-                      const hasPlanned = (data.plannedCarbs || 0) > 0;
-                      if (hasPlanned) return `${data.plannedCarbs} g`;
-                      const bmr = calculateBMR((user as any)?.user_metadata?.weight || null, (user as any)?.user_metadata?.height || null, (user as any)?.user_metadata?.age || null);
-                      const mult = getActivityMultiplier((user as any)?.user_metadata?.activity_level || 'moderate');
-                      const base = bmr > 0 ? Math.round(bmr * mult) : 0;
-                      const total = Math.max(0, base + (data.caloriesBurned || 0));
-                      const macros = deriveMacrosFromCalories(total);
-                      return `${macros.carbs} g`;
-                    })()}
-                  </div>
-                </div>
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <div className="text-xs text-muted-foreground">Fat</div>
-                  <div className="font-semibold">
-                    {(() => {
-                      const hasPlanned = (data.plannedFat || 0) > 0;
-                      if (hasPlanned) return `${data.plannedFat} g`;
-                      const bmr = calculateBMR((user as any)?.user_metadata?.weight || null, (user as any)?.user_metadata?.height || null, (user as any)?.user_metadata?.age || null);
-                      const mult = getActivityMultiplier((user as any)?.user_metadata?.activity_level || 'moderate');
-                      const base = bmr > 0 ? Math.round(bmr * mult) : 0;
-                      const total = Math.max(0, base + (data.caloriesBurned || 0));
-                      const macros = deriveMacrosFromCalories(total);
-                      return `${macros.fat} g`;
-                    })()}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">No targets yet — generate a meal plan first.</div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Daily Nutrition Summary removed - now integrated into Combined Nutrition Widget */}
 
-        {/* Daily Nutrition Summary removed */}
-
-        {/* 5. Today's Nutrition Plan - Carousel */}
+        {/* 4. Today's Nutrition Plan - Carousel */}
         <Card className="shadow-card mb-6">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
