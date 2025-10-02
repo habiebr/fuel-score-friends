@@ -416,7 +416,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           </p>
         </div>
 
-        {/* Daily Score - Hero Section */}
+        {/* 1. Daily Score - Hero Section */}
         <div className="mb-6">
           <ScoreCard
             title="Daily Score"
@@ -428,11 +428,37 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
         </div>
 
+        {/* 2. Race Goal Widget */}
+        <div className="mb-6">
+          <RaceGoalWidget />
+        </div>
 
-        {/* Daily Nutrient Needs (TDEE-based) */}
+        {/* 3. Quick Recovery Plan Button */}
+        <Card className="shadow-card mb-6">
+          <CardContent className="p-6">
+            <div className="text-center">
+              <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                <Camera className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Quick Recovery Plan</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Upload your activity photo for instant recovery suggestions
+              </p>
+              <Button 
+                onClick={onAnalyzeFitness}
+                className="w-full sm:w-auto"
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                Get Recovery Plan
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 4. Daily Nutrient Needs (TDEE-based) */}
         <Card className="shadow-card mb-6">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Daily Nutrient Needs</CardTitle>
+            <CardTitle className="text-lg">Daily Nutrition Needs</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             {data ? (
@@ -509,127 +535,196 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           </CardContent>
         </Card>
 
-        <RaceGoalWidget />
-
         {/* Daily Nutrition Summary removed */}
 
-        {/* Today's Nutrition Plan */}
+        {/* 5. Today's Nutrition Plan - Carousel */}
         <Card className="shadow-card mb-6">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-                <Target className="h-5 w-5 text-primary" />
-                Today's Nutrition Plan
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {mealPlans.length === 0 ? (
-                <>
-                  <div className="text-center py-4">
-                    <p className="text-sm text-muted-foreground mb-3">
-                      No meal plan found for today. Showing default runner-friendly suggestions.
-                    </p>
-                  </div>
-                  <div className="space-y-3">
-                    {([
-                      { meal_type: 'breakfast', target: 400, suggestion: getIndonesianMealSuggestions('breakfast', 400) },
-                      { meal_type: 'lunch', target: 600, suggestion: getIndonesianMealSuggestions('lunch', 600) },
-                      { meal_type: 'dinner', target: 600, suggestion: getIndonesianMealSuggestions('dinner', 600) },
-                    ] as const).map((m) => (
-                      <div key={m.meal_type} className="p-4 bg-muted/20 rounded-lg border">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="font-semibold capitalize">{m.meal_type}</div>
-                          <div className="text-xs text-muted-foreground">Target: {m.target} kcal</div>
-                        </div>
-                        <div className="space-y-2 text-sm">
-                          <div className="font-medium text-primary">{m.suggestion.name}</div>
-                          <div className="text-muted-foreground">{m.suggestion.description}</div>
-                          <div className="flex gap-4 text-muted-foreground">
-                            <span>🔥 {m.suggestion.calories} cal</span>
-                            <span>🥩 {m.suggestion.protein}g</span>
-                            <span>🍚 {m.suggestion.carbs}g</span>
-                            <span>🥑 {m.suggestion.fat}g</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-3">
-                  {(['breakfast','lunch','dinner'] as const).map((type) => {
-                    const plan = mealPlans.find(p => p.meal_type === type);
-                    if (!plan) return null;
-                    const first = Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0 ? plan.meal_suggestions[0] : null;
-                    return (
-                      <div key={type} className="p-4 bg-muted/20 rounded-lg border">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="font-semibold capitalize">{type}</div>
-                          <div className="text-xs text-muted-foreground">Target: {plan.recommended_calories} kcal</div>
-                        </div>
-                        {first ? (
-                          <div className="space-y-2 text-sm">
-                            <div className="font-medium text-primary">{first.name}</div>
-                            <div className="text-muted-foreground">{first.description}</div>
-                            <div className="flex gap-4 text-muted-foreground">
-                              <span>🔥 {first.calories} cal</span>
-                              <span>🥩 {first.protein}g</span>
-                              <span>🍚 {first.carbs}g</span>
-                              <span>🥑 {first.fat}g</span>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <Target className="h-5 w-5 text-primary" />
+              Today's Nutrition Plan
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {mealPlans.length === 0 ? (
+              <>
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    No meal plan found for today. Showing default runner-friendly suggestions.
+                  </p>
+                </div>
+                <div className="relative">
+                  <div className="overflow-hidden">
+                    <div className="flex transition-transform duration-300 ease-in-out" style={{ transform: `translateX(-${currentMealIndex * 100}%)` }}>
+                      {([
+                        { meal_type: 'breakfast', target: 400, suggestion: getIndonesianMealSuggestions('breakfast', 400) },
+                        { meal_type: 'lunch', target: 600, suggestion: getIndonesianMealSuggestions('lunch', 600) },
+                        { meal_type: 'dinner', target: 600, suggestion: getIndonesianMealSuggestions('dinner', 600) },
+                      ] as const).map((m) => (
+                        <div key={m.meal_type} className="w-full flex-shrink-0 px-2">
+                          <div className="p-4 bg-muted/20 rounded-lg border">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold capitalize">{m.meal_type}</div>
+                              <div className="text-xs text-muted-foreground">Target: {m.target} kcal</div>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              <div className="font-medium text-primary">{m.suggestion.name}</div>
+                              <div className="text-muted-foreground">{m.suggestion.description}</div>
+                              <div className="flex gap-4 text-muted-foreground">
+                                <span>🔥 {m.suggestion.calories} cal</span>
+                                <span>🥩 {m.suggestion.protein}g</span>
+                                <span>🍚 {m.suggestion.carbs}g</span>
+                                <span>🥑 {m.suggestion.fat}g</span>
+                              </div>
                             </div>
                           </div>
-                        ) : (
-                          <div className="text-sm text-muted-foreground">No suggestion available.</div>
-                        )}
-                      </div>
-                    );
-                  })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex justify-center mt-4 space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentMealIndex(Math.max(0, currentMealIndex - 1))}
+                      disabled={currentMealIndex === 0}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="flex space-x-1">
+                      {[0, 1, 2].map((index) => (
+                        <button
+                          key={index}
+                          className={`w-2 h-2 rounded-full transition-colors ${
+                            index === currentMealIndex ? 'bg-primary' : 'bg-muted-foreground/30'
+                          }`}
+                          onClick={() => setCurrentMealIndex(index)}
+                        />
+                      ))}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentMealIndex(Math.min(2, currentMealIndex + 1))}
+                      disabled={currentMealIndex === 2}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </>
+            ) : (
+              <div className="relative">
+                <div className="overflow-hidden">
+                  <div className="flex transition-transform duration-300 ease-in-out" style={{ transform: `translateX(-${currentMealIndex * 100}%)` }}>
+                    {(['breakfast','lunch','dinner'] as const).map((type) => {
+                      const plan = mealPlans.find(p => p.meal_type === type);
+                      if (!plan) return null;
+                      const first = Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0 ? plan.meal_suggestions[0] : null;
+                      return (
+                        <div key={type} className="w-full flex-shrink-0 px-2">
+                          <div className="p-4 bg-muted/20 rounded-lg border">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-semibold capitalize">{type}</div>
+                              <div className="text-xs text-muted-foreground">Target: {plan.recommended_calories} kcal</div>
+                            </div>
+                            {first ? (
+                              <div className="space-y-2 text-sm">
+                                <div className="font-medium text-primary">{first.name}</div>
+                                <div className="text-muted-foreground">{first.description}</div>
+                                <div className="flex gap-4 text-muted-foreground">
+                                  <span>🔥 {first.calories} cal</span>
+                                  <span>🥩 {first.protein}g</span>
+                                  <span>🍚 {first.carbs}g</span>
+                                  <span>🥑 {first.fat}g</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-muted-foreground">No suggestion available.</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex justify-center mt-4 space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentMealIndex(Math.max(0, currentMealIndex - 1))}
+                    disabled={currentMealIndex === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="flex space-x-1">
+                    {[0, 1, 2].map((index) => (
+                      <button
+                        key={index}
+                        className={`w-2 h-2 rounded-full transition-colors ${
+                          index === currentMealIndex ? 'bg-primary' : 'bg-muted-foreground/30'
+                        }`}
+                        onClick={() => setCurrentMealIndex(index)}
+                      />
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentMealIndex(Math.min(2, currentMealIndex + 1))}
+                    disabled={currentMealIndex === 2}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Additional Sections */}
-        <div className="space-y-4 sm:space-y-6">
-
-
-          {/* Quick Actions */}
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Quick Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3">
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => navigate('/meals')}
-              >
-                <CalendarDays className="h-4 w-4 mr-2" />
-                Meal Diary
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => navigate('/profile')}
-              >
-                <Target className="h-4 w-4 mr-2" />
-                Profile & Goals
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={onAnalyzeFitness}
-              >
-                <Camera className="h-4 w-4 mr-2" />
-                Analyze Fitness
-              </Button>
-              {/* Manual generate daily plan button removed */}
-            </CardContent>
-          </Card>
-
-        </div>
+        {/* 6. Quick Actions */}
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              Quick Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => navigate('/meals')}
+            >
+              <CalendarDays className="h-4 w-4 mr-2" />
+              Meal Diary
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => navigate('/profile')}
+            >
+              <Target className="h-4 w-4 mr-2" />
+              Profile & Goals
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => navigate('/goals')}
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Community
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => navigate('/import')}
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              Import Data
+            </Button>
+          </CardContent>
+        </Card>
 
       </div>
     </div>
