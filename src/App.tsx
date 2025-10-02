@@ -16,6 +16,7 @@ import Meals from "./pages/Meals";
 import MealPlans from "./pages/MealPlans";
 import ShoppingList from "./pages/ShoppingList";
 import MealHistory from "./pages/MealHistory";
+import SupabaseDebug from "./pages/SupabaseDebug";
 import MarathonCalendarPage from "./pages/MarathonCalendarPage";
 import Offline from "./pages/Offline";
 import NotFound from "./pages/NotFound";
@@ -87,6 +88,7 @@ function App() {
                   <Route path="/shopping-list" element={<ShoppingList />} />
                   <Route path="/meal-history" element={<MealHistory />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/debug/supabase" element={<SupabaseDebug />} />
                   <Route path="/offline" element={<Offline />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
