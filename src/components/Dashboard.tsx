@@ -9,7 +9,6 @@ import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
-import { EnvDebug } from '@/components/EnvDebug';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 
@@ -438,9 +437,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         {/* 3. Combined Nutrition Widget */}
         <div className="mb-6">
           <CombinedNutritionWidget />
-          
-          {/* Environment Debug */}
-          <EnvDebug />
         </div>
 
         {/* 4. Quick Recovery Plan Button */}
