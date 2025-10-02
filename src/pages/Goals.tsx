@@ -70,11 +70,25 @@ export default function Goals() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // Try selecting extended columns; fallback if columns don't exist (42703)
+      let data: any = null;
+      let error: any = null;
+      const first = await supabase
         .from('profiles')
         .select('fitness_goals, activity_level, target_date, fitness_level, goal_type, goal_name')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
+      data = (first as any)?.data;
+      error = (first as any)?.error;
+      if (error && String(error.code) === '42703') {
+        const fallback = await supabase
+          .from('profiles')
+          .select('fitness_goals, activity_level, target_date, fitness_level')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        data = (fallback as any)?.data;
+        error = (fallback as any)?.error;
+      }
 
       if (error) {
         console.error('Error loading goals:', error);
@@ -176,9 +190,14 @@ export default function Goals() {
       
       reader.onload = async () => {
         const base64Image = reader.result as string;
-        
+        const session = (await supabase.auth.getSession()).data.session;
+        const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
         const { data, error } = await supabase.functions.invoke('parse-training-plan', {
-          body: { image: base64Image }
+          body: { image: base64Image },
+          headers: {
+            ...(apiKey ? { apikey: apiKey } : {}),
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          }
         });
 
         if (error) throw error;
@@ -191,8 +210,14 @@ export default function Goals() {
         // Trigger regeneration for affected dates (next 7 weeks)
         try {
           const today = new Date().toISOString().split('T')[0];
+          const session = (await supabase.auth.getSession()).data.session;
+          const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
           await supabase.functions.invoke('generate-meal-plan-range', {
-            body: { startDate: today, weeks: 7 }
+            body: { startDate: today, weeks: 7 },
+            headers: {
+              ...(apiKey ? { apikey: apiKey } : {}),
+              ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            }
           });
         } catch (regenErr) {
           console.error('Failed to refresh daily_meal_plans:', regenErr);
@@ -268,8 +293,14 @@ export default function Goals() {
       // Regenerate meal plans for the next 7 weeks so Dashboard shows updated data
       try {
         const today = new Date().toISOString().split('T')[0];
+        const session = (await supabase.auth.getSession()).data.session;
+        const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
         await supabase.functions.invoke('generate-meal-plan-range', {
-          body: { startDate: today, weeks: 7 }
+          body: { startDate: today, weeks: 7 },
+          headers: {
+            ...(apiKey ? { apikey: apiKey } : {}),
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          }
         });
       } catch (regenErr) {
         console.error('Failed to refresh daily_meal_plans after save:', regenErr);
