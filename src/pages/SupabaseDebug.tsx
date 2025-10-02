@@ -13,7 +13,6 @@ export default function SupabaseDebug() {
         MODE: import.meta.env.MODE,
         PROD: import.meta.env.PROD,
         VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET',
-        VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ? 'SET' : 'NOT SET',
         VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET',
       };
       setEnvInfo(env);

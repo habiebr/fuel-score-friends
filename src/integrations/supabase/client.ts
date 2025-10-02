@@ -3,20 +3,37 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
-// Support multiple common env var names for the public key
-const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+// Use only anon/public key for frontend auth
+const SUPABASE_ANON_KEY =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   'placeholder-key';
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
   }
 });
+
+// Fail-fast with a clear error if env vars are not configured
+const missingUrl = !import.meta.env.VITE_SUPABASE_URL;
+const missingKey = !import.meta.env.VITE_SUPABASE_ANON_KEY;
+const usingPlaceholders = SUPABASE_URL.includes('placeholder.supabase.co') || SUPABASE_ANON_KEY === 'placeholder-key';
+
+if (missingUrl || missingKey || usingPlaceholders) {
+  const message = [
+    'Supabase environment variables are not configured.',
+    'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local',
+    'See SUPABASE_MIGRATION_GUIDE.md (Step 3).'
+  ].join(' ');
+  // eslint-disable-next-line no-console
+  console.error(message, {
+    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET',
+    VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET',
+  });
+  throw new Error(message);
+}

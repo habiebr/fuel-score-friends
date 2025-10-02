@@ -119,8 +119,8 @@ export default function MealsTabbed() {
     setLoadingMealPlan(true);
     try {
       const session = (await supabase.auth.getSession()).data.session;
-      const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
+      const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      const { error } = await supabase.functions.invoke('generate-meal-plan', {
         body: { date: format(new Date(), 'yyyy-MM-dd') },
         headers: {
           ...(apiKey ? { apikey: apiKey } : {}),
@@ -130,13 +130,12 @@ export default function MealsTabbed() {
 
       if (error) throw error;
 
-      if (data && data.plans) {
-        setDailyMealPlan(data.plans);
-        toast({
-          title: 'Meal plan generated!',
-          description: 'Your personalized meal plan has been created.',
-        });
-      }
+      // Refresh from DB to reflect persisted plans
+      await loadMealPlan();
+      toast({
+        title: 'Meal plan generated!',
+        description: 'Your personalized meal plan has been created.',
+      });
     } catch (error) {
       console.error('Error generating meal plan:', error);
       toast({

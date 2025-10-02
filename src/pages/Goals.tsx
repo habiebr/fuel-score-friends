@@ -177,7 +177,7 @@ export default function Goals() {
       reader.onload = async () => {
         const base64Image = reader.result as string;
         const session = (await supabase.auth.getSession()).data.session;
-        const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+        const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
         const { data, error } = await supabase.functions.invoke('parse-training-plan', {
           body: { image: base64Image },
           headers: {
@@ -197,7 +197,7 @@ export default function Goals() {
         try {
           const today = new Date().toISOString().split('T')[0];
           const session = (await supabase.auth.getSession()).data.session;
-          const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+          const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
           await supabase.functions.invoke('generate-meal-plan-range', {
             body: { startDate: today, weeks: 7 },
             headers: {
@@ -280,7 +280,7 @@ export default function Goals() {
       try {
         const today = new Date().toISOString().split('T')[0];
         const session = (await supabase.auth.getSession()).data.session;
-        const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+        const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
         await supabase.functions.invoke('generate-meal-plan-range', {
           body: { startDate: today, weeks: 7 },
           headers: {
