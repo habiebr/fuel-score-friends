@@ -49,14 +49,36 @@ serve(async (req) => {
       // Initialize Google GenAI
       const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-      // Prepare the image data
-      const imageData = image.includes(',') ? image.split(',')[1] : image;
-      
+      // Prepare the image data (support data URLs, raw base64, or HTTP(S) URLs)
+      let mimeType = "image/jpeg";
+      let base64Data = "";
+      if (typeof image === 'string' && image.startsWith('http')) {
+        const imgResp = await fetch(image);
+        if (!imgResp.ok) {
+          throw new Error(`Failed to fetch image from URL: ${imgResp.status}`);
+        }
+        mimeType = imgResp.headers.get('content-type') || 'image/jpeg';
+        const buf = new Uint8Array(await imgResp.arrayBuffer());
+        let binary = '';
+        for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+        base64Data = btoa(binary);
+      } else if (typeof image === 'string' && image.startsWith('data:')) {
+        const commaIdx = image.indexOf(',');
+        const header = image.substring(0, commaIdx);
+        base64Data = image.substring(commaIdx + 1);
+        const mtMatch = header.match(/data:(.*?);base64/);
+        if (mtMatch) mimeType = mtMatch[1];
+      } else if (typeof image === 'string') {
+        base64Data = image;
+      } else {
+        throw new Error('Unsupported image format');
+      }
+
       const contents = [
         {
           inlineData: {
-            mimeType: "image/jpeg",
-            data: imageData,
+            mimeType,
+            data: base64Data,
           },
         },
         { 

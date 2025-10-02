@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { image } = await req.json();
+    const { image, userProfile } = await req.json();
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     
     console.log('Analyzing fitness screenshot...');
@@ -43,66 +43,60 @@ serve(async (req) => {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
     // Prepare the prompt for fitness screenshot analysis
-    const systemPrompt = `You are an expert fitness and nutrition AI assistant. Analyze fitness app screenshots to extract body metrics and provide personalized nutrition recommendations.
+    const systemPrompt = `You are an expert sports nutritionist. Analyze a fitness app screenshot and produce two practical nutrition suggestion lists only.
 
-Your task:
-1. Extract body metrics from the image (weight, height, body fat %, muscle mass, BMI, age, gender, activity level)
-2. Calculate appropriate macro recommendations based on the extracted data
-3. Suggest specific meals that align with the macro goals
-
-Return ONLY a valid JSON object with this exact structure:
+Return ONLY valid JSON with this exact structure (no markdown):
 {
-  "bodyMetrics": {
-    "weight": number (in kg),
-    "height": number (in cm),
-    "bodyFat": number (percentage),
-    "muscleMass": number (in kg),
-    "bmi": number,
-    "age": number,
-    "gender": "male" | "female",
-    "activityLevel": "sedentary" | "lightly_active" | "moderately_active" | "very_active" | "extremely_active"
-  },
-  "macroRecommendations": {
-    "calories": number,
-    "protein": number (in grams),
-    "carbs": number (in grams),
-    "fat": number (in grams),
-    "proteinPercentage": number (percentage of calories),
-    "carbsPercentage": number (percentage of calories),
-    "fatPercentage": number (percentage of calories)
-  },
-  "mealSuggestions": [
-    {
-      "name": string,
-      "description": string,
-      "calories": number,
-      "protein": number,
-      "carbs": number,
-      "fat": number,
-      "foods": [string array of food items]
-    }
+  "instantRecoverySnack": [
+    { "name": string, "description": string, "calories": number, "protein": number, "carbs": number, "fat": number, "foods": string[] }
   ],
-  "analysis": "Brief summary of what you found and your recommendations"
+  "recoveryMeal": [
+    { "name": string, "description": string, "calories": number, "protein": number, "carbs": number, "fat": number, "foods": string[] }
+  ]
 }
 
-Guidelines:
-- If a metric is not visible or unclear, omit it from the response
-- Use standard formulas for BMI calculation if weight/height are available
-- Base macro recommendations on the person's goals (weight loss, maintenance, or muscle gain)
-- Suggest 3-5 practical meal options
-- Be realistic and practical with recommendations
-- If the image shows workout data, consider it for activity level assessment`;
+Rules:
+- Do not include any analysis summary, body metrics, or extra fields
+- Focus snacks for immediate post-activity recovery (15–30 min)
+- Focus meals for full recovery within 2–3 hours
+- Use realistic, accessible foods and portions`;
 
-    const userPrompt = `Analyze this fitness app screenshot and extract all available body metrics, then provide personalized nutrition recommendations.`;
+    const profileText = userProfile ? `\n\nUser Profile (optional): ${JSON.stringify(userProfile)}` : '';
+    const userPrompt = `Analyze this fitness screenshot and output only the two lists: instantRecoverySnack and recoveryMeal as specified.${profileText}`;
 
-    // Prepare the image data
-    const imageData = image.includes(',') ? image.split(',')[1] : image;
-    
+    // Prepare the image data (support data URLs, raw base64, or HTTP(S) URLs)
+    let mimeType = "image/jpeg";
+    let base64Data = "";
+    if (typeof image === 'string' && image.startsWith('http')) {
+      // Fetch remote image and convert to base64
+      const imgResp = await fetch(image);
+      if (!imgResp.ok) {
+        throw new Error(`Failed to fetch image from URL: ${imgResp.status}`);
+      }
+      mimeType = imgResp.headers.get('content-type') || 'image/jpeg';
+      const buf = new Uint8Array(await imgResp.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+      base64Data = btoa(binary);
+    } else if (typeof image === 'string' && image.startsWith('data:')) {
+      // data URL: data:<mime>;base64,<data>
+      const commaIdx = image.indexOf(',');
+      const header = image.substring(0, commaIdx);
+      base64Data = image.substring(commaIdx + 1);
+      const mtMatch = header.match(/data:(.*?);base64/);
+      if (mtMatch) mimeType = mtMatch[1];
+    } else if (typeof image === 'string') {
+      // Assume raw base64 string
+      base64Data = image;
+    } else {
+      throw new Error('Unsupported image format');
+    }
+
     const contents = [
       {
         inlineData: {
-          mimeType: "image/jpeg",
-          data: imageData,
+          mimeType,
+          data: base64Data,
         },
       },
       { text: `${systemPrompt}\n\n${userPrompt}` },
@@ -120,7 +114,7 @@ Guidelines:
     console.log('Raw Gemini response:', responseText);
 
     // Parse the JSON response
-    let analysisResult;
+    let suggestions;
     try {
       // Clean up the response text to extract JSON
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -128,91 +122,32 @@ Guidelines:
         throw new Error('No JSON found in response');
       }
       
-      analysisResult = JSON.parse(jsonMatch[0]);
+      suggestions = JSON.parse(jsonMatch[0]);
     } catch (parseError) {
       console.error('Failed to parse Gemini response as JSON:', parseError);
       console.error('Response text:', responseText);
       
       // Fallback: create a basic response structure
-      analysisResult = {
-        bodyMetrics: {
-          weight: null,
-          height: null,
-          bodyFat: null,
-          muscleMass: null,
-          bmi: null,
-          age: null,
-          gender: null,
-          activityLevel: "moderately_active"
-        },
-        macroRecommendations: {
-          calories: 2000,
-          protein: 150,
-          carbs: 200,
-          fat: 70,
-          proteinPercentage: 30,
-          carbsPercentage: 40,
-          fatPercentage: 30
-        },
-        mealSuggestions: [
-          {
-            name: "Balanced Breakfast",
-            description: "A nutritious start to your day",
-            calories: 400,
-            protein: 25,
-            carbs: 35,
-            fat: 15,
-            foods: ["eggs", "oatmeal", "berries", "almonds"]
-          },
-          {
-            name: "Protein-Packed Lunch",
-            description: "Satisfying midday meal",
-            calories: 500,
-            protein: 35,
-            carbs: 40,
-            fat: 20,
-            foods: ["chicken breast", "quinoa", "vegetables", "olive oil"]
-          },
-          {
-            name: "Light Dinner",
-            description: "Evening meal for recovery",
-            calories: 450,
-            protein: 30,
-            carbs: 30,
-            fat: 25,
-            foods: ["salmon", "sweet potato", "broccoli", "avocado"]
-          }
+      suggestions = {
+        instantRecoverySnack: [
+          { name: "Greek yogurt & banana", description: "Quick carb + protein combo", calories: 250, protein: 18, carbs: 35, fat: 4, foods: ["1 cup Greek yogurt", "1 banana"] },
+          { name: "Chocolate milk", description: "Convenient recovery drink", calories: 220, protein: 12, carbs: 30, fat: 6, foods: ["500 ml low‑fat chocolate milk"] }
         ],
-        analysis: "Unable to fully analyze the image. Here are general nutrition recommendations based on a moderate activity level."
+        recoveryMeal: [
+          { name: "Chicken, rice, veggies", description: "Balanced post‑workout plate", calories: 600, protein: 40, carbs: 70, fat: 15, foods: ["150g chicken breast", "1 cup cooked rice", "1 cup mixed veggies", "1 tsp olive oil"] },
+          { name: "Salmon pasta bowl", description: "Omega‑3 rich recovery", calories: 650, protein: 35, carbs: 70, fat: 22, foods: ["120g salmon", "2 cups cooked pasta", "spinach", "olive oil"] }
+        ]
       };
     }
 
-    // Validate and clean up the response
-    if (!analysisResult.bodyMetrics) {
-      analysisResult.bodyMetrics = {};
-    }
-    if (!analysisResult.macroRecommendations) {
-      analysisResult.macroRecommendations = {
-        calories: 2000,
-        protein: 150,
-        carbs: 200,
-        fat: 70,
-        proteinPercentage: 30,
-        carbsPercentage: 40,
-        fatPercentage: 30
-      };
-    }
-    if (!analysisResult.mealSuggestions) {
-      analysisResult.mealSuggestions = [];
-    }
-    if (!analysisResult.analysis) {
-      analysisResult.analysis = "Analysis completed successfully.";
-    }
+    // Validate minimal structure
+    if (!Array.isArray(suggestions.instantRecoverySnack)) suggestions.instantRecoverySnack = [];
+    if (!Array.isArray(suggestions.recoveryMeal)) suggestions.recoveryMeal = [];
 
-    console.log('Analysis result:', analysisResult);
+    console.log('Suggestions:', suggestions);
 
     return new Response(JSON.stringify({ 
-      analysisResult 
+      suggestions
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
