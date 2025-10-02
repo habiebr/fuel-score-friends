@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Insert a new row per session (no aggregation)
+    // Insert multiple rows per session for different metrics
     for (const session of sessions) {
       const sessionTs = session?.timestamp || session?.startTime || session?.start_time || session?.time_created || new Date().toISOString();
       const sessionDate = new Date(sessionTs).toISOString().split('T')[0];
@@ -91,10 +91,6 @@ Deno.serve(async (req) => {
       const activeMinutes = Math.round(durationSec / 60);
       const distance = Math.max(0, Math.round(session.totalDistance || session.total_distance || session.distance || 0));
       const avgHr = Math.max(0, Math.round(session.avgHeartRate || session.avg_heart_rate || 0));
-      const maxHr = Math.max(0, Number(session.maxHeartRate || session.max_heart_rate || 0)) || null;
-      const activityType = session.activityType || session.activity || 'activity';
-      const trainingEffect = session.trainingEffect ?? null;
-      const recoveryTime = session.recoveryTime ?? null;
 
       const row = {
         user_id: user.id,
