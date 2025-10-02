@@ -98,7 +98,10 @@ Deno.serve(async (req) => {
 
       const row = {
         user_id: user.id,
+        device_type: 'garmin',
+        data_type: 'session',
         date: sessionDate,
+        session_start: sessionTs, // New column to ensure uniqueness per session
         calories_burned: calories,
         active_minutes: activeMinutes,
         distance_meters: distance,

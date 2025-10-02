@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
+import { CaloriesWidget } from '@/components/CaloriesWidget';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 
@@ -433,7 +434,12 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           <RaceGoalWidget />
         </div>
 
-        {/* 3. Quick Recovery Plan Button */}
+        {/* 3. Calories Widget */}
+        <div className="mb-6">
+          <CaloriesWidget />
+        </div>
+
+        {/* 4. Quick Recovery Plan Button */}
         <Card className="shadow-card mb-6">
           <CardContent className="p-6">
             <div className="text-center">
@@ -455,7 +461,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           </CardContent>
         </Card>
 
-        {/* 4. Daily Nutrient Needs (TDEE-based) */}
+        {/* 5. Daily Nutrient Needs (TDEE-based) */}
         <Card className="shadow-card mb-6">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Daily Nutrition Needs</CardTitle>
