@@ -70,25 +70,11 @@ export default function Goals() {
     if (!user) return;
 
     try {
-      // Try selecting extended columns; fallback if columns don't exist (42703)
-      let data: any = null;
-      let error: any = null;
-      const first = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('fitness_goals, activity_level, target_date, fitness_level, goal_type, goal_name')
         .eq('user_id', user.id)
-        .maybeSingle();
-      data = (first as any)?.data;
-      error = (first as any)?.error;
-      if (error && String(error.code) === '42703') {
-        const fallback = await supabase
-          .from('profiles')
-          .select('fitness_goals, activity_level, target_date, fitness_level')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        data = (fallback as any)?.data;
-        error = (fallback as any)?.error;
-      }
+        .single();
 
       if (error) {
         console.error('Error loading goals:', error);
