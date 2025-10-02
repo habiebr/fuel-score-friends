@@ -119,9 +119,13 @@ export default function MealsTabbed() {
     setLoadingMealPlan(true);
     try {
       const session = (await supabase.auth.getSession()).data.session;
+      const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
         body: { date: format(new Date(), 'yyyy-MM-dd') },
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        headers: {
+          ...(apiKey ? { apikey: apiKey } : {}),
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
       });
 
       if (error) throw error;
