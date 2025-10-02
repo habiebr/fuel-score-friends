@@ -114,22 +114,61 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                   const ts = new Date(s.timestamp);
                   const dateStr = new Date(ts.getTime() - ts.getTimezoneOffset() * 60000).toISOString().split('T')[0];
                   const toInt = (v: any) => (v == null ? 0 : Math.round(Number(v)));
-                  const row = {
-                    user_id: user.id,
-                    date: dateStr,
-                    calories_burned: toInt(s.totalCalories),
-                    active_minutes: Math.max(0, Math.round(toInt(s.duration) / 60)),
-                    heart_rate_avg: toInt(s.avgHeartRate),
-                    max_heart_rate: toInt(s.maxHeartRate) || null,
-                    distance_meters: toInt(s.totalDistance),
-                    activity_type: s.activityType || 'activity',
-                    training_effect: s.trainingEffect ?? null,
-                    recovery_time: s.recoveryTime ?? null,
-                    source: 'fit'
-                  } as any;
+                  
+                  // Insert multiple rows for different metrics
+                  const metricsToInsert = [];
+                  
+                  if (s.totalCalories) {
+                    metricsToInsert.push({
+                      user_id: user.id,
+                      date: dateStr,
+                      data_type: 'calories',
+                      device_type: 'garmin',
+                      unit: 'kcal',
+                      value: toInt(s.totalCalories),
+                      recorded_at: ts.toISOString()
+                    });
+                  }
+                  
+                  if (s.duration) {
+                    metricsToInsert.push({
+                      user_id: user.id,
+                      date: dateStr,
+                      data_type: 'active_minutes',
+                      device_type: 'garmin',
+                      unit: 'minutes',
+                      value: Math.round(toInt(s.duration) / 60),
+                      recorded_at: ts.toISOString()
+                    });
+                  }
+                  
+                  if (s.avgHeartRate) {
+                    metricsToInsert.push({
+                      user_id: user.id,
+                      date: dateStr,
+                      data_type: 'heart_rate_avg',
+                      device_type: 'garmin',
+                      unit: 'bpm',
+                      value: toInt(s.avgHeartRate),
+                      recorded_at: ts.toISOString()
+                    });
+                  }
+                  
+                  if (s.totalDistance) {
+                    metricsToInsert.push({
+                      user_id: user.id,
+                      date: dateStr,
+                      data_type: 'distance',
+                      device_type: 'garmin',
+                      unit: 'meters',
+                      value: toInt(s.totalDistance),
+                      recorded_at: ts.toISOString()
+                    });
+                  }
+                  
                   const { error: insErr } = await (supabase as any)
                     .from('wearable_data')
-                    .insert(row);
+                    .insert(metricsToInsert);
                   if (insErr) throw insErr;
                 }
                 invokedServer = true;

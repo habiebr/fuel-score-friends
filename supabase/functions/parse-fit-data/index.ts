@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Insert a new row per session (no aggregation)
+    // Insert multiple rows per session for different metrics
     for (const session of sessions) {
       const sessionTs = session?.timestamp || session?.startTime || session?.start_time || session?.time_created || new Date().toISOString();
       const sessionDate = new Date(sessionTs).toISOString().split('T')[0];
@@ -91,28 +91,60 @@ Deno.serve(async (req) => {
       const activeMinutes = Math.round(durationSec / 60);
       const distance = Math.max(0, Math.round(session.totalDistance || session.total_distance || session.distance || 0));
       const avgHr = Math.max(0, Math.round(session.avgHeartRate || session.avg_heart_rate || 0));
-      const maxHr = Math.max(0, Number(session.maxHeartRate || session.max_heart_rate || 0)) || null;
-      const activityType = session.activityType || session.activity || 'activity';
-      const trainingEffect = session.trainingEffect ?? null;
-      const recoveryTime = session.recoveryTime ?? null;
 
-      const row = {
-        user_id: user.id,
-        date: sessionDate,
-        calories_burned: calories,
-        active_minutes: activeMinutes,
-        distance_meters: distance,
-        heart_rate_avg: avgHr,
-        max_heart_rate: maxHr,
-        activity_type: activityType,
-        training_effect: trainingEffect,
-        recovery_time: recoveryTime,
-        source: 'fit'
-      } as Record<string, unknown>;
+      const metricsToInsert = [];
+      
+      if (calories > 0) {
+        metricsToInsert.push({
+          user_id: user.id,
+          date: sessionDate,
+          data_type: 'calories',
+          device_type: 'garmin',
+          unit: 'kcal',
+          value: calories,
+          recorded_at: sessionTs
+        });
+      }
+      
+      if (activeMinutes > 0) {
+        metricsToInsert.push({
+          user_id: user.id,
+          date: sessionDate,
+          data_type: 'active_minutes',
+          device_type: 'garmin',
+          unit: 'minutes',
+          value: activeMinutes,
+          recorded_at: sessionTs
+        });
+      }
+      
+      if (distance > 0) {
+        metricsToInsert.push({
+          user_id: user.id,
+          date: sessionDate,
+          data_type: 'distance',
+          device_type: 'garmin',
+          unit: 'meters',
+          value: distance,
+          recorded_at: sessionTs
+        });
+      }
+      
+      if (avgHr > 0) {
+        metricsToInsert.push({
+          user_id: user.id,
+          date: sessionDate,
+          data_type: 'heart_rate_avg',
+          device_type: 'garmin',
+          unit: 'bpm',
+          value: avgHr,
+          recorded_at: sessionTs
+        });
+      }
 
       const { error: insertError } = await supabase
         .from('wearable_data')
-        .insert(row);
+        .insert(metricsToInsert);
       if (insertError) {
         console.error('Insert error:', insertError);
         throw insertError;
