@@ -262,13 +262,20 @@ Consider the user's wearable data:
 - For high-intensity activity days, increase carb recommendations for recovery
 - Account for actual calories burned to prevent under/over-eating
 
-Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), and dinner (30%).
+Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), dinner (30%), and snacks (10% for training days).
 
 For each meal, provide 2-3 realistic meal options with:
 - Specific meal name (Indonesian-style)
 - List of locally available foods/ingredients with EXACT gram portions (e.g., "Nasi putih (150g)", "Ayam goreng (100g)")
 - Brief appetizing description
 - Accurate macros (calories, protein, carbs, fat)
+
+RUNNING-SPECIFIC SNACKS & RECOVERY:
+${dayPlan && dayPlan.activity === 'run' ? `- PRE-RUN (1-2 hours before): Quick carbs like pisang (banana), kurma (dates), or energy gel
+- DURING RUN (if >60 minutes): Sports drink, energy gel, or kurma
+- POST-RUN (within 30 minutes): Protein shake with susu kedelai, or pisang dengan susu
+- RECOVERY SNACKS: Kacang almond, yogurt dengan madu, or smoothie buah lokal
+- ELECTROLYTE REPLENISHMENT: Air kelapa muda, isotonic drink, or buah-buahan tinggi kalium` : ''}
 
 IMPORTANT: All food ingredients MUST include precise gram measurements to help runners with portion control and nutrition tracking.
 
@@ -278,6 +285,7 @@ Examples of Indonesian-appropriate meals:
 - Breakfast: Nasi uduk dengan ayam goreng dan sambal kacang
 - Lunch: Gado-gado dengan bumbu kacang dan kerupuk
 - Dinner: Rendang daging dengan nasi putih dan sayur daun singkong
+- Snacks: Pisang dengan susu kedelai, kacang almond panggang, air kelapa muda
 
 Return ONLY valid JSON in this exact format:
 {
@@ -299,7 +307,24 @@ Return ONLY valid JSON in this exact format:
     ]
   },
   "lunch": { ... same structure with 40% calories ... },
-  "dinner": { ... same structure with 30% calories ... }
+  "dinner": { ... same structure with 30% calories ... },
+  ${dayPlan && dayPlan.activity === 'run' ? `"snack": {
+    "target_calories": ${Math.round(totalDailyCalories * 0.10)},
+    "target_protein": ${Math.round((totalDailyCalories * 0.10 * 0.20) / 4)},
+    "target_carbs": ${Math.round((totalDailyCalories * 0.10 * 0.60) / 4)},
+    "target_fat": ${Math.round((totalDailyCalories * 0.10 * 0.20) / 9)},
+    "suggestions": [
+      {
+        "name": "Pisang dengan susu kedelai",
+        "foods": ["Pisang (120g)", "Susu kedelai (200ml)", "Madu (15g)"],
+        "description": "Snack pemulihan pasca lari dengan protein dan karbohidrat cepat",
+        "calories": ${Math.round(totalDailyCalories * 0.10)},
+        "protein": ${Math.round((totalDailyCalories * 0.10 * 0.20) / 4)},
+        "carbs": ${Math.round((totalDailyCalories * 0.10 * 0.60) / 4)},
+        "fat": ${Math.round((totalDailyCalories * 0.10 * 0.20) / 9)}
+      }
+    ]
+  }` : ''}
 }
 `;
 
@@ -392,25 +417,38 @@ Return ONLY valid JSON in this exact format:
     // Store meal plans for each meal type
     console.log("8. Storing meal plans in database...");
     const mealTypes = ["breakfast", "lunch", "dinner"];
+    
+    // Add snack category for training days
+    if (dayPlan && dayPlan.activity === 'run') {
+      mealTypes.push("snack");
+    }
 
     for (const mealType of mealTypes) {
       // Ensure we have a meal object with targets even if AI missed it
       let meal = mealPlan[mealType];
-      const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : 0.30;
+      const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : mealType === 'snack' ? 0.10 : 0.30;
       if (!meal) {
+        const proteinRatio = mealType === 'snack' ? 0.20 : 0.30;
+        const carbsRatio = mealType === 'snack' ? 0.60 : 0.40;
+        const fatRatio = mealType === 'snack' ? 0.20 : 0.30;
+        
         meal = {
           target_calories: Math.round(totalDailyCalories * pct),
-          target_protein: Math.round((totalDailyCalories * pct * 0.30) / 4),
-          target_carbs: Math.round((totalDailyCalories * pct * 0.40) / 4),
-          target_fat: Math.round((totalDailyCalories * pct * 0.30) / 9),
+          target_protein: Math.round((totalDailyCalories * pct * proteinRatio) / 4),
+          target_carbs: Math.round((totalDailyCalories * pct * carbsRatio) / 4),
+          target_fat: Math.round((totalDailyCalories * pct * fatRatio) / 9),
           suggestions: [],
         };
       } else {
         // Fill any missing target fields with sane defaults
+        const proteinRatio = mealType === 'snack' ? 0.20 : 0.30;
+        const carbsRatio = mealType === 'snack' ? 0.60 : 0.40;
+        const fatRatio = mealType === 'snack' ? 0.20 : 0.30;
+        
         if (!Number.isFinite(meal.target_calories) || meal.target_calories <= 0) meal.target_calories = Math.round(totalDailyCalories * pct);
-        if (!Number.isFinite(meal.target_protein) || meal.target_protein <= 0) meal.target_protein = Math.round((totalDailyCalories * pct * 0.30) / 4);
-        if (!Number.isFinite(meal.target_carbs) || meal.target_carbs <= 0) meal.target_carbs = Math.round((totalDailyCalories * pct * 0.40) / 4);
-        if (!Number.isFinite(meal.target_fat) || meal.target_fat <= 0) meal.target_fat = Math.round((totalDailyCalories * pct * 0.30) / 9);
+        if (!Number.isFinite(meal.target_protein) || meal.target_protein <= 0) meal.target_protein = Math.round((totalDailyCalories * pct * proteinRatio) / 4);
+        if (!Number.isFinite(meal.target_carbs) || meal.target_carbs <= 0) meal.target_carbs = Math.round((totalDailyCalories * pct * carbsRatio) / 4);
+        if (!Number.isFinite(meal.target_fat) || meal.target_fat <= 0) meal.target_fat = Math.round((totalDailyCalories * pct * fatRatio) / 9);
         if (!Array.isArray(meal.suggestions)) meal.suggestions = [];
       }
 

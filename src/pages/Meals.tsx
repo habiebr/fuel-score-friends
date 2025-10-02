@@ -3,11 +3,9 @@ import { useMealCron } from '@/hooks/useMealCron';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { Calendar, ArrowLeft, Utensils, TrendingUp, Loader2, BookOpen, Plus, History } from 'lucide-react';
+import { Calendar, ArrowLeft, Utensils, TrendingUp, Plus } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -46,13 +44,25 @@ export default function MealsTabbed() {
   const [dailyMealPlan, setDailyMealPlan] = useState<any>(null);
   const [loadingMealPlan, setLoadingMealPlan] = useState(false);
   const [activityCaloriesToday, setActivityCaloriesToday] = useState(0);
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - dayOfWeek);
+    return startOfWeek;
+  });
+  const [weekData, setWeekData] = useState<DayData[]>([]);
 
   useEffect(() => {
-    if (user) {
-      loadMealPlan();
-      loadWearableToday();
-    }
-  }, [user]);
+    if (!user) return;
+    (async () => {
+      try {
+        await Promise.all([loadMealPlan(), loadWearableToday(), loadWeekData()]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [user, currentWeekStart]);
 
   const loadWearableToday = async () => {
     if (!user) return;
@@ -134,6 +144,51 @@ export default function MealsTabbed() {
     }
   };
 
+  const loadWeekData = async () => {
+    if (!user) return;
+    try {
+      const startDate = format(currentWeekStart, 'yyyy-MM-dd');
+      const endDate = format(new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+
+      const { data: logs } = await supabase
+        .from('food_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('logged_at', `${startDate}T00:00:00`)
+        .lte('logged_at', `${endDate}T23:59:59`)
+        .order('logged_at', { ascending: false });
+
+      const days: DayData[] = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(currentWeekStart);
+        date.setDate(currentWeekStart.getDate() + i);
+        const dateStr = format(date, 'yyyy-MM-dd');
+
+        const dayLogs = logs?.filter(log => 
+          format(new Date(log.logged_at), 'yyyy-MM-dd') === dateStr
+        ) || [];
+
+        const totalCalories = dayLogs.reduce((sum, log) => sum + (log.calories || 0), 0);
+        const totalProtein = dayLogs.reduce((sum, log) => sum + (log.protein_grams || 0), 0);
+        const totalCarbs = dayLogs.reduce((sum, log) => sum + (log.carbs_grams || 0), 0);
+        const totalFat = dayLogs.reduce((sum, log) => sum + (log.fat_grams || 0), 0);
+
+        days.push({
+          date: dateStr,
+          logs: dayLogs,
+          totalCalories,
+          totalProtein,
+          totalCarbs,
+          totalFat,
+        });
+      }
+
+      setWeekData(days);
+    } catch (error) {
+      console.error('Error loading week data:', error);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -163,128 +218,174 @@ export default function MealsTabbed() {
             <p className="text-muted-foreground text-sm">Track your nutrition and meal plans</p>
           </div>
 
-          {/* Tabs */}
-          <Tabs defaultValue="diary" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="diary" className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                Meal Diary
-              </TabsTrigger>
-              <TabsTrigger value="plans" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Meal Plans
-              </TabsTrigger>
-            </TabsList>
+          {/* Quick Actions */}
+          <Card className="shadow-card mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Utensils className="h-5 w-5 text-primary" />
+                Quick Actions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Button
+                  onClick={() => setFoodTrackerOpen(true)}
+                  className="h-20 flex flex-col items-center justify-center gap-2"
+                >
+                  <Plus className="h-6 w-6" />
+                  <span className="text-sm">Add Meal</span>
+                </Button>
+                <Button
+                  onClick={() => navigate('/meal-plans')}
+                  variant="outline"
+                  className="h-20 flex flex-col items-center justify-center gap-2"
+                >
+                  <Calendar className="h-6 w-6" />
+                  <span className="text-sm">7-Day Plans</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Meal Diary Tab */}
-            <TabsContent value="diary" className="space-y-6">
-              {/* Quick Actions */}
-              <Card className="shadow-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Utensils className="h-5 w-5 text-primary" />
-                    Quick Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Button
-                      onClick={() => setFoodTrackerOpen(true)}
-                      className="h-20 flex flex-col items-center justify-center gap-2"
-                    >
-                      <Plus className="h-6 w-6" />
-                      <span className="text-sm">Add Meal</span>
-                    </Button>
-                    <Button
-                      onClick={() => navigate('/meal-history')}
-                      variant="outline"
-                      className="h-20 flex flex-col items-center justify-center gap-2"
-                    >
-                      <History className="h-6 w-6" />
-                      <span className="text-sm">View History</span>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Meal Plans Tab */}
-            <TabsContent value="plans" className="space-y-6">
-              <Card className="shadow-card">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-primary" />
-                      Today's Meal Plan
-                    </CardTitle>
-                    <Button
-                      onClick={generateMealPlan}
-                      disabled={loadingMealPlan}
-                      size="sm"
-                      className="flex items-center gap-2"
-                    >
-                      {loadingMealPlan ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Plus className="h-4 w-4" />
+          {/* Meal Plan */}
+          <Card className="shadow-card">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Today's Meal Plan
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {dailyMealPlan && dailyMealPlan.length > 0 ? (
+                <div className="space-y-4">
+                  {dailyMealPlan.map((meal: any, index: number) => (
+                    <div key={index} className="p-4 bg-muted/20 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold capitalize">{meal.meal_type}</h3>
+                        <div className="text-sm text-muted-foreground">
+                          {meal.recommended_calories} cal
+                        </div>
+                      </div>
+                      {meal.meal_suggestions && meal.meal_suggestions.length > 0 && (
+                        <div className="space-y-2">
+                          {meal.meal_suggestions.map((suggestion: any, idx: number) => (
+                            <div key={idx} className="text-sm">
+                              <div className="font-medium">{suggestion.name}</div>
+                              <div className="text-muted-foreground">{suggestion.description}</div>
+                              <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+                                <span>🔥 {suggestion.calories} cal</span>
+                                <span>🥩 {suggestion.protein}g</span>
+                                <span>🍚 {suggestion.carbs}g</span>
+                                <span>🥑 {suggestion.fat}g</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
-                      {loadingMealPlan ? 'Generating...' : 'Generate Plan'}
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {dailyMealPlan && dailyMealPlan.length > 0 ? (
-                    <div className="space-y-4">
-                      {dailyMealPlan.map((meal: any, index: number) => (
-                        <div key={index} className="p-4 bg-muted/20 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold capitalize">{meal.meal_type}</h3>
-                            <div className="text-sm text-muted-foreground">
-                              {meal.recommended_calories} cal
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">No meal plan for today</p>
+                  <p className="text-sm">You can create plans from the 7-Day Plans page.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* History - This Week */}
+          <div className="space-y-4 mt-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold">This Week</h2>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentWeekStart(subDays(currentWeekStart, 7))}
+                >
+                  ‹
+                </Button>
+                <span className="text-sm text-muted-foreground px-2">
+                  {format(currentWeekStart, 'MMM dd')} - {format(new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000), 'MMM dd')}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentWeekStart(subDays(currentWeekStart, -7))}
+                >
+                  ›
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {weekData.map((day) => (
+                <Card key={day.date} className="shadow-card">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">
+                        {format(new Date(day.date), 'EEEE, MMM dd')}
+                      </CardTitle>
+                      <div className="text-sm font-semibold">
+                        {day.totalCalories} <span className="text-muted-foreground font-normal">cal</span>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {day.logs.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2 text-xs mb-3 p-3 bg-muted/30 rounded-lg">
+                        <div className="text-center">
+                          <div className="font-semibold text-success">{day.totalProtein}g</div>
+                          <div className="text-muted-foreground">Protein</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-semibold text-warning">{day.totalCarbs}g</div>
+                          <div className="text-muted-foreground">Carbs</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-semibold text-info">{day.totalFat}g</div>
+                          <div className="text-muted-foreground">Fat</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {day.logs.length > 0 ? (
+                      <div className="space-y-2">
+                        {day.logs.map((log) => (
+                          <div
+                            key={log.id}
+                            className="flex items-center justify-between p-3 bg-muted/20 rounded-lg hover:bg-muted/40 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <Utensils className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium text-sm capitalize">{log.meal_type}</div>
+                                <div className="text-xs text-muted-foreground">{log.food_name}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-semibold text-sm">{log.calories} cal</div>
+                              <div className="text-xs text-muted-foreground">
+                                P:{log.protein_grams}g C:{log.carbs_grams}g F:{log.fat_grams}g
+                              </div>
                             </div>
                           </div>
-                          {meal.meal_suggestions && meal.meal_suggestions.length > 0 && (
-                            <div className="space-y-2">
-                              {meal.meal_suggestions.map((suggestion: any, idx: number) => (
-                                <div key={idx} className="text-sm">
-                                  <div className="font-medium">{suggestion.name}</div>
-                                  <div className="text-muted-foreground">{suggestion.description}</div>
-                                  <div className="flex gap-4 text-xs text-muted-foreground mt-1">
-                                    <span>🔥 {suggestion.calories} cal</span>
-                                    <span>🥩 {suggestion.protein}g</span>
-                                    <span>🍚 {suggestion.carbs}g</span>
-                                    <span>🥑 {suggestion.fat}g</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg font-medium mb-2">No meal plan for today</p>
-                      <p className="text-sm mb-4">Generate a personalized meal plan based on your goals and activity level.</p>
-                      <Button
-                        onClick={generateMealPlan}
-                        disabled={loadingMealPlan}
-                        className="flex items-center gap-2"
-                      >
-                        {loadingMealPlan ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Plus className="h-4 w-4" />
-                        )}
-                        {loadingMealPlan ? 'Generating...' : 'Generate Meal Plan'}
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-muted-foreground text-sm">
+                        No meals logged for this day
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
       <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />

@@ -13,6 +13,8 @@ import Community from "./pages/Community";
 import Auth from "./pages/Auth";
 import Import from "./pages/Import";
 import Meals from "./pages/Meals";
+import MealPlans from "./pages/MealPlans";
+import ShoppingList from "./pages/ShoppingList";
 import MealHistory from "./pages/MealHistory";
 import MarathonCalendarPage from "./pages/MarathonCalendarPage";
 import Offline from "./pages/Offline";
@@ -81,6 +83,8 @@ function App() {
                   <Route path="/community" element={<Community />} />
                   <Route path="/import" element={<Import />} />
                   <Route path="/meals" element={<Meals />} />
+                  <Route path="/meal-plans" element={<MealPlans />} />
+                  <Route path="/shopping-list" element={<ShoppingList />} />
                   <Route path="/meal-history" element={<MealHistory />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/offline" element={<Offline />} />
