@@ -118,7 +118,7 @@ Today's Activity Metrics for ${dateStr}:
 
 Daily Calorie Target for ${dateStr}: ${totalDailyCalories} kcal
 
-Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), and dinner (30%). For each meal, provide 2-3 realistic meal options with:
+Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), dinner (30%), and snacks (10% for training days). For each meal, provide 2-3 realistic meal options with:
 - Specific meal name (Indonesian-style)
 - List of locally available foods/ingredients with EXACT gram portions (e.g., "Nasi putih (150g)", "Ayam goreng (100g)")
 - Brief appetizing description
@@ -146,7 +146,24 @@ Return ONLY valid JSON in this exact format:
     ]
   },
   "lunch": { ... same structure with 40% calories ... },
-  "dinner": { ... same structure with 30% calories ... }
+  "dinner": { ... same structure with 30% calories ... },
+  ${isTrainingDay ? `"snack": {
+    "target_calories": ${Math.round(totalDailyCalories * 0.10)},
+    "target_protein": ${Math.round((totalDailyCalories * 0.10 * 0.20) / 4)},
+    "target_carbs": ${Math.round((totalDailyCalories * 0.10 * 0.60) / 4)},
+    "target_fat": ${Math.round((totalDailyCalories * 0.10 * 0.20) / 9)},
+    "suggestions": [
+      {
+        "name": "Energy gel atau recovery snack",
+        "foods": ["Energy gel (30g)", "Pisang (100g)", "Air kelapa (200ml)"],
+        "description": "Snack untuk recovery setelah latihan",
+        "calories": ${Math.round(totalDailyCalories * 0.10)},
+        "protein": ${Math.round((totalDailyCalories * 0.10 * 0.20) / 4)},
+        "carbs": ${Math.round((totalDailyCalories * 0.10 * 0.60) / 4)},
+        "fat": ${Math.round((totalDailyCalories * 0.10 * 0.20) / 9)}
+      }
+    ]
+  }` : ''}
 }`;
 
         let mealPlan: any = {
@@ -154,6 +171,17 @@ Return ONLY valid JSON in this exact format:
           lunch: { target_calories: Math.round(totalDailyCalories * 0.40), target_protein: Math.round((totalDailyCalories * 0.40 * 0.30) / 4), target_carbs: Math.round((totalDailyCalories * 0.40 * 0.40) / 4), target_fat: Math.round((totalDailyCalories * 0.40 * 0.30) / 9), suggestions: [] },
           dinner: { target_calories: Math.round(totalDailyCalories * 0.30), target_protein: Math.round((totalDailyCalories * 0.30 * 0.30) / 4), target_carbs: Math.round((totalDailyCalories * 0.30 * 0.40) / 4), target_fat: Math.round((totalDailyCalories * 0.30 * 0.30) / 9), suggestions: [] },
         };
+        
+        // Add snack for training days
+        if (isTrainingDay) {
+          mealPlan.snack = { 
+            target_calories: Math.round(totalDailyCalories * 0.10), 
+            target_protein: Math.round((totalDailyCalories * 0.10 * 0.20) / 4), 
+            target_carbs: Math.round((totalDailyCalories * 0.10 * 0.60) / 4), 
+            target_fat: Math.round((totalDailyCalories * 0.10 * 0.20) / 9), 
+            suggestions: [] 
+          };
+        }
 
         if (GROQ_API_KEY) {
           const aiResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -180,17 +208,30 @@ Return ONLY valid JSON in this exact format:
         }
 
         const mealTypes = ["breakfast", "lunch", "dinner"] as const;
+        
+        // Add snack category for training days
+        const isTrainingDay = todayPlan && todayPlan.activity && todayPlan.activity !== 'rest' && (todayPlan.estimatedCalories || todayPlan.distanceKm || todayPlan.duration);
+        if (isTrainingDay) {
+          mealTypes.push("snack");
+        }
+        
         for (const mealType of mealTypes) {
           let meal = mealPlan[mealType] || {};
-          const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : 0.30;
+          const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : mealType === 'snack' ? 0.10 : 0.30;
+          
+          // Adjust macro ratios for snacks (more carbs for recovery)
+          const proteinRatio = mealType === 'snack' ? 0.20 : 0.30;
+          const carbsRatio = mealType === 'snack' ? 0.60 : 0.40;
+          const fatRatio = mealType === 'snack' ? 0.20 : 0.30;
+          
           const record = {
             user_id: userId,
             date: dateStr,
             meal_type: mealType,
             recommended_calories: meal.target_calories ?? Math.round(totalDailyCalories * pct),
-            recommended_protein_grams: meal.target_protein ?? Math.round((totalDailyCalories * pct * 0.30) / 4),
-            recommended_carbs_grams: meal.target_carbs ?? Math.round((totalDailyCalories * pct * 0.40) / 4),
-            recommended_fat_grams: meal.target_fat ?? Math.round((totalDailyCalories * pct * 0.30) / 9),
+            recommended_protein_grams: meal.target_protein ?? Math.round((totalDailyCalories * pct * proteinRatio) / 4),
+            recommended_carbs_grams: meal.target_carbs ?? Math.round((totalDailyCalories * pct * carbsRatio) / 4),
+            recommended_fat_grams: meal.target_fat ?? Math.round((totalDailyCalories * pct * fatRatio) / 9),
             meal_suggestions: Array.isArray(meal.suggestions) ? meal.suggestions : [],
           };
 
