@@ -682,49 +682,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           </CardContent>
         </Card>
 
-        {/* 6. Quick Actions */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              Quick Actions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => navigate('/meals')}
-            >
-              <CalendarDays className="h-4 w-4 mr-2" />
-              Meal Diary
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => navigate('/profile')}
-            >
-              <Target className="h-4 w-4 mr-2" />
-              Profile & Goals
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => navigate('/goals')}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Community
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => navigate('/import')}
-            >
-              <Zap className="h-4 w-4 mr-2" />
-              Import Data
-            </Button>
-          </CardContent>
-        </Card>
 
       </div>
     </div>
