@@ -28,7 +28,11 @@ export function useMealCron() {
         if (h === 6) {
           try {
             const today = new Date().toISOString().split('T')[0];
-            await supabase.functions.invoke('generate-meal-plan-range', { body: { startDate: today, weeks: 7 } });
+            const session = (await supabase.auth.getSession()).data.session;
+            await supabase.functions.invoke('generate-meal-plan-range', {
+              body: { startDate: today, weeks: 7 },
+              headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+            });
           } catch (e) {
             // ignore transient errors; will retry next hour
           }

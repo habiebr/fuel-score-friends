@@ -108,8 +108,10 @@ export default function MealPlans() {
       const startStr = format(startDate, 'yyyy-MM-dd');
 
       // Try to generate the week without clearing existing rows.
+      const session = (await supabase.auth.getSession()).data.session;
       const { error } = await supabase.functions.invoke('generate-meal-plan-range', {
         body: { startDate: startStr, weeks: 1 },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       });
       if (error) throw error;
 
@@ -123,8 +125,12 @@ export default function MealPlans() {
           days.push(format(addDays(startDate, i), 'yyyy-MM-dd'));
         }
         for (const day of days) {
+          const session = (await supabase.auth.getSession()).data.session;
           try {
-            await supabase.functions.invoke('generate-meal-plan', { body: { date: day } });
+            await supabase.functions.invoke('generate-meal-plan', {
+              body: { date: day },
+              headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+            });
           } catch {}
         }
         await loadWeeklyPlans();

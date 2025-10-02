@@ -25,8 +25,10 @@ export function AIMacroEstimation() {
 
     setLoading(true);
     try {
+      const session = (await supabase.auth.getSession()).data.session;
       const { data, error } = await supabase.functions.invoke('estimate-macros', {
-        body: {}
+        body: {},
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       });
 
       if (error) throw error;

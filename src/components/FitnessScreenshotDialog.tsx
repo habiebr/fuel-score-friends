@@ -86,7 +86,7 @@ export function FitnessScreenshotDialog({ open, onOpenChange }: FitnessScreensho
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('age,height,weight,gender,activity_level,fitness_goals,body_fat')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .single();
       if (profileError) {
         console.warn('Failed to load profile for analysis, proceeding without it:', profileError.message);

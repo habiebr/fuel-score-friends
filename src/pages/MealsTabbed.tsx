@@ -197,11 +197,13 @@ export default function MealsTabbed() {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
+      const session = (await supabase.auth.getSession()).data.session;
       const { data, error } = await supabase.functions.invoke('nutrition-ai', {
         body: {
           type: 'food_search',
           query: searchQuery,
         },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       });
 
       if (error) throw error;
