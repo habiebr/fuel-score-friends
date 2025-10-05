@@ -12,10 +12,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "wrangler:dev": "wrangler pages dev dist",
-    "wrangler:deploy": "wrangler pages deploy dist",
-    "cf:deploy": "npm run build:cf && wrangler pages deploy dist --branch=cursor",
-    "pwa:deploy": "npm run build:pwa && wrangler pages deploy dist --branch=cursor",
-    "deploy": "npm run build:pwa && CLOUDFLARE_ACCOUNT_ID=5a73505af9ed48e44ce4caeaa0fdf73f wrangler pages deploy dist --project-name nutrisync --branch=cursor --commit-dirty=true"
+    "wrangler:deploy": "bash scripts/ensure-cursor-branch.sh && wrangler pages deploy dist --branch=cursor",
+    "cf:deploy": "bash scripts/ensure-cursor-branch.sh && npm run build:cf && wrangler pages deploy dist --branch=cursor",
+    "pwa:deploy": "bash scripts/ensure-cursor-branch.sh && npm run build:pwa && wrangler pages deploy dist --branch=cursor",
+    "deploy": "bash scripts/ensure-cursor-branch.sh && npm run build:pwa && CLOUDFLARE_ACCOUNT_ID=5a73505af9ed48e44ce4caeaa0fdf73f wrangler pages deploy dist --project-name nutrisync --branch=cursor --commit-dirty=true"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",

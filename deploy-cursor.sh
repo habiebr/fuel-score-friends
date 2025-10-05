@@ -7,15 +7,10 @@ set -e  # Exit on any error
 
 echo "🚀 Starting deployment from cursor branch..."
 
-# Check if we're on the cursor branch
-CURRENT_BRANCH=$(git branch --show-current)
-if [ "$CURRENT_BRANCH" != "cursor" ]; then
-    echo "⚠️  Not on cursor branch. Current branch: $CURRENT_BRANCH"
-    echo "🔄 Switching to cursor branch..."
-    git checkout cursor
-fi
+# Enforce cursor branch for deploys
+bash scripts/ensure-cursor-branch.sh
 
-echo "✅ On cursor branch: $(git branch --show-current)"
+echo "✅ On cursor branch: cursor"
 
 # Build the PWA
 echo "🔨 Building PWA..."
