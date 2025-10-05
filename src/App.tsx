@@ -20,6 +20,7 @@ import SupabaseDebug from "./pages/SupabaseDebug";
 import MarathonCalendarPage from "./pages/MarathonCalendarPage";
 import Offline from "./pages/Offline";
 import NotFound from "./pages/NotFound";
+import StravaCallback from "./pages/StravaCallback";
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 import { PWAUpdateNotification } from "@/components/PWAUpdateNotification";
 
@@ -88,6 +89,7 @@ function App() {
                   <Route path="/shopping-list" element={<ShoppingList />} />
                   <Route path="/meal-history" element={<MealHistory />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/auth/strava/callback" element={<StravaCallback />} />
                   <Route path="/debug/supabase" element={<SupabaseDebug />} />
                   <Route path="/offline" element={<Offline />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

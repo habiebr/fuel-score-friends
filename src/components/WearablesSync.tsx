@@ -8,6 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { AppleHealthSync } from './AppleHealthSync';
 import { GoogleFitIntegration } from './GoogleFitIntegration';
 import { useUpload } from '@/contexts/UploadContext';
+import { supabase } from '@/integrations/supabase/client';
 
 export function WearablesSync() {
   const [syncing, setSyncing] = useState(false);
@@ -109,6 +110,45 @@ export function WearablesSync() {
 
       {/* Google Fit Integration */}
       <GoogleFitIntegration />
+
+      {/* Strava OAuth */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Watch className="h-5 w-5 text-primary" />
+            Strava
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            className="w-full"
+            variant="secondary"
+            onClick={async () => {
+              const session = (await supabase.auth.getSession()).data.session;
+              if (!session) {
+                toast({ title: 'Please sign in first', variant: 'destructive' });
+                return;
+              }
+              try {
+                const fnUrl = `${import.meta.env.VITE_SUPABASE_URL?.replace('.co', '.co/functions/v1')}/strava-auth?action=start`;
+                const res = await fetch(fnUrl, {
+                  headers: { 'Authorization': `Bearer ${session.access_token}` }
+                });
+                const data = await res.json();
+                if (data.authorizeUrl) {
+                  window.location.href = data.authorizeUrl;
+                } else {
+                  toast({ title: 'Failed to start Strava auth', variant: 'destructive' });
+                }
+              } catch {
+                toast({ title: 'Failed to start Strava auth', variant: 'destructive' });
+              }
+            }}
+          >
+            Connect Strava
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Apple Health for PWA */}
       {!isNative && <AppleHealthSync />}
