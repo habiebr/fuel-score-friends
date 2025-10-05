@@ -108,3 +108,6 @@ STRAVA_WEBHOOK_VERIFY_TOKEN=some-random-token
 Edge Functions added:
 - `strava-auth` (actions: `start`, `callback`)
 - `strava-webhook` (GET verify, POST events)
+
+Frontend callback route:
+- Set Strava app callback to your web URL `/auth/strava/callback` (the page calls the function callback with the user token).

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Watch, Upload, CheckCircle, AlertCircle, Smartphone } from 'lucide-react';
@@ -17,6 +17,7 @@ export function WearablesSync() {
   const { isAvailable, isAuthorized, requestAuthorization, fetchTodayData } = useHealthKit();
   const { uploading, startUpload } = useUpload();
   const isNative = Capacitor.isNativePlatform();
+  const [isStravaConnected, setIsStravaConnected] = useState(false);
 
   const handleFitFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -38,6 +39,19 @@ export function WearablesSync() {
     setLastSync(new Date());
     event.target.value = '';
   };
+
+  useEffect(() => {
+    (async () => {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) return;
+      const { data } = await supabase
+        .from('provider_connections')
+        .select('id')
+        .eq('provider', 'strava')
+        .limit(1);
+      setIsStravaConnected(!!(data && data.length > 0));
+    })();
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -144,8 +158,9 @@ export function WearablesSync() {
                 toast({ title: 'Failed to start Strava auth', variant: 'destructive' });
               }
             }}
+            disabled={isStravaConnected}
           >
-            Connect Strava
+            {isStravaConnected ? 'Strava Connected' : 'Connect Strava'}
           </Button>
         </CardContent>
       </Card>
