@@ -91,3 +91,20 @@ After migration:
 ## 🎉 **You're All Set!**
 
 Once migration is complete, your NutriSync app will be fully connected to your cloud Supabase database with all features working! 🚀
+
+---
+
+## 🔌 Strava Integration
+
+Add these Function env vars in Supabase:
+
+```
+STRAVA_CLIENT_ID=your_client_id
+STRAVA_CLIENT_SECRET=your_client_secret
+STRAVA_REDIRECT_URI=https://<project>.functions.supabase.co/strava-auth?action=callback
+STRAVA_WEBHOOK_VERIFY_TOKEN=some-random-token
+```
+
+Edge Functions added:
+- `strava-auth` (actions: `start`, `callback`)
+- `strava-webhook` (GET verify, POST events)
