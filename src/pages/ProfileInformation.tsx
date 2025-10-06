@@ -25,10 +25,10 @@ export default function ProfileInformation() {
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
+    sex: 'male',
     weight_kg: '',
     height_cm: '',
-    age: '',
-    activity_level: 'moderate'
+    age: ''
   });
 
   useEffect(() => {
@@ -52,10 +52,10 @@ export default function ProfileInformation() {
       setFormData({
         full_name: data.full_name || '',
         email: user.email || '',
+        sex: data.sex || 'male',
         weight_kg: data.weight_kg?.toString() || '',
         height_cm: data.height_cm?.toString() || '',
-        age: data.age?.toString() || '',
-        activity_level: data.activity_level || 'moderate'
+        age: data.age?.toString() || ''
       });
     }
   };
@@ -70,10 +70,10 @@ export default function ProfileInformation() {
         .upsert({
           id: user.id,
           full_name: formData.full_name,
+          sex: formData.sex,
           weight_kg: parseFloat(formData.weight_kg) || null,
           height_cm: parseFloat(formData.height_cm) || null,
           age: parseInt(formData.age) || null,
-          activity_level: formData.activity_level,
           updated_at: new Date().toISOString()
         });
 
@@ -159,6 +159,26 @@ export default function ProfileInformation() {
                   />
                 </div>
 
+                {/* Sex */}
+                <div className="space-y-2">
+                  <Label htmlFor="sex">Sex</Label>
+                  <Select
+                    value={formData.sex}
+                    onValueChange={(value) => setFormData({...formData, sex: value})}
+                  >
+                    <SelectTrigger className="bg-gray-100 dark:bg-gray-800 border-0">
+                      <SelectValue placeholder="Select sex" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Required for accurate BMR calculation (Mifflin-St Jeor equation)
+                  </p>
+                </div>
+
                 {/* Body Metrics Grid */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-2">
@@ -196,24 +216,12 @@ export default function ProfileInformation() {
                   </div>
                 </div>
 
-                {/* Activity Level */}
-                <div className="space-y-2">
-                  <Label htmlFor="activity_level">Activity Level</Label>
-                  <Select
-                    value={formData.activity_level}
-                    onValueChange={(value) => setFormData({...formData, activity_level: value})}
-                  >
-                    <SelectTrigger className="bg-gray-100 dark:bg-gray-800 border-0">
-                      <SelectValue placeholder="Select activity level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sedentary">Sedentary (little/no exercise)</SelectItem>
-                      <SelectItem value="light">Light (1-3 runs/week)</SelectItem>
-                      <SelectItem value="moderate">Moderate (5-6 runs/week)</SelectItem>
-                      <SelectItem value="active">Active (6-7 runs/week)</SelectItem>
-                      <SelectItem value="very_active">Very Active (2x/day training)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Info about activity level */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p className="text-sm text-blue-900 dark:text-blue-100">
+                    <strong>Activity Level</strong> is automatically calculated from your Training Goals and Session data. 
+                    Set your goals to get personalized nutrition targets.
+                  </p>
                 </div>
 
                 {/* Save Button */}
