@@ -5,6 +5,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
+import { ActionFAB } from '@/components/ActionFAB';
 import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
@@ -56,7 +57,11 @@ const Index = () => {
         />
         </div>
       </div>
-      <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />
+      <BottomNav />
+      <ActionFAB
+        onLogMeal={() => setFoodTrackerOpen(true)}
+        onUploadActivity={() => setFitnessScreenshotOpen(true)}
+      />
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <FitnessScreenshotDialog open={fitnessScreenshotOpen} onOpenChange={setFitnessScreenshotOpen} />
     </>
