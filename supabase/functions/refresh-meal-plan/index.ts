@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
-import { calculateTDEE } from "../_shared/nutrition.ts";
+import { generateUserMealPlan, mealPlanToDbRecords } from "../_shared/meal-planner.ts";
+import { UserProfile } from "../_shared/nutrition-unified.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -18,14 +19,14 @@ serve(async (req) => {
     const fifteenMinAgo = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
     const today = new Date().toISOString().split('T')[0];
 
-    // Find users with wearable updates in last 15 minutes
-    const { data: updatedWearables } = await supabaseAdmin
-      .from('wearable_data')
+    // Find users with Google Fit updates in last 15 minutes
+    const { data: updatedFit } = await supabaseAdmin
+      .from('google_fit_data')
       .select('user_id, date, calories_burned, steps, updated_at')
       .eq('date', today)
       .gte('updated_at', fifteenMinAgo);
 
-    const userIds = Array.from(new Set((updatedWearables || []).map(w => w.user_id)));
+    const userIds = Array.from(new Set((updatedFit || []).map(w => w.user_id)));
     if (userIds.length === 0) {
       return new Response(JSON.stringify({ refreshed: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -35,7 +36,7 @@ serve(async (req) => {
     // Fetch profiles for these users
     const { data: profiles } = await supabaseAdmin
       .from('profiles')
-      .select('user_id, weight, height, age, activity_level, fitness_goals, target_date, fitness_level, meal_plan_refresh_mode, timezone')
+      .select('user_id, weight_kg, height_cm, age, sex, meal_plan_refresh_mode, timezone')
       .in('user_id', userIds);
 
     let refreshed = 0;
@@ -69,39 +70,30 @@ serve(async (req) => {
       }
 
       if (!shouldRefresh) continue;
-      // wearable for this user
-      const wearable = (updatedWearables || []).find(w => w.user_id === profile.user_id);
+      // fit for this user
+      const fit = (updatedFit || []).find(w => w.user_id === profile.user_id);
 
-      const fitnessGoal = profile?.fitness_goals?.[0];
-      const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
+      const userProfile: UserProfile = {
+        weightKg: profile.weight_kg || 70,
+        heightCm: profile.height_cm || 170,
+        age: profile.age || 30,
+        sex: (profile.sex || 'male') as 'male' | 'female'
+      };
 
-      const tdee = calculateTDEE({
-        weightKg: profile?.weight,
-        heightCm: profile?.height,
-        ageYears: profile?.age,
-        activityLevel: profile?.activity_level,
-        wearableCaloriesToday: wearable?.calories_burned || 0,
-        fitnessGoal,
-        weekPlan,
+      const plan = await generateUserMealPlan({
+        userId: profile.user_id,
+        date: today,
+        userProfile,
+        googleFitCalories: fit?.calories_burned || 0,
+        useAI: false,
       });
 
-      // Reuse generate-meal-plan AI if available via HTTP call to our own endpoint
-      const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-meal-plan`;
-      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      if (!url || !serviceKey) continue;
+      const records = mealPlanToDbRecords(profile.user_id, plan);
+      await supabaseAdmin
+        .from('daily_meal_plans')
+        .upsert(records, { onConflict: 'user_id,date,meal_type' });
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${serviceKey}`
-        },
-        body: JSON.stringify({ date: today })
-      });
-
-      if (res.ok) {
-        refreshed += 1;
-      }
+      refreshed += 1;
     }
 
     return new Response(JSON.stringify({ refreshed }), {
