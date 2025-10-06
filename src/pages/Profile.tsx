@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { WearablePerformanceGraph } from '@/components/WearablePerformanceGraph';
+// WearablePerformanceGraph removed - using Google Fit data now
 import { BodyMetricsForm } from '@/components/BodyMetricsForm';
 import { LogOut, User, Target, Activity as ActivityIcon, Download, TrendingUp, Flame, Heart, Zap, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -109,8 +109,8 @@ export default function Profile() {
       const endDate = new Date();
       const startDate = subDays(endDate, 6);
 
-      const { data: wearableData } = await supabase
-        .from('wearable_data')
+      const { data: googleFitData } = await supabase
+        .from('google_fit_data')
         .select('*')
         .eq('user_id', user.id)
         .gte('date', format(startDate, 'yyyy-MM-dd'))
@@ -125,8 +125,8 @@ export default function Profile() {
         .lte('date', format(endDate, 'yyyy-MM-dd'))
         .order('date', { ascending: true });
 
-      // Format data for charts
-      const formattedActivity = ((wearableData as any[]) || []).map((d: any) => ({
+      // Format data for charts (Google Fit)
+      const formattedActivity = ((googleFitData as any[]) || []).map((d: any) => ({
         date: format(new Date(d.date), 'MMM dd'),
         steps: d.steps,
         calories: d.calories_burned,
@@ -219,21 +219,21 @@ export default function Profile() {
             </Card>
           </div>
 
-          {/* Import Data Section */}
+          {/* Google Fit Sync Section */}
           <Card className="premium-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-lg mb-1">Import Activity Data</h3>
-                  <p className="text-sm text-muted-foreground">Sync data from Garmin & health apps</p>
+                  <h3 className="font-semibold text-lg mb-1">Google Fit Integration</h3>
+                  <p className="text-sm text-muted-foreground">Sync your activity data automatically</p>
                 </div>
                 <Button 
                   variant="default" 
-                  onClick={() => navigate('/import')}
+                  onClick={() => navigate('/profile/integrations')}
                   className="premium-button"
                 >
                   <Upload className="h-4 w-4 mr-2" />
-                  Import
+                  Connect
                 </Button>
               </div>
             </CardContent>
@@ -292,9 +292,9 @@ export default function Profile() {
             </CardContent>
           </Card>
 
-          {/* Activity Metrics with Premium Tabs */}
+          {/* Google Fit Activity Metrics */}
           <div className="mb-6">
-            <WearablePerformanceGraph />
+            {/* Google Fit performance graph will be integrated here */}
           </div>
 
           {/* Activity Metrics with Premium Tabs */}

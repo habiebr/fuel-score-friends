@@ -7,7 +7,11 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { UploadProvider } from "@/contexts/UploadContext";
 import { ErrorBoundary } from "react-error-boundary";
 import Index from "./pages/Index";
-import Profile from "./pages/Profile";
+import ProfileNew from "./pages/ProfileNew";
+import ProfileInformation from "./pages/ProfileInformation";
+import FoodPreferences from "./pages/FoodPreferences";
+import NotificationsSettings from "./pages/NotificationsSettings";
+import AppIntegrations from "./pages/AppIntegrations";
 import Goals from "./pages/Goals";
 import Community from "./pages/Community";
 import Auth from "./pages/Auth";
@@ -78,7 +82,11 @@ function App() {
               <BrowserRouter>
                 <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/profile" element={<ProfileNew />} />
+                  <Route path="/profile/information" element={<ProfileInformation />} />
+                  <Route path="/profile/food-preferences" element={<FoodPreferences />} />
+                  <Route path="/profile/notifications" element={<NotificationsSettings />} />
+                  <Route path="/profile/integrations" element={<AppIntegrations />} />
                   <Route path="/goals" element={<Goals />} />
                   <Route path="/marathons" element={<MarathonCalendarPage />} />
                   <Route path="/community" element={<Community />} />
