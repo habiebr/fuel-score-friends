@@ -155,6 +155,17 @@ export default function ProfileNew() {
               </CardContent>
             </Card>
 
+            <Card className="shadow-card border-orange-200 dark:border-orange-800 cursor-pointer" onClick={handleLogout}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
+                    <LogOut className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <span className="flex-1 font-medium text-orange-600 dark:text-orange-400">Logout</span>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="shadow-card border-red-200 dark:border-red-800">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
