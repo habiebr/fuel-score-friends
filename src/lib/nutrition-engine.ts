@@ -350,3 +350,284 @@ export function convertLegacyToTarget(
   };
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * RECOMMENDATION ENGINE (Personalization Engine)
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+export interface Recipe {
+  id: string;
+  name: string;
+  nutrients_per_serving: {
+    calories: number;
+    cho_g: number;
+    protein_g: number;
+    fat_g: number;
+  };
+  prep_time: number;
+  cost_est: number;
+  tags: string[];
+  ingredients?: string[];
+}
+
+export interface UserPreferences {
+  dietary_restrictions: string[];
+  eating_behaviors: string[];
+  time_budget_min?: number;
+}
+
+export interface RecipeScore {
+  recipe: Recipe;
+  score: number;
+  reasons: string[];
+  compatibility: 'excellent' | 'good' | 'fair' | 'incompatible';
+}
+
+/**
+ * STEP 12: Filter recipes based on dietary restrictions
+ */
+export function filterRecipesByRestrictions(
+  recipes: Recipe[],
+  restrictions: string[]
+): Recipe[] {
+  if (restrictions.length === 0) return recipes;
+
+  return recipes.filter(recipe => {
+    const recipeTags = recipe.tags.map(t => t.toLowerCase());
+    const recipeIngredients = (recipe.ingredients || []).map(i => i.toLowerCase());
+    const combinedText = [...recipeTags, ...recipeIngredients].join(' ');
+
+    // Check each restriction
+    for (const restriction of restrictions) {
+      const restrictionLower = restriction.toLowerCase();
+
+      // Common restriction patterns
+      if (restrictionLower.includes('lactose') || restrictionLower.includes('dairy')) {
+        if (combinedText.includes('milk') || combinedText.includes('cheese') || 
+            combinedText.includes('yogurt') || combinedText.includes('dairy')) {
+          return false;
+        }
+      }
+
+      if (restrictionLower.includes('gluten')) {
+        if (combinedText.includes('wheat') || combinedText.includes('bread') || 
+            combinedText.includes('pasta') || combinedText.includes('flour')) {
+          return false;
+        }
+      }
+
+      if (restrictionLower.includes('no red meat') || restrictionLower.includes('red meat')) {
+        if (combinedText.includes('beef') || combinedText.includes('pork') || 
+            combinedText.includes('lamb')) {
+          return false;
+        }
+      }
+
+      if (restrictionLower.includes('vegan')) {
+        if (combinedText.includes('meat') || combinedText.includes('dairy') || 
+            combinedText.includes('egg') || combinedText.includes('fish')) {
+          return false;
+        }
+      }
+
+      if (restrictionLower.includes('vegetarian')) {
+        if (combinedText.includes('meat') || combinedText.includes('chicken') || 
+            combinedText.includes('beef') || combinedText.includes('fish')) {
+          return false;
+        }
+      }
+
+      if (restrictionLower.includes('nut')) {
+        if (combinedText.includes('almond') || combinedText.includes('peanut') || 
+            combinedText.includes('cashew') || combinedText.includes('walnut')) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
+}
+
+/**
+ * STEP 13: Score recipes based on nutrition target match
+ */
+export function scoreRecipeForTarget(
+  recipe: Recipe,
+  target: { kcal: number; cho_g: number; protein_g: number; fat_g: number }
+): number {
+  const nutrients = recipe.nutrients_per_serving;
+  
+  // Calculate how well each macro matches the target (per serving)
+  const calorieMatch = 1 - Math.abs(nutrients.calories - target.kcal) / target.kcal;
+  const choMatch = 1 - Math.abs(nutrients.cho_g - target.cho_g) / target.cho_g;
+  const proteinMatch = 1 - Math.abs(nutrients.protein_g - target.protein_g) / target.protein_g;
+  const fatMatch = 1 - Math.abs(nutrients.fat_g - target.fat_g) / target.fat_g;
+  
+  // Weighted average (CHO most important for runners)
+  const score = (
+    calorieMatch * 0.3 +
+    choMatch * 0.4 +
+    proteinMatch * 0.2 +
+    fatMatch * 0.1
+  );
+  
+  return Math.max(0, Math.min(1, score)) * 100; // 0-100 scale
+}
+
+/**
+ * STEP 14: Boost recipe score based on eating behaviors
+ */
+export function applyBehaviorBoost(
+  recipe: Recipe,
+  behaviors: string[],
+  mealType: MealType
+): number {
+  let boost = 0;
+  const recipeName = recipe.name.toLowerCase();
+  const recipeTags = recipe.tags.map(t => t.toLowerCase()).join(' ');
+
+  for (const behavior of behaviors) {
+    const behaviorLower = behavior.toLowerCase();
+
+    // Breakfast preferences
+    if (mealType === 'breakfast' && behaviorLower.includes('breakfast')) {
+      if (behaviorLower.includes('egg') && recipeName.includes('egg')) {
+        boost += 15;
+      }
+      if (behaviorLower.includes('oatmeal') && recipeName.includes('oat')) {
+        boost += 15;
+      }
+      if (behaviorLower.includes('protein shake') && recipeName.includes('shake')) {
+        boost += 15;
+      }
+    }
+
+    // Protein preferences
+    if (behaviorLower.includes('plant-based') || behaviorLower.includes('plant based')) {
+      if (recipeTags.includes('plant-based') || recipeTags.includes('vegan') || 
+          recipeTags.includes('vegetarian')) {
+        boost += 20;
+      }
+    }
+
+    if (behaviorLower.includes('high protein')) {
+      if (recipe.nutrients_per_serving.protein_g > 25) {
+        boost += 10;
+      }
+    }
+
+    // Meal timing preferences
+    if (behaviorLower.includes('light dinner') && mealType === 'dinner') {
+      if (recipe.nutrients_per_serving.calories < 500) {
+        boost += 10;
+      }
+    }
+  }
+
+  return boost;
+}
+
+/**
+ * STEP 15: Recommend recipes for a meal (MAIN RECOMMENDATION FUNCTION)
+ */
+export function recommendRecipesForMeal(
+  recipes: Recipe[],
+  mealTarget: { kcal: number; cho_g: number; protein_g: number; fat_g: number },
+  mealType: MealType,
+  preferences: UserPreferences,
+  topN: number = 10
+): RecipeScore[] {
+  // Step 1: Filter by dietary restrictions
+  const compatibleRecipes = filterRecipesByRestrictions(recipes, preferences.dietary_restrictions);
+
+  // Step 2: Filter by time budget if specified
+  let timeFilteredRecipes = compatibleRecipes;
+  if (preferences.time_budget_min) {
+    timeFilteredRecipes = compatibleRecipes.filter(
+      r => r.prep_time <= preferences.time_budget_min!
+    );
+  }
+
+  // Step 3: Score each recipe
+  const scoredRecipes: RecipeScore[] = timeFilteredRecipes.map(recipe => {
+    // Base score from nutrition match
+    let score = scoreRecipeForTarget(recipe, mealTarget);
+
+    // Apply behavior boost
+    const behaviorBoost = applyBehaviorBoost(recipe, preferences.eating_behaviors, mealType);
+    score += behaviorBoost;
+
+    // Determine compatibility level
+    let compatibility: 'excellent' | 'good' | 'fair' | 'incompatible';
+    const reasons: string[] = [];
+
+    if (score >= 80) {
+      compatibility = 'excellent';
+      reasons.push('Excellent nutrition match');
+    } else if (score >= 60) {
+      compatibility = 'good';
+      reasons.push('Good nutrition match');
+    } else if (score >= 40) {
+      compatibility = 'fair';
+      reasons.push('Fair nutrition match');
+    } else {
+      compatibility = 'incompatible';
+      reasons.push('Poor nutrition match');
+    }
+
+    if (behaviorBoost > 0) {
+      reasons.push('Matches your eating preferences');
+    }
+
+    if (recipe.prep_time <= 15) {
+      reasons.push('Quick to prepare');
+      score += 5; // Bonus for convenience
+    }
+
+    return {
+      recipe,
+      score: Math.min(100, score),
+      reasons,
+      compatibility
+    };
+  });
+
+  // Step 4: Sort by score and return top N
+  return scoredRecipes
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topN);
+}
+
+/**
+ * STEP 16: Generate meal suggestions for entire day
+ */
+export function generateDailyMealSuggestions(
+  recipes: Recipe[],
+  dayTarget: DayTarget,
+  mealPlan: MealPlan,
+  preferences: UserPreferences
+): Record<MealType, RecipeScore[]> {
+  const suggestions: Record<string, RecipeScore[]> = {};
+
+  for (const meal of mealPlan.meals) {
+    const mealTarget = {
+      kcal: meal.targetKcal,
+      cho_g: meal.targetCHO_g,
+      protein_g: meal.targetProtein_g,
+      fat_g: meal.targetFat_g
+    };
+
+    suggestions[meal.mealType] = recommendRecipesForMeal(
+      recipes,
+      mealTarget,
+      meal.mealType,
+      preferences,
+      5 // Top 5 suggestions per meal
+    );
+  }
+
+  return suggestions as Record<MealType, RecipeScore[]>;
+}
+

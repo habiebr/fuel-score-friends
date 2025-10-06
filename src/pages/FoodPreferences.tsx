@@ -18,32 +18,124 @@ export default function FoodPreferences() {
   const { toast } = useToast();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [restrictions, setRestrictions] = useState<string[]>(['Lactose Intolerant', 'No Red Meat']);
-  const [behaviors, setBehaviors] = useState<string[]>(['Eat eggs for breakfast', 'No caffeine after 2 PM', 'Prefer plant-based proteins']);
+  const [restrictions, setRestrictions] = useState<string[]>([]);
+  const [behaviors, setBehaviors] = useState<string[]>([]);
   const [restrictionInput, setRestrictionInput] = useState('');
   const [behaviorInput, setBehaviorInput] = useState('');
 
-  const addRestriction = () => {
+  useEffect(() => {
+    if (user) {
+      loadPreferences();
+    }
+  }, [user]);
+
+  const loadPreferences = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('dietary_restrictions, eating_behaviors')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setRestrictions(data.dietary_restrictions || []);
+        setBehaviors(data.eating_behaviors || []);
+      }
+    } catch (error: any) {
+      console.error('Error loading preferences:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const savePreferences = async () => {
+    if (!user) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          dietary_restrictions: restrictions,
+          eating_behaviors: behaviors,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Preferences saved",
+        description: "Your food preferences have been updated. Meal suggestions will be personalized accordingly.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Save failed",
+        description: error.message || "Could not save your preferences.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addRestriction = async () => {
     if (restrictionInput.trim() && !restrictions.includes(restrictionInput.trim())) {
-      setRestrictions([...restrictions, restrictionInput.trim()]);
+      const newRestrictions = [...restrictions, restrictionInput.trim()];
+      setRestrictions(newRestrictions);
       setRestrictionInput('');
+      // Auto-save
+      await savePreferencesQuiet(newRestrictions, behaviors);
     }
   };
 
-  const removeRestriction = (item: string) => {
-    setRestrictions(restrictions.filter(r => r !== item));
+  const removeRestriction = async (item: string) => {
+    const newRestrictions = restrictions.filter(r => r !== item);
+    setRestrictions(newRestrictions);
+    // Auto-save
+    await savePreferencesQuiet(newRestrictions, behaviors);
   };
 
-  const addBehavior = () => {
+  const addBehavior = async () => {
     if (behaviorInput.trim() && !behaviors.includes(behaviorInput.trim())) {
-      setBehaviors([...behaviors, behaviorInput.trim()]);
+      const newBehaviors = [...behaviors, behaviorInput.trim()];
+      setBehaviors(newBehaviors);
       setBehaviorInput('');
+      // Auto-save
+      await savePreferencesQuiet(restrictions, newBehaviors);
     }
   };
 
-  const removeBehavior = (item: string) => {
-    setBehaviors(behaviors.filter(b => b !== item));
+  const removeBehavior = async (item: string) => {
+    const newBehaviors = behaviors.filter(b => b !== item);
+    setBehaviors(newBehaviors);
+    // Auto-save
+    await savePreferencesQuiet(restrictions, newBehaviors);
+  };
+
+  const savePreferencesQuiet = async (newRestrictions: string[], newBehaviors: string[]) => {
+    if (!user) return;
+
+    try {
+      await supabase
+        .from('profiles')
+        .update({
+          dietary_restrictions: newRestrictions,
+          eating_behaviors: newBehaviors,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+    } catch (error) {
+      console.error('Error auto-saving preferences:', error);
+    }
   };
 
   return (
@@ -78,6 +170,13 @@ export default function FoodPreferences() {
           {/* Content */}
           <div className="p-4">
             <h2 className="text-2xl font-bold mb-4">Food Preferences</h2>
+            
+            {/* Info Box */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-900 dark:text-blue-100">
+                <strong>AI-Powered Meal Suggestions:</strong> Your preferences are used by the Meal Generator and Recipe Recommender to personalize meal plans, filter incompatible recipes, and optimize nutrition targets based on your needs.
+              </p>
+            </div>
 
             {/* Dietary Restrictions */}
             <Card className="shadow-card mb-4">
