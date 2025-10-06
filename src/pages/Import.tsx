@@ -1,6 +1,6 @@
-import { WearablesSync } from '@/components/WearablesSync';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 
 export default function Import() {
@@ -22,25 +22,58 @@ export default function Import() {
           
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent mb-2">
-              Import Activity Data
+              Google Fit Integration
             </h1>
             <p className="text-muted-foreground">
-              Sync your fitness data from Garmin devices and health apps
+              Connect your Google Fit account to automatically sync your activity data
             </p>
           </div>
         </div>
 
-        {/* Wearables Sync Component */}
-        <WearablesSync />
+        {/* Google Fit Card */}
+        <Card className="shadow-card">
+          <CardContent className="p-8 text-center">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Activity className="w-8 h-8 text-primary" />
+            </div>
+            <h2 className="text-2xl font-bold mb-3">Connect Google Fit</h2>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              Automatically sync your steps, calories burned, active minutes, and heart rate data from Google Fit.
+            </p>
+            <Button 
+              size="lg"
+              onClick={() => navigate('/profile/integrations')}
+              className="min-w-[200px]"
+            >
+              Go to App Integrations
+            </Button>
+          </CardContent>
+        </Card>
 
-        {/* Additional Info */}
-        <div className="mt-6 p-4 bg-card border border-border rounded-lg">
-          <h3 className="font-semibold mb-2">Supported Devices & Formats</h3>
-          <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• Google Fit (Real-time API integration)</li>
-            <li>• Garmin devices (.fit files)</li>
-            <li>• Apple Health (XML export)</li>
-            <li>• Bulk import support for multiple files</li>
+        {/* Info Card */}
+        <div className="mt-6 p-6 bg-card border border-border rounded-lg">
+          <h3 className="font-semibold text-lg mb-3">What data is synced?</h3>
+          <ul className="text-sm text-muted-foreground space-y-2">
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">✓</span>
+              <span><strong>Daily steps:</strong> Track your movement throughout the day</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">✓</span>
+              <span><strong>Calories burned:</strong> Monitor your energy expenditure</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">✓</span>
+              <span><strong>Active minutes:</strong> See how much you move</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">✓</span>
+              <span><strong>Heart rate:</strong> Average heart rate data (if available)</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5">✓</span>
+              <span><strong>Activity sessions:</strong> Running, cycling, and other workouts</span>
+            </li>
           </ul>
         </div>
       </div>
