@@ -14,7 +14,7 @@ export default function MarathonCalendarPage() {
     <>
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-7xl mx-auto p-4">
+        <div className="max-w-none mx-auto p-4">
           {/* Header */}
           <div className="mb-6">
             <Button

@@ -8,7 +8,7 @@ export default function Import() {
 
   return (
     <div className="min-h-screen bg-gradient-background pb-20">
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="max-w-none mx-auto p-6">
         {/* Header with Back Button */}
         <div className="mb-8">
           <Button

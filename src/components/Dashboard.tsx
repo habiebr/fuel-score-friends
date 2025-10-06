@@ -407,7 +407,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
   return (
     <div className="min-h-screen bg-gradient-background p-4 pb-28 safe-area-inset">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full mx-auto">
         {/* Header - Mobile Optimized */}
         <div className="mb-4">
           <h1 className="text-2xl font-bold text-foreground leading-tight">

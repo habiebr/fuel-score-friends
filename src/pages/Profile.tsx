@@ -173,7 +173,7 @@ export default function Profile() {
     <>
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-none mx-auto p-6">
           {/* Premium Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-2">

@@ -74,7 +74,7 @@ export default function Community() {
     <>
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-7xl mx-auto p-4">
+        <div className="max-w-none mx-auto p-4">
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-foreground mb-2">Community</h1>

@@ -112,7 +112,7 @@ export default function MealHistory() {
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-7xl mx-auto p-4">
+        <div className="max-w-none mx-auto p-4">
           {/* Header */}
           <div className="mb-6">
             <Button variant="ghost" onClick={() => navigate('/meals')} className="mb-4 -ml-2">

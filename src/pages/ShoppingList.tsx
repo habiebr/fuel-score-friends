@@ -83,7 +83,7 @@ export default function ShoppingList() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-7xl mx-auto p-4">
+        <div className="max-w-none mx-auto p-4">
           <div className="animate-pulse">
             <div className="w-12 h-12 bg-primary rounded-full"></div>
           </div>
@@ -94,7 +94,7 @@ export default function ShoppingList() {
 
   return (
     <div className="min-h-screen bg-gradient-background pb-20">
-      <div className="max-w-7xl mx-auto p-4">
+      <div className="max-w-none mx-auto p-4">
         <div className="mb-6">
           <Button variant="ghost" onClick={() => navigate(`/meal-plans?start=${format(startDate, 'yyyy-MM-dd')}`)} className="mb-4 -ml-2">
             <ArrowLeft className="h-4 w-4 mr-2" />
