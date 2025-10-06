@@ -392,13 +392,13 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       // Calculate targets from user profile or use defaults
       const { data: profile } = await supabase
         .from('profiles')
-        .select('age, gender, weight_kg, height_cm, activity_level')
-        .eq('id', user.id)
-        .single();
+        .select('age, sex, weight_kg, height_cm, activity_level')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
       const bmr = profile ? calculateBMR(
         profile.age || 30,
-        profile.gender || 'male',
+        (profile.sex || 'male'),
         profile.weight_kg || 70,
         profile.height_cm || 170
       ) : 1800;
