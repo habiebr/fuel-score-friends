@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomNav } from '@/components/BottomNav';
-import { ChevronRight, User as UserIcon, Utensils, Bell, Smartphone, Shield, Download, X } from 'lucide-react';
+import { ChevronRight, User as UserIcon, Utensils, Bell, Smartphone, Shield, Download, X, Target } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
@@ -42,6 +42,13 @@ export default function ProfileNew() {
       title: 'Profile Information',
       subtitle: 'Personal details and body metrics',
       path: '/profile/information',
+      iconBg: 'bg-gray-100 dark:bg-gray-800'
+    },
+    {
+      icon: Target,
+      title: 'Training Goals',
+      subtitle: 'Set your fitness objectives',
+      path: '/goals',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
     {
