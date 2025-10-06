@@ -18,6 +18,7 @@ interface LeaderboardEntry {
   nutrition_score: number;
   rank: number;
   composite_score: number;
+  email?: string;
 }
 
 export default function Community() {
@@ -40,30 +41,50 @@ export default function Community() {
 
     setLoading(true);
     try {
-      // Get all users with their profiles and nutrition scores
-      const { data: profiles } = await supabase
+      // Get ALL users - don't filter by full_name to show everyone
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name')
-        .not('full_name', 'is', null);
+        .select('id, full_name, email');
 
-      if (!profiles) return;
+      if (profilesError) {
+        console.error('Error loading profiles:', profilesError);
+        return;
+      }
+
+      if (!profiles || profiles.length === 0) {
+        console.log('No profiles found in database');
+        setLoading(false);
+        return;
+      }
+
+      console.log(`Found ${profiles.length} total users in database`);
 
       // Get nutrition scores for the past 7 days
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      const { data: scores } = await supabase
+      const { data: scores, error: scoresError } = await supabase
         .from('nutrition_scores')
         .select('user_id, daily_score, date')
         .gte('date', sevenDaysAgo.toISOString().split('T')[0]);
 
+      if (scoresError) {
+        console.error('Error loading nutrition scores:', scoresError);
+      }
+      console.log(`Found ${scores?.length || 0} nutrition score entries`);
+
       // Get Google Fit data for weekly miles
-      const { data: fitData } = await supabase
+      const { data: fitData, error: fitError } = await supabase
         .from('google_fit_data')
         .select('user_id, distance_meters, date')
         .gte('date', sevenDaysAgo.toISOString().split('T')[0]);
 
-      // Calculate stats per user
+      if (fitError) {
+        console.error('Error loading Google Fit data:', fitError);
+      }
+      console.log(`Found ${fitData?.length || 0} Google Fit data entries`);
+
+      // Calculate stats per user - include ALL users even with no data
       const userStats = profiles.map(profile => {
         const userScores = scores?.filter(s => s.user_id === profile.id) || [];
         const avgScore = userScores.length > 0
@@ -75,9 +96,17 @@ export default function Community() {
         const weeklyMiles = Math.round(weeklyMeters / 1609.34);
         const totalMiles = weeklyMiles * 10; // Placeholder: should be from cumulative data
 
+        // Generate display name: use full_name, or email username, or "Runner"
+        let displayName = 'Anonymous Runner';
+        if (profile.full_name) {
+          displayName = profile.full_name;
+        } else if (profile.email) {
+          displayName = profile.email.split('@')[0];
+        }
+
         return {
           user_id: profile.id,
-          full_name: profile.full_name || 'Anonymous Runner',
+          full_name: displayName,
           location: 'New York, NY', // Placeholder: should be from profile
           total_miles: totalMiles,
           weekly_miles: weeklyMiles,
@@ -87,6 +116,8 @@ export default function Community() {
         };
       });
 
+      console.log(`Processed ${userStats.length} user stats`);
+
       // Calculate composite score (60% nutrition, 40% miles-based)
       // Normalize both metrics to 0-100 scale
       const maxMiles = Math.max(...userStats.map(u => u.total_miles), 1);
@@ -95,21 +126,41 @@ export default function Community() {
         const normalizedNutrition = entry.nutrition_score;
         
         // Composite score: 60% nutrition (more important) + 40% miles
+        // If both are 0, give a small base score to show in leaderboard
         entry.composite_score = (normalizedNutrition * 0.6) + (normalizedMiles * 0.4);
       });
 
       // Sort by composite score (both nutrition and miles) and assign ranks
-      userStats.sort((a, b) => b.composite_score - a.composite_score);
+      userStats.sort((a, b) => {
+        // Sort by composite score descending
+        if (b.composite_score !== a.composite_score) {
+          return b.composite_score - a.composite_score;
+        }
+        // If tied, sort by nutrition score
+        if (b.nutrition_score !== a.nutrition_score) {
+          return b.nutrition_score - a.nutrition_score;
+        }
+        // If still tied, sort by miles
+        return b.total_miles - a.total_miles;
+      });
+      
       userStats.forEach((entry, index) => {
         entry.rank = index + 1;
       });
+
+      console.log('Top 5 users:', userStats.slice(0, 5).map(u => ({
+        name: u.full_name,
+        score: u.nutrition_score,
+        miles: u.total_miles,
+        composite: u.composite_score
+      })));
 
       // Find current user's rank
       const currentUserRank = userStats.find(entry => entry.user_id === user.id);
       setUserRank(currentUserRank || null);
 
-      // Set top performers
-      setLeaderboard(userStats.slice(0, 20));
+      // Set ALL users (not just top 20) so we can show everyone
+      setLeaderboard(userStats);
 
     } catch (error) {
       console.error('Error loading leaderboard:', error);
@@ -285,14 +336,20 @@ export default function Community() {
                   <CardContent className="p-6">
                     <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-yellow-500" />
-                      Weekly Leaderboard
+                      Global Leaderboard
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Top performers in your region this week
+                      All {leaderboard.length} registered NutriSync users ranked by nutrition + miles
                     </p>
 
-                    <div className="space-y-3">
-                      {leaderboard.map((entry, index) => (
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                      {leaderboard.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                          <p>No users found. Be the first to start logging!</p>
+                        </div>
+                      ) : (
+                        leaderboard.map((entry, index) => (
                         <div
                           key={entry.user_id}
                           className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
@@ -342,7 +399,8 @@ export default function Community() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      ))
+                      )}
                     </div>
                   </CardContent>
                 </Card>
