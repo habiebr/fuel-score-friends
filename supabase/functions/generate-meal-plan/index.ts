@@ -2,69 +2,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
-// Inline minimal nutrition helpers to avoid shared import issues
-type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | string | null | undefined;
-interface TDEEInput {
-  weightKg?: number | null;
-  heightCm?: number | null;
-  ageYears?: number | null;
-  activityLevel?: ActivityLevel;
-  wearableCaloriesToday?: number | null;
-  fitnessGoal?: string | null;
-  weekPlan?: Array<{ day: string; activity?: string; duration?: number }> | null;
-}
-interface TDEEResult {
-  bmr: number;
-  activityMultiplier: number;
-  baseTDEE: number;
-  trainingAdjustment: number;
-  totalDailyCalories: number;
-  trainingIntensity: 'low' | 'moderate' | 'moderate-high' | 'high';
-}
-function inlineCalculateBMR(weightKg?: number | null, heightCm?: number | null, ageYears?: number | null): number {
-  if (!weightKg || !heightCm || !ageYears) return 2000; // safe default to avoid zeroing
-  return Math.round(10 * weightKg + 6.25 * heightCm - 5 * ageYears + 5);
-}
-function inlineGetActivityMultiplier(level?: ActivityLevel): number {
-  const map: Record<string, number> = {
-    sedentary: 1.2,
-    light: 1.375,
-    moderate: 1.55,
-    active: 1.725,
-    very_active: 1.9,
-  };
-  const key = String(level || 'moderate').toLowerCase();
-  return map[key] ?? 1.55;
-}
-function calculateTDEE(input: TDEEInput): TDEEResult {
-  const bmr = inlineCalculateBMR(input.weightKg, input.heightCm, input.ageYears);
-  const activityMultiplier = inlineGetActivityMultiplier(input.activityLevel);
-  let total = Math.round(bmr * activityMultiplier);
-  if (typeof input.wearableCaloriesToday === 'number' && input.wearableCaloriesToday > 0) {
-    total = Math.round(bmr + input.wearableCaloriesToday);
-  }
-  let trainingAdjustment = 0;
-  let trainingIntensity: TDEEResult['trainingIntensity'] = 'moderate';
-  const goal = (input.fitnessGoal || '').toLowerCase();
-  if (goal.includes('marathon')) { trainingAdjustment += 500; trainingIntensity = 'high'; }
-  else if (goal.includes('half')) { trainingAdjustment += 300; trainingIntensity = 'moderate-high'; }
-  else if (goal.includes('5k') || goal.includes('10k')) { trainingAdjustment += 200; trainingIntensity = 'moderate'; }
-  else if (goal === 'lose_weight') { trainingAdjustment -= 500; trainingIntensity = 'moderate'; }
-  else if (goal === 'gain_muscle') { trainingAdjustment += 300; trainingIntensity = 'moderate'; }
-  if (input.weekPlan && Array.isArray(input.weekPlan)) {
-    const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-    const todayPlan = input.weekPlan.find(d => d && d.day === todayName);
-    if (todayPlan) {
-      const dur = todayPlan.duration || 0;
-      if (todayPlan.activity === 'run' && dur > 60) { trainingAdjustment += 400; trainingIntensity = 'high'; }
-      else if (todayPlan.activity === 'run' && dur > 30) { trainingAdjustment += 200; trainingIntensity = 'moderate-high'; }
-      else if (todayPlan.activity === 'run') { trainingAdjustment += 100; trainingIntensity = 'moderate'; }
-      else if (todayPlan.activity === 'rest') { trainingAdjustment -= 100; trainingIntensity = 'low'; }
-    }
-  }
-  const totalDailyCalories = total + trainingAdjustment;
-  return { bmr, activityMultiplier, baseTDEE: total, trainingAdjustment, totalDailyCalories, trainingIntensity };
-}
+import {
+  UserProfile,
+  TrainingLoad,
+  determineTrainingLoad,
+  generateDayTarget,
+  generateMealPlan,
+  shouldIncludeSnack,
+} from "../_shared/nutrition-unified.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -133,53 +78,67 @@ serve(async (req) => {
     }
     console.log("Profile data:", profile ? "found" : "not found");
 
-    // Fetch recent wearable data with comprehensive metrics
-    const { data: wearableData } = await supabaseAdmin
-      .from("wearable_data")
+    // Fetch Google Fit data (replaces wearable_data)
+    const { data: googleFitData } = await supabaseAdmin
+      .from("google_fit_data")
       .select("*")
       .eq("user_id", userId)
       .eq("date", requestDate)
       .single();
 
-    // Fetch recent 7-day wearable data for trends
+    // Fetch recent 7-day Google Fit data for trends
     const sevenDaysAgo = new Date(requestDate);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const { data: recentWearableData } = await supabaseAdmin
-      .from("wearable_data")
+    const { data: recentFitData } = await supabaseAdmin
+      .from("google_fit_data")
       .select("*")
       .eq("user_id", userId)
       .gte("date", sevenDaysAgo.toISOString().split("T")[0])
       .order("date", { ascending: false })
       .limit(7);
 
+    // Get training plan for today
     const fitnessGoal = profile?.goal_type || profile?.fitness_goals?.[0];
     const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
     const dayPlan = Array.isArray(weekPlan) ? weekPlan.find((d: any) => d && d.day === requestWeekday) : null;
-    const distanceKm = typeof dayPlan?.distanceKm === 'number' ? dayPlan.distanceKm : undefined;
-    const distanceBasedKcal = distanceKm && profile?.weight ? Math.round((profile.weight as number) * distanceKm) : undefined;
-    const plannedCalories = distanceBasedKcal ?? (dayPlan?.estimatedCalories || 0);
-    const tdee = calculateTDEE({
-      weightKg: profile?.weight,
-      heightCm: profile?.height,
-      ageYears: profile?.age,
-      activityLevel: profile?.activity_level,
-      wearableCaloriesToday: (wearableData?.calories_burned || 0) || plannedCalories,
-      fitnessGoal,
-      weekPlan,
-    });
-    const totalDailyCalories = tdee.totalDailyCalories;
-    const trainingIntensity = tdee.trainingIntensity;
+    
+    // Determine training load using unified engine
+    const trainingLoad: TrainingLoad = determineTrainingLoad(
+      dayPlan?.activity || 'rest',
+      dayPlan?.duration,
+      dayPlan?.distanceKm
+    );
+
+    // Create user profile for unified engine
+    const userProfile: UserProfile = {
+      weightKg: profile?.weight_kg || profile?.weight || 70,
+      heightCm: profile?.height_cm || profile?.height || 170,
+      age: profile?.age || 30,
+      sex: (profile?.sex || 'male') as 'male' | 'female'
+    };
+
+    // Generate day target using unified engine
+    const dayTarget = generateDayTarget(userProfile, requestDate, trainingLoad);
+    // Precompute unified meal plan and snack flag
+    const includeSnack = shouldIncludeSnack(trainingLoad);
+    const unifiedMealPlan = generateMealPlan(dayTarget, includeSnack);
+    
+    const totalDailyCalories = dayTarget.kcal;
     const targetDate = profile?.target_date;
     const fitnessLevel = profile?.fitness_level;
-    console.log(`Calculated nutrition needs - BMR: ${tdee.bmr}, TDEE: ${totalDailyCalories}, Goal: ${fitnessGoal}`);
+    
+    console.log(`Calculated nutrition needs using unified engine:`);
+    console.log(`- Training Load: ${trainingLoad}`);
+    console.log(`- TDEE: ${totalDailyCalories} kcal`);
+    console.log(`- Macros: CHO ${dayTarget.cho_g}g, Protein ${dayTarget.protein_g}g, Fat ${dayTarget.fat_g}g`);
+    console.log(`- Goal: ${fitnessGoal}`);
 
     // Calculate average metrics from recent data
-    const avgMetrics = recentWearableData?.length ? {
-      avgCalories: Math.round(recentWearableData.reduce((sum, d) => sum + (d.calories_burned || 0), 0) / recentWearableData.length),
-      avgSteps: Math.round(recentWearableData.reduce((sum, d) => sum + (d.steps || 0), 0) / recentWearableData.length),
-      avgHeartRate: Math.round(recentWearableData.reduce((sum, d) => sum + (d.heart_rate_avg || 0), 0) / recentWearableData.length),
-      avgSleep: (recentWearableData.reduce((sum, d) => sum + (d.sleep_hours || 0), 0) / recentWearableData.length).toFixed(1),
-      avgDistance: (recentWearableData.reduce((sum, d) => sum + (d.distance_meters || 0), 0) / recentWearableData.length / 1000).toFixed(1),
+    const avgMetrics = recentFitData?.length ? {
+      avgCalories: Math.round(recentFitData.reduce((sum, d) => sum + (d.calories_burned || 0), 0) / recentFitData.length),
+      avgSteps: Math.round(recentFitData.reduce((sum, d) => sum + (d.steps || 0), 0) / recentFitData.length),
+      avgHeartRate: Math.round(recentFitData.reduce((sum, d) => sum + (d.heart_rate_avg || 0), 0) / recentFitData.length),
+      avgDistance: (recentFitData.reduce((sum, d) => sum + (d.distance_meters || 0), 0) / recentFitData.length / 1000).toFixed(1),
     } : null;
 
     // Use AI to generate detailed meal suggestions
@@ -189,16 +148,21 @@ serve(async (req) => {
     const context = `
 Date: ${requestDate} (${requestWeekday})
 User Profile:
-- Age: ${profile?.age || "unknown"}
-- Weight: ${profile?.weight || "unknown"} kg
-- Height: ${profile?.height || "unknown"} cm
-- BMR (Basal Metabolic Rate): ${tdee.bmr} kcal
-- Activity Level: ${profile?.activity_level || "moderate"}
+- Age: ${userProfile.age}
+- Weight: ${userProfile.weightKg} kg
+- Height: ${userProfile.heightCm} cm
+- Sex: ${userProfile.sex}
 - Fitness Goals: ${fitnessGoal || "general fitness"}
 - Target Race Date: ${targetDate || "not set"}
 - Fitness Level: ${fitnessLevel || "intermediate"}
-        - Training Intensity: ${trainingIntensity}
-        - Location: Indonesia
+- Location: Indonesia
+
+Calculated Nutrition Targets (Unified Engine):
+- Training Load: ${trainingLoad} (rest/easy/moderate/long/quality)
+- TDEE: ${totalDailyCalories} kcal
+- Carbohydrates: ${dayTarget.cho_g}g (${Math.round((dayTarget.cho_g * 4 / totalDailyCalories) * 100)}%)
+- Protein: ${dayTarget.protein_g}g (${Math.round((dayTarget.protein_g * 4 / totalDailyCalories) * 100)}%)
+- Fat: ${dayTarget.fat_g}g (${Math.round((dayTarget.fat_g * 9 / totalDailyCalories) * 100)}%)
 
 Running Goals & Training Plan:
 - Primary Goal: ${fitnessGoal || "general fitness"}
@@ -207,23 +171,17 @@ Running Goals & Training Plan:
 - Weekly Training Plan: ${weekPlan ? JSON.stringify(weekPlan, null, 2) : "not set"}
 - Today's Training: ${dayPlan ? `${dayPlan.activity}${typeof dayPlan.distanceKm==='number' ? ` ${dayPlan.distanceKm} km` : dayPlan.duration?` for ${dayPlan.duration} minutes`:''} (${plannedCalories} calories est.)` : "rest day"}
 
-Today's Activity Metrics:
-- Calories burned: ${wearableData?.calories_burned || 0} kcal
-- Steps: ${wearableData?.steps || 0}
-- Distance: ${wearableData?.distance_meters ? (wearableData.distance_meters / 1000).toFixed(2) : 0} km
-- Active minutes: ${wearableData?.active_minutes || 0}
-- Average heart rate: ${wearableData?.heart_rate_avg || "N/A"} bpm
-- Max heart rate: ${wearableData?.max_heart_rate || "N/A"} bpm
-- Sleep hours: ${wearableData?.sleep_hours || "N/A"} hours
-- Training effect: ${wearableData?.training_effect || "N/A"}
-- Recovery time needed: ${wearableData?.recovery_time || "N/A"} hours
-- Activity type: ${wearableData?.activity_type || "general"}
+Today's Activity Metrics (Google Fit):
+- Calories burned: ${googleFitData?.calories_burned || 0} kcal
+- Steps: ${googleFitData?.steps || 0}
+- Distance: ${googleFitData?.distance_meters ? (googleFitData.distance_meters / 1000).toFixed(2) : 0} km
+- Active minutes: ${googleFitData?.active_minutes || 0}
+- Average heart rate: ${googleFitData?.heart_rate_avg || "N/A"} bpm
 
-7-Day Average Trends:
+7-Day Average Trends (Google Fit):
 ${avgMetrics ? `- Average calories burned: ${avgMetrics.avgCalories} kcal/day
 - Average steps: ${avgMetrics.avgSteps} steps/day
 - Average heart rate: ${avgMetrics.avgHeartRate} bpm
-- Average sleep: ${avgMetrics.avgSleep} hours/night
 - Average distance: ${avgMetrics.avgDistance} km/day` : "- No recent data available"}
 
 Daily Calorie Target: ${totalDailyCalories} kcal (includes planned training load for this day)
@@ -249,20 +207,20 @@ ${fitnessGoal && (fitnessGoal.includes('5k') || fitnessGoal.includes('10k')) ? '
 ${fitnessGoal === 'lose_weight' ? '- WEIGHT LOSS: High protein, moderate carbs, filling foods with controlled portions' : ''}
 ${fitnessGoal === 'gain_muscle' ? '- MUSCLE GAIN: High protein (2g per kg body weight), sufficient carbs for energy, healthy fats' : ''}
 
-TRAINING DAY ADJUSTMENTS:
-${trainingIntensity === 'high' ? '- HIGH INTENSITY DAY: Extra carbs 2-3 hours before training, protein within 30 minutes after' : ''}
-${trainingIntensity === 'moderate-high' ? '- MODERATE-HIGH INTENSITY: Balanced pre-workout nutrition, good recovery foods' : ''}
-${trainingIntensity === 'moderate' ? '- MODERATE INTENSITY: Standard balanced nutrition' : ''}
-${trainingIntensity === 'low' ? '- REST DAY: Lighter meals, focus on recovery and preparation for next training' : ''}
+TRAINING DAY ADJUSTMENTS (Based on Unified Engine):
+${trainingLoad === 'quality' ? '- QUALITY/INTERVAL DAY: Extra carbs 2-3 hours before, protein within 30 minutes after, CHO-focused (55%)' : ''}
+${trainingLoad === 'long' ? '- LONG RUN DAY: High carbs for endurance, adequate protein for recovery, CHO-focused (55%)' : ''}
+${trainingLoad === 'moderate' ? '- MODERATE RUN DAY: Balanced nutrition, 50% carbs, 25% protein, 25% fat' : ''}
+${trainingLoad === 'easy' ? '- EASY RUN DAY: Standard balanced nutrition with higher protein (30%)' : ''}
+${trainingLoad === 'rest' ? '- REST DAY: Lower carbs (40%), higher protein (30%) for recovery and muscle repair' : ''}
 
-Consider the user's wearable data:
-- If training effect is high or recovery time is significant, recommend more protein and anti-inflammatory foods
-- If sleep quality is poor, suggest foods that promote better sleep (magnesium, tryptophan)
+Consider the user's Google Fit data:
 - If heart rate trends are elevated, consider hydration and electrolyte-rich foods
-- For high-intensity activity days, increase carb recommendations for recovery
+- For high-intensity activity days (long/quality load), increase carb recommendations for recovery
 - Account for actual calories burned to prevent under/over-eating
 
-Create a complete daily meal plan with SPECIFIC meal suggestions for breakfast (30%), lunch (40%), dinner (30%), and snacks (10% for training days).
+Create a complete daily meal plan with SPECIFIC meal suggestions based on unified engine distribution:
+${shouldIncludeSnack(trainingLoad) ? '- Breakfast (25%), Lunch (35%), Dinner (30%), Snack (10%) - INTENSE TRAINING DAY' : '- Breakfast (30%), Lunch (40%), Dinner (30%) - STANDARD/EASY DAY'}
 
 For each meal, provide 2-3 realistic meal options with:
 - Specific meal name (Indonesian-style)
@@ -416,41 +374,12 @@ Return ONLY valid JSON in this exact format:
 
     // Store meal plans for each meal type
     console.log("8. Storing meal plans in database...");
-    const mealTypes = ["breakfast", "lunch", "dinner"];
-    
-    // Add snack category for training days
-    if (dayPlan && dayPlan.activity === 'run') {
-      mealTypes.push("snack");
-    }
+    const mealTypes = includeSnack ? ["breakfast", "lunch", "dinner", "snack"] : ["breakfast", "lunch", "dinner"];
 
     for (const mealType of mealTypes) {
-      // Ensure we have a meal object with targets even if AI missed it
-      let meal = mealPlan[mealType];
-      const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : mealType === 'snack' ? 0.10 : 0.30;
-      if (!meal) {
-        const proteinRatio = mealType === 'snack' ? 0.20 : 0.30;
-        const carbsRatio = mealType === 'snack' ? 0.60 : 0.40;
-        const fatRatio = mealType === 'snack' ? 0.20 : 0.30;
-        
-        meal = {
-          target_calories: Math.round(totalDailyCalories * pct),
-          target_protein: Math.round((totalDailyCalories * pct * proteinRatio) / 4),
-          target_carbs: Math.round((totalDailyCalories * pct * carbsRatio) / 4),
-          target_fat: Math.round((totalDailyCalories * pct * fatRatio) / 9),
-          suggestions: [],
-        };
-      } else {
-        // Fill any missing target fields with sane defaults
-        const proteinRatio = mealType === 'snack' ? 0.20 : 0.30;
-        const carbsRatio = mealType === 'snack' ? 0.60 : 0.40;
-        const fatRatio = mealType === 'snack' ? 0.20 : 0.30;
-        
-        if (!Number.isFinite(meal.target_calories) || meal.target_calories <= 0) meal.target_calories = Math.round(totalDailyCalories * pct);
-        if (!Number.isFinite(meal.target_protein) || meal.target_protein <= 0) meal.target_protein = Math.round((totalDailyCalories * pct * proteinRatio) / 4);
-        if (!Number.isFinite(meal.target_carbs) || meal.target_carbs <= 0) meal.target_carbs = Math.round((totalDailyCalories * pct * carbsRatio) / 4);
-        if (!Number.isFinite(meal.target_fat) || meal.target_fat <= 0) meal.target_fat = Math.round((totalDailyCalories * pct * fatRatio) / 9);
-        if (!Array.isArray(meal.suggestions)) meal.suggestions = [];
-      }
+      // Use unified targets and AI suggestions if present
+      const suggestions = mealPlan?.[mealType]?.suggestions || [];
+      const targets = unifiedMealPlan[mealType as keyof typeof unifiedMealPlan];
 
       console.log(`Inserting ${mealType} plan...`);
       const { error: insertError } = await supabaseAdmin
@@ -460,11 +389,11 @@ Return ONLY valid JSON in this exact format:
             user_id: userId,
             date: requestDate,
             meal_type: mealType,
-            recommended_calories: meal.target_calories || 0,
-            recommended_protein_grams: meal.target_protein || 0,
-            recommended_carbs_grams: meal.target_carbs || 0,
-            recommended_fat_grams: meal.target_fat || 0,
-            meal_suggestions: meal.suggestions || [],
+            recommended_calories: targets.kcal || 0,
+            recommended_protein_grams: targets.protein_g || 0,
+            recommended_carbs_grams: targets.cho_g || 0,
+            recommended_fat_grams: targets.fat_g || 0,
+            meal_suggestions: suggestions,
           },
           {
             onConflict: "user_id,date,meal_type",
