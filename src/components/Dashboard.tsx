@@ -6,10 +6,16 @@ import { ScoreCard } from '@/components/ScoreCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils } from 'lucide-react';
+import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils, Settings, Activity } from 'lucide-react';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
+import { WeeklyScoreCard } from '@/components/WeeklyScoreCard';
+import { TodayMealScoreCard } from '@/components/TodayMealScoreCard';
+import { TodayNutritionCard } from '@/components/TodayNutritionCard';
+import { WeeklyMilesCard } from '@/components/WeeklyMilesCard';
+import { UpcomingWorkouts } from '@/components/UpcomingWorkouts';
+import { TodayInsightsCard } from '@/components/TodayInsightsCard';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 
@@ -51,6 +57,16 @@ interface DashboardData {
   breakfastScore: number | null;
   lunchScore: number | null;
   dinnerScore: number | null;
+  calories?: {
+    consumed: number;
+    target: number;
+  };
+  macros?: {
+    protein?: { consumed: number; target: number };
+    carbs?: { consumed: number; target: number };
+    fat?: { consumed: number; target: number };
+  };
+  nextRun?: string;
 }
 
 interface DashboardProps {
@@ -387,6 +403,24 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         breakfastScore: nutritionScore?.breakfast_score || null,
         lunchScore: nutritionScore?.lunch_score || null,
         dinnerScore: nutritionScore?.dinner_score || null,
+        calories: {
+          consumed: consumedNutrition.calories,
+          target: calorieTarget
+        },
+        macros: {
+          protein: {
+            consumed: consumedNutrition.protein,
+            target: macroTargets.protein
+          },
+          carbs: {
+            consumed: consumedNutrition.carbs,
+            target: macroTargets.carbs
+          },
+          fat: {
+            consumed: consumedNutrition.fat,
+            target: macroTargets.fat
+          }
+        }
       });
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -405,81 +439,155 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     );
   }
 
+  // Calculate meal score and timing
+  const calculateMealScore = () => {
+    // Mock calculation based on actual nutrition data
+    const proteinScore = data?.macros?.protein ? Math.min((data.macros.protein.consumed / data.macros.protein.target) * 100, 100) : 0;
+    const carbsScore = data?.macros?.carbs ? Math.min((data.macros.carbs.consumed / data.macros.carbs.target) * 100, 100) : 0;
+    const fatScore = data?.macros?.fat ? Math.min((data.macros.fat.consumed / data.macros.fat.target) * 100, 100) : 0;
+    
+    const avgScore = Math.round((proteinScore + carbsScore + fatScore) / 3);
+    
+    if (avgScore >= 80) return { score: avgScore, rating: 'Excellent' as const };
+    if (avgScore >= 65) return { score: avgScore, rating: 'Good' as const };
+    if (avgScore >= 50) return { score: avgScore, rating: 'Fair' as const };
+    return { score: avgScore, rating: 'Needs Improvement' as const };
+  };
+
+  const mealScore = calculateMealScore();
+
+  // Get upcoming workouts from user data
+  const nextWorkout = data?.nextRun ? {
+    type: 'Tempo Run',
+    date: new Date(data.nextRun),
+    distance: 8
+  } : undefined;
+
+  // Pre-run meal suggestion
+  const preRunMeal = nextWorkout ? {
+    food: 'Banana + Almond Butter',
+    time: new Date(nextWorkout.date.getTime() - 30 * 60000) // 30 min before
+  } : undefined;
+
+  // Today's insights
+  const insights = [
+    {
+      icon: 'zap' as const,
+      title: 'Pre-Run Nutrition',
+      message: nextWorkout 
+        ? `Tempo run tomorrow - have your pre-run snack 1 hour before.`
+        : 'Plan your pre-run nutrition for optimal performance.',
+      color: 'bg-blue-50 dark:bg-blue-900/20',
+      details: [
+        'Eat 1-2 hours before running',
+        'Focus on easily digestible carbs',
+        'Include a small amount of protein',
+        'Stay hydrated'
+      ]
+    },
+    {
+      icon: 'droplets' as const,
+      title: 'Hydration Goal',
+      message: '2 glasses away from your daily goal. Great progress!',
+      color: 'bg-green-50 dark:bg-green-900/20'
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-background p-4 pb-28 safe-area-inset">
       <div className="w-full mx-auto">
-        {/* Header - Mobile Optimized */}
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold text-foreground leading-tight">
-            Good morning! 👋
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {format(new Date(), 'EEEE, MMMM do')}
-          </p>
+        {/* Header - NutriSync Branding */}
+        <div className="mb-6 pt-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center">
+                <Activity className="w-6 h-6 text-white dark:text-black" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-foreground leading-tight">
+                  NutriSync
+                </h1>
+                <p className="text-muted-foreground text-sm">
+                  Fuel Your Run
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Settings className="w-4 h-4" />
+              Customize
+            </Button>
+          </div>
         </div>
 
-        {/* Quick Stats Row - Mobile Optimized */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          {/* 1. Daily Score - Compact */}
-          <ScoreCard
-            title="Score"
-            score={data?.dailyScore || 0}
-            maxScore={100}
-            subtitle="Today"
-            variant="success"
-            className="animate-fade-in"
-          />
-
-          {/* 2. Race Goal Widget - Compact */}
+        {/* 1. Marathon Countdown */}
+        <div className="mb-4">
           <RaceGoalWidget />
         </div>
 
-        {/* 3. Runner Nutrition Dashboard - Featured Section */}
+        {/* 2. Weekly Score */}
         <div className="mb-4">
-          <RunnerNutritionDashboard />
+          <WeeklyScoreCard
+            weeklyScore={82}
+            macroBalance={72}
+            mealTiming={70}
+          />
         </div>
 
-        {/* 4. Additional Tools - Mobile Optimized */}
-        <div className="grid grid-cols-1 gap-3 mb-4">
-          {/* Quick Recovery Plan - Touch-Friendly */}
-          <Card className="shadow-card active:scale-[0.98] transition-transform">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Camera className="h-6 w-6 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-base leading-tight">Recovery Plan</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Upload activity photo</p>
-                </div>
-                <Button 
-                  onClick={onAnalyzeFitness}
-                  size="lg"
-                  className="flex-shrink-0 h-11 w-11 p-0"
-                >
-                  <Camera className="h-5 w-5" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        {/* 3. Today's Meal Score */}
+        <div className="mb-4">
+          <TodayMealScoreCard
+            score={mealScore.score}
+            rating={mealScore.rating}
+          />
+        </div>
 
-          {/* Add Meal Quick Action - Info Card */}
-          <Card className="shadow-card bg-gradient-to-br from-orange-50 to-pink-50 dark:from-orange-900/10 dark:to-pink-900/10 border-orange-200 dark:border-orange-800 active:scale-[0.98] transition-transform">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Utensils className="h-6 w-6 text-orange-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-base leading-tight">Quick Meal Log</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Tap the orange button below →</p>
-                </div>
-                <div className="w-11 h-11 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center animate-pulse">
-                  <Target className="h-5 w-5 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* 4. Today's Nutrition */}
+        <div className="mb-4">
+          <TodayNutritionCard
+            calories={{
+              current: data?.calories?.consumed || 0,
+              target: data?.calories?.target || 2400
+            }}
+            protein={{
+              current: data?.macros?.protein?.consumed || 0,
+              target: data?.macros?.protein?.target || 120,
+              color: 'text-blue-600 dark:text-blue-400'
+            }}
+            carbs={{
+              current: data?.macros?.carbs?.consumed || 0,
+              target: data?.macros?.carbs?.target || 330,
+              color: 'text-green-600 dark:text-green-400'
+            }}
+            fat={{
+              current: data?.macros?.fat?.consumed || 0,
+              target: data?.macros?.fat?.target || 67,
+              color: 'text-orange-600 dark:text-orange-400'
+            }}
+            showEducation={true}
+          />
+        </div>
+
+        {/* 5. Weekly Miles */}
+        <div className="mb-4">
+          <WeeklyMilesCard
+            current={28.5}
+            target={35}
+          />
+        </div>
+
+        {/* 6. Upcoming Workouts */}
+        {(nextWorkout || preRunMeal) && (
+          <div className="mb-4">
+            <UpcomingWorkouts
+              workouts={nextWorkout ? [nextWorkout] : []}
+              preRunMeal={preRunMeal}
+            />
+          </div>
+        )}
+
+        {/* 7. Today's Insights */}
+        <div className="mb-4">
+          <TodayInsightsCard insights={insights} />
         </div>
 
         {/* 4. Today's Nutrition Plan - Carousel */}
