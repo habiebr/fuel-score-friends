@@ -1,59 +1,135 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { BottomNav } from '@/components/BottomNav';
+import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
+import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Button } from '@/components/ui/button';
-import { Users, UserPlus, TrendingUp, Trophy, Target } from 'lucide-react';
+import { Trophy, MapPin, Activity as ActivityIcon, Target, Users, Crown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
+
+interface LeaderboardEntry {
+  user_id: string;
+  full_name: string;
+  location: string;
+  total_miles: number;
+  weekly_miles: number;
+  nutrition_score: number;
+  rank: number;
+  composite_score: number;
+}
 
 export default function Community() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [friends, setFriends] = useState<any[]>([]);
-  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'challenges' | 'groups'>('leaderboard');
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [userRank, setUserRank] = useState<LeaderboardEntry | null>(null);
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
+  const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
-      loadCommunityData();
+      loadGlobalLeaderboard();
     }
   }, [user]);
 
-  const loadCommunityData = async () => {
+  const loadGlobalLeaderboard = async () => {
     if (!user) return;
 
+    setLoading(true);
     try {
-      // Get friends list
-      const { data: friendsData } = await supabase
-        .from('friends')
-        .select('*')
-        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
-        .eq('status', 'accepted');
+      // Get all users with their profiles and nutrition scores
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .not('full_name', 'is', null);
 
-      // Get leaderboard (friends' scores)
-      const { data: scoresData } = await supabase
+      if (!profiles) return;
+
+      // Get nutrition scores for the past 7 days
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const { data: scores } = await supabase
         .from('nutrition_scores')
-        .select('*')
-        .order('daily_score', { ascending: false })
-        .limit(10);
+        .select('user_id, daily_score, date')
+        .gte('date', sevenDaysAgo.toISOString().split('T')[0]);
 
-      setFriends(friendsData || []);
-      setLeaderboard(scoresData || []);
+      // Get Google Fit data for weekly miles
+      const { data: fitData } = await supabase
+        .from('google_fit_data')
+        .select('user_id, distance_meters, date')
+        .gte('date', sevenDaysAgo.toISOString().split('T')[0]);
+
+      // Calculate stats per user
+      const userStats = profiles.map(profile => {
+        const userScores = scores?.filter(s => s.user_id === profile.id) || [];
+        const avgScore = userScores.length > 0
+          ? Math.round(userScores.reduce((sum, s) => sum + s.daily_score, 0) / userScores.length)
+          : 0;
+
+        const userFitData = fitData?.filter(f => f.user_id === profile.id) || [];
+        const weeklyMeters = userFitData.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
+        const weeklyMiles = Math.round(weeklyMeters / 1609.34);
+        const totalMiles = weeklyMiles * 10; // Placeholder: should be from cumulative data
+
+        return {
+          user_id: profile.id,
+          full_name: profile.full_name || 'Anonymous Runner',
+          location: 'New York, NY', // Placeholder: should be from profile
+          total_miles: totalMiles,
+          weekly_miles: weeklyMiles,
+          nutrition_score: avgScore,
+          rank: 0,
+          composite_score: 0 // Will calculate next
+        };
+      });
+
+      // Calculate composite score (60% nutrition, 40% miles-based)
+      // Normalize both metrics to 0-100 scale
+      const maxMiles = Math.max(...userStats.map(u => u.total_miles), 1);
+      userStats.forEach(entry => {
+        const normalizedMiles = (entry.total_miles / maxMiles) * 100;
+        const normalizedNutrition = entry.nutrition_score;
+        
+        // Composite score: 60% nutrition (more important) + 40% miles
+        entry.composite_score = (normalizedNutrition * 0.6) + (normalizedMiles * 0.4);
+      });
+
+      // Sort by composite score (both nutrition and miles) and assign ranks
+      userStats.sort((a, b) => b.composite_score - a.composite_score);
+      userStats.forEach((entry, index) => {
+        entry.rank = index + 1;
+      });
+
+      // Find current user's rank
+      const currentUserRank = userStats.find(entry => entry.user_id === user.id);
+      setUserRank(currentUserRank || null);
+
+      // Set top performers
+      setLeaderboard(userStats.slice(0, 20));
+
     } catch (error) {
-      console.error('Error loading community data:', error);
+      console.error('Error loading leaderboard:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddFriend = () => {
-    toast({
-      title: "Coming soon!",
-      description: "Friend requests will be available in the next update.",
-    });
+  const getRankBadge = (rank: number) => {
+    if (rank === 1) return '🏆';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return `#${rank}`;
+  };
+
+  const getScoreBadge = (score: number) => {
+    if (score >= 90) return { text: 'Excellent', color: 'bg-green-500/10 text-green-700 dark:text-green-400' };
+    if (score >= 80) return { text: 'Good', color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' };
+    if (score >= 70) return { text: 'Fair', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400' };
+    return { text: 'Needs Work', color: 'bg-red-500/10 text-red-700 dark:text-red-400' };
   };
 
   if (loading) {
@@ -64,129 +140,248 @@ export default function Community() {
             <div className="w-12 h-12 bg-primary rounded-full"></div>
           </div>
         </div>
-        <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />
+        <BottomNav />
+        <ActionFAB
+          onLogMeal={() => setFoodTrackerOpen(true)}
+          onUploadActivity={() => setFitnessScreenshotOpen(true)}
+        />
         <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
+        <FitnessScreenshotDialog open={fitnessScreenshotOpen} onOpenChange={setFitnessScreenshotOpen} />
       </>
     );
   }
 
   return (
     <>
-      <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-none mx-auto p-4">
+        <div className="w-full mx-auto">
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-foreground mb-2">Community</h1>
-            <p className="text-muted-foreground text-sm">Connect with friends and track progress together</p>
+          <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
+                <ActivityIcon className="w-6 h-6 text-white dark:text-black" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold leading-tight">NutriSync</h1>
+                <p className="text-sm text-muted-foreground">Fuel Your Run</p>
+              </div>
+            </div>
           </div>
 
-          {/* Add Friends */}
-          <Card className="shadow-card mb-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-primary" />
-                Friends
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                variant="secondary" 
-                className="w-full"
-                onClick={handleAddFriend}
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add Friends
-              </Button>
-              <div className="mt-4">
-                {friends.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No friends yet. Add friends to see their progress!
+          {/* Content */}
+          <div className="p-4 space-y-4">
+            {/* Beta Badge */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">BETA</div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Community Features</h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Connect with fellow runners and compete on our weekly leaderboard!
                   </p>
-                ) : (
-                  <div className="space-y-2">
-                    {friends.map((friend) => (
-                      <div key={friend.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                            <Users className="h-5 w-5 text-primary" />
-                          </div>
-                          <span className="font-medium">Friend</span>
-                        </div>
-                        <Button variant="ghost" size="sm">View</Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Leaderboard */}
-          <Card className="shadow-card mb-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-warning" />
+            {/* Tabs */}
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+              <Button
+                variant={activeTab === 'leaderboard' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveTab('leaderboard')}
+                className="flex-1"
+              >
+                <Trophy className="w-4 h-4 mr-2" />
                 Leaderboard
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {leaderboard.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No scores yet. Start logging meals to compete!
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {leaderboard.map((entry, index) => (
-                    <div key={entry.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                          index === 0 ? 'bg-warning text-warning-foreground' :
-                          index === 1 ? 'bg-muted text-muted-foreground' :
-                          index === 2 ? 'bg-info/20 text-info' :
-                          'bg-background text-foreground'
-                        }`}>
-                          {index + 1}
-                        </div>
-                        <span className="font-medium">
-                          {entry.user_id === user?.id ? 'You' : 'User'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-success" />
-                        <span className="font-bold text-lg">{entry.daily_score}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </Button>
+              <Button
+                variant={activeTab === 'challenges' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveTab('challenges')}
+                className="flex-1"
+              >
+                <Target className="w-4 h-4 mr-2" />
+                Challenges
+              </Button>
+              <Button
+                variant={activeTab === 'groups' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveTab('groups')}
+                className="flex-1"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Groups
+              </Button>
+            </div>
 
-          {/* Weekly Challenges */}
-          <Card className="shadow-card mb-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-secondary" />
-                Weekly Challenge
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="p-4 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30">
-                <h3 className="font-semibold mb-2">Log 21 Meals This Week!</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Complete this challenge to earn bonus points
-                </p>
-                <div className="w-full bg-background rounded-full h-2 overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-primary to-secondary w-[45%] transition-all"></div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">9/21 meals logged</p>
-              </div>
-            </CardContent>
-          </Card>
+            {activeTab === 'leaderboard' && (
+              <>
+                {/* Your Rank Card */}
+                {userRank && (
+                  <Card className="shadow-card">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-black dark:bg-white rounded-full flex items-center justify-center font-bold text-white dark:text-black text-lg">
+                            {userRank.full_name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-lg">Your Rank</h3>
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {userRank.location}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl font-bold">#{userRank.rank}</span>
+                            <span className="text-2xl font-bold">#{userRank.rank}</span>
+                          </div>
+                          <div className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getScoreBadge(userRank.nutrition_score).color}`}>
+                            {getScoreBadge(userRank.nutrition_score).text}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <div className="text-2xl font-bold">{userRank.total_miles}</div>
+                          <div className="text-xs text-muted-foreground">Total Miles</div>
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-orange-500">{userRank.nutrition_score}</div>
+                          <div className="text-xs text-muted-foreground">Nutrition Score</div>
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold">{userRank.weekly_miles}</div>
+                          <div className="text-xs text-muted-foreground">Day Streak</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Ranking Info */}
+                <Card className="shadow-card">
+                  <CardContent className="p-6">
+                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                      <span className="text-blue-600">⭐</span>
+                      Weekly Nutrition Score
+                    </h3>
+                    <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
+                      Based on meal consistency, macro balance, hydration, and pre/post-run nutrition timing over the past 7 days.
+                    </p>
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Ranking Formula:</strong> Your rank is based on both your nutrition score (60%) and total miles run (40%). 
+                        Keep logging meals and running to climb the leaderboard!
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Weekly Leaderboard */}
+                <Card className="shadow-card">
+                  <CardContent className="p-6">
+                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-yellow-500" />
+                      Weekly Leaderboard
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Top performers in your region this week
+                    </p>
+
+                    <div className="space-y-3">
+                      {leaderboard.map((entry, index) => (
+                        <div
+                          key={entry.user_id}
+                          className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                            entry.user_id === user?.id
+                              ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                              : 'bg-gray-50 dark:bg-gray-800'
+                          }`}
+                        >
+                          {/* Rank Icon */}
+                          <div className="flex-shrink-0 w-8 text-center">
+                            {index === 0 ? (
+                              <Crown className="w-6 h-6 text-yellow-500 mx-auto" />
+                            ) : (
+                              <span className="text-lg font-bold text-muted-foreground">
+                                {getRankBadge(entry.rank)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Avatar */}
+                          <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            {entry.full_name.substring(0, 2).toUpperCase()}
+                          </div>
+
+                          {/* User Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold truncate">{entry.full_name}</div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {entry.location}
+                            </div>
+                          </div>
+
+                          {/* Stats */}
+                          <div className="text-right flex-shrink-0">
+                            <div className="font-bold">{entry.total_miles} mi</div>
+                            <div className="text-xs text-muted-foreground flex items-center justify-end gap-1">
+                              <ActivityIcon className="w-3 h-3" />
+                              {entry.weekly_miles} mi this week
+                            </div>
+                          </div>
+
+                          {/* Score Badge */}
+                          <div className="text-right flex-shrink-0 min-w-[3rem]">
+                            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                              {entry.nutrition_score}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {activeTab === 'challenges' && (
+              <Card className="shadow-card">
+                <CardContent className="p-6 text-center">
+                  <Target className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="font-semibold text-lg mb-2">Challenges Coming Soon</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Weekly nutrition and training challenges will be available soon!
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === 'groups' && (
+              <Card className="shadow-card">
+                <CardContent className="p-6 text-center">
+                  <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="font-semibold text-lg mb-2">Groups Coming Soon</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Join running groups and train together with your community!
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
-      <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />
+      <BottomNav />
+      <ActionFAB
+        onLogMeal={() => setFoodTrackerOpen(true)}
+        onUploadActivity={() => setFitnessScreenshotOpen(true)}
+      />
+      <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
+      <FitnessScreenshotDialog open={fitnessScreenshotOpen} onOpenChange={setFitnessScreenshotOpen} />
     </>
   );
 }
