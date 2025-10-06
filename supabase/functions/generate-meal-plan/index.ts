@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
+import { getSupabaseAdmin, getGroqKey } from "../_shared/env.ts";
 import {
   UserProfile,
   TrainingLoad,
@@ -53,10 +54,7 @@ serve(async (req) => {
     }
 
     // Create admin client with service role key for database operations
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    const supabaseAdmin = getSupabaseAdmin();
 
     const { date } = await req.json();
     const requestDate = date || new Date().toISOString().split("T")[0];
@@ -143,7 +141,7 @@ serve(async (req) => {
 
     // Use AI to generate detailed meal suggestions
     console.log("5. Preparing AI request...");
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    const GROQ_API_KEY = getGroqKey();
 
     const context = `
 Date: ${requestDate} (${requestWeekday})
@@ -374,12 +372,41 @@ Return ONLY valid JSON in this exact format:
 
     // Store meal plans for each meal type
     console.log("8. Storing meal plans in database...");
-    const mealTypes = includeSnack ? ["breakfast", "lunch", "dinner", "snack"] : ["breakfast", "lunch", "dinner"];
+    const mealTypes = ["breakfast", "lunch", "dinner"];
+    
+    // Add snack category for training days
+    if (dayPlan && dayPlan.activity === 'run') {
+      mealTypes.push("snack");
+    }
 
     for (const mealType of mealTypes) {
-      // Use unified targets and AI suggestions if present
-      const suggestions = mealPlan?.[mealType]?.suggestions || [];
-      const targets = unifiedMealPlan[mealType as keyof typeof unifiedMealPlan];
+      // Ensure we have a meal object with targets even if AI missed it
+      let meal = mealPlan[mealType];
+      const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : mealType === 'snack' ? 0.10 : 0.30;
+      if (!meal) {
+        const proteinRatio = mealType === 'snack' ? 0.20 : 0.30;
+        const carbsRatio = mealType === 'snack' ? 0.60 : 0.40;
+        const fatRatio = mealType === 'snack' ? 0.20 : 0.30;
+        
+        meal = {
+          target_calories: Math.round(totalDailyCalories * pct),
+          target_protein: Math.round((totalDailyCalories * pct * proteinRatio) / 4),
+          target_carbs: Math.round((totalDailyCalories * pct * carbsRatio) / 4),
+          target_fat: Math.round((totalDailyCalories * pct * fatRatio) / 9),
+          suggestions: [],
+        };
+      } else {
+        // Fill any missing target fields with sane defaults
+        const proteinRatio = mealType === 'snack' ? 0.20 : 0.30;
+        const carbsRatio = mealType === 'snack' ? 0.60 : 0.40;
+        const fatRatio = mealType === 'snack' ? 0.20 : 0.30;
+        
+        if (!Number.isFinite(meal.target_calories) || meal.target_calories <= 0) meal.target_calories = Math.round(totalDailyCalories * pct);
+        if (!Number.isFinite(meal.target_protein) || meal.target_protein <= 0) meal.target_protein = Math.round((totalDailyCalories * pct * proteinRatio) / 4);
+        if (!Number.isFinite(meal.target_carbs) || meal.target_carbs <= 0) meal.target_carbs = Math.round((totalDailyCalories * pct * carbsRatio) / 4);
+        if (!Number.isFinite(meal.target_fat) || meal.target_fat <= 0) meal.target_fat = Math.round((totalDailyCalories * pct * fatRatio) / 9);
+        if (!Array.isArray(meal.suggestions)) meal.suggestions = [];
+      }
 
       console.log(`Inserting ${mealType} plan...`);
       const { error: insertError } = await supabaseAdmin
@@ -389,11 +416,11 @@ Return ONLY valid JSON in this exact format:
             user_id: userId,
             date: requestDate,
             meal_type: mealType,
-            recommended_calories: targets.kcal || 0,
-            recommended_protein_grams: targets.protein_g || 0,
-            recommended_carbs_grams: targets.cho_g || 0,
-            recommended_fat_grams: targets.fat_g || 0,
-            meal_suggestions: suggestions,
+            recommended_calories: meal.target_calories || 0,
+            recommended_protein_grams: meal.target_protein || 0,
+            recommended_carbs_grams: meal.target_carbs || 0,
+            recommended_fat_grams: meal.target_fat || 0,
+            meal_suggestions: meal.suggestions || [],
           },
           {
             onConflict: "user_id,date,meal_type",

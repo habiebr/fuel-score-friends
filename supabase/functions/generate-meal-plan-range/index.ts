@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
+import { getSupabaseAdmin } from "../_shared/env.ts";
 import { generateUserMealPlan, mealPlanToDbRecords } from "../_shared/meal-planner.ts";
 import { UserProfile } from "../_shared/nutrition-unified.ts";
 
@@ -32,10 +33,7 @@ serve(async (req) => {
       });
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    const supabaseAdmin = getSupabaseAdmin();
 
     const body = await req.json().catch(() => ({}));
     const startDate: string = body.startDate || new Date().toISOString().split("T")[0];
