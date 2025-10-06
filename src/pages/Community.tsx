@@ -41,10 +41,10 @@ export default function Community() {
 
     setLoading(true);
     try {
-      // Get ALL users - don't filter by full_name to show everyone
+      // Get ALL users from profiles (which links to auth.users via user_id)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, email');
+        .select('id, user_id, full_name');
 
       if (profilesError) {
         console.error('Error loading profiles:', profilesError);
@@ -57,7 +57,16 @@ export default function Community() {
         return;
       }
 
-      console.log(`Found ${profiles.length} total users in database`);
+      console.log(`Found ${profiles.length} total profiles in database`);
+      
+      // Get auth users to fetch emails
+      const { data: { users: authUsers }, error: authError } = await supabase.auth.admin.listUsers();
+      
+      if (authError) {
+        console.warn('Could not fetch auth users (admin access required):', authError);
+      }
+      
+      console.log(`Found ${authUsers?.length || 0} auth users`);
 
       // Get nutrition scores for the past 7 days
       const sevenDaysAgo = new Date();
@@ -86,12 +95,15 @@ export default function Community() {
 
       // Calculate stats per user - include ALL users even with no data
       const userStats = profiles.map(profile => {
-        const userScores = scores?.filter(s => s.user_id === profile.id) || [];
+        // Use user_id for matching scores/fit data (not profile.id)
+        const userId = profile.user_id || profile.id;
+        
+        const userScores = scores?.filter(s => s.user_id === userId) || [];
         const avgScore = userScores.length > 0
           ? Math.round(userScores.reduce((sum, s) => sum + s.daily_score, 0) / userScores.length)
           : 0;
 
-        const userFitData = fitData?.filter(f => f.user_id === profile.id) || [];
+        const userFitData = fitData?.filter(f => f.user_id === userId) || [];
         const weeklyMeters = userFitData.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
         const weeklyMiles = Math.round(weeklyMeters / 1609.34);
         const totalMiles = weeklyMiles * 10; // Placeholder: should be from cumulative data
@@ -100,12 +112,16 @@ export default function Community() {
         let displayName = 'Anonymous Runner';
         if (profile.full_name) {
           displayName = profile.full_name;
-        } else if (profile.email) {
-          displayName = profile.email.split('@')[0];
+        } else {
+          // Try to find email from auth users
+          const authUser = authUsers?.find(au => au.id === userId);
+          if (authUser?.email) {
+            displayName = authUser.email.split('@')[0];
+          }
         }
 
         return {
-          user_id: profile.id,
+          user_id: userId,
           full_name: displayName,
           location: 'New York, NY', // Placeholder: should be from profile
           total_miles: totalMiles,
