@@ -6,9 +6,10 @@ import { ScoreCard } from '@/components/ScoreCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
+import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils } from 'lucide-react';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
+import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 
@@ -405,7 +406,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background p-3 sm:p-4 pb-20">
+    <div className="min-h-screen bg-gradient-background p-3 sm:p-4 pb-24">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -417,51 +418,69 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           </p>
         </div>
 
-        {/* 1. Daily Score - Hero Section */}
-        <div className="mb-6">
+        {/* Quick Stats Row */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          {/* 1. Daily Score - Compact */}
           <ScoreCard
-            title="Daily Score"
+            title="Score"
             score={data?.dailyScore || 0}
             maxScore={100}
-            subtitle="Keep it up!"
+            subtitle="Today"
             variant="success"
             className="animate-fade-in"
           />
-        </div>
 
-        {/* 2. Race Goal Widget */}
-        <div className="mb-6">
+          {/* 2. Race Goal Widget - Compact */}
           <RaceGoalWidget />
         </div>
 
-        {/* 3. Combined Nutrition Widget */}
+        {/* 3. Runner Nutrition Dashboard - Featured Section */}
         <div className="mb-6">
-          <CombinedNutritionWidget />
+          <RunnerNutritionDashboard />
         </div>
 
-        {/* 4. Quick Recovery Plan Button */}
-        <Card className="shadow-card mb-6">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                <Camera className="h-8 w-8 text-primary" />
+        {/* 4. Additional Tools */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          {/* Quick Recovery Plan */}
+          <Card className="shadow-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Camera className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold mb-1">Recovery Plan</h3>
+                  <p className="text-xs text-muted-foreground">Upload activity photo</p>
+                </div>
+                <Button 
+                  onClick={onAnalyzeFitness}
+                  size="sm"
+                  className="flex-shrink-0"
+                >
+                  <Camera className="h-4 w-4" />
+                </Button>
               </div>
-              <h3 className="text-lg font-semibold mb-2">Quick Recovery Plan</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Upload your activity photo for instant recovery suggestions
-              </p>
-              <Button 
-                onClick={onAnalyzeFitness}
-                className="w-full sm:w-auto"
-              >
-                <Camera className="h-4 w-4 mr-2" />
-                Get Recovery Plan
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Daily Nutrition Summary removed - now integrated into Combined Nutrition Widget */}
+          {/* Add Meal Quick Action - Info Card */}
+          <Card className="shadow-card bg-gradient-to-br from-orange-50 to-pink-50 dark:from-orange-900/10 dark:to-pink-900/10 border-orange-200 dark:border-orange-800">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Utensils className="h-6 w-6 text-orange-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold mb-1">Quick Log</h3>
+                  <p className="text-xs text-muted-foreground">Tap the orange button →</p>
+                </div>
+                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center animate-pulse">
+                  <Target className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* 4. Today's Nutrition Plan - Carousel */}
         <Card className="shadow-card mb-6">
