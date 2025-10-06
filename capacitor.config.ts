@@ -1,20 +1,41 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.95aad8de18da43a3b9f630c9f277f405',
+  appId: 'com.nutrisync.app',
   appName: 'Nutrisync',
   webDir: 'dist',
+  // Production URL - Update before building for TestFlight
   server: {
-    url: 'https://95aad8de-18da-43a3-b9f6-30c9f277f405.lovableproject.com?forceHideBadge=true',
+    url: 'https://cursor.nutrisync.pages.dev',
     cleartext: true
+  },
+  ios: {
+    contentInset: 'automatic',
+    scrollEnabled: true,
+    backgroundColor: '#ffffff'
+  },
+  android: {
+    backgroundColor: '#ffffff'
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 0
+      launchShowDuration: 1000,
+      backgroundColor: '#1e40af',
+      showSpinner: false,
+      androidSpinnerStyle: 'small',
+      iosSpinnerStyle: 'small'
     },
     Health: {
       read: ['steps', 'calories', 'heartRate', 'distance', 'activeMinutes'],
       write: []
+    },
+    Keyboard: {
+      resize: 'ionic',
+      resizeOnFullScreen: true
+    },
+    StatusBar: {
+      style: 'light',
+      backgroundColor: '#1e40af'
     }
   }
 };

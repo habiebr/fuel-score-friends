@@ -109,20 +109,15 @@ export function QuickMealLog({ onMealLogged, className = '' }: QuickMealLogProps
 
   return (
     <>
-      {/* Floating Action Button with Tooltip */}
-      <div className="fixed bottom-24 right-6 z-50 flex flex-col items-end gap-2">
-        {/* Tooltip - shows on hover */}
-        <div className="opacity-0 hover:opacity-100 transition-opacity duration-200 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg">
-          Quick Meal Log
-        </div>
-        
-        {/* FAB Button */}
+      {/* Floating Action Button - Mobile Optimized */}
+      <div className="fixed bottom-20 right-4 z-50 safe-area-inset-bottom">
+        {/* FAB Button - iOS Touch Target: 64x64 */}
         <button
           onClick={() => setOpen(true)}
-          className={`${className} w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-500 text-white rounded-full shadow-xl hover:shadow-2xl transform hover:scale-110 transition-all duration-200 flex items-center justify-center group relative`}
+          className={`${className} w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-500 text-white rounded-full shadow-2xl active:scale-95 transition-all duration-200 flex items-center justify-center relative touch-manipulation`}
           aria-label="Quick meal log"
         >
-          <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-200" />
+          <Plus className="w-8 h-8" />
           
           {/* Pulse animation ring */}
           <span className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 animate-ping opacity-20"></span>

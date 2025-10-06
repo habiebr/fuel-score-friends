@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* iOS Safe Area Insets */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-area-inset {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */

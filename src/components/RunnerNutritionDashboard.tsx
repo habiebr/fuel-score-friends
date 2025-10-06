@@ -166,14 +166,14 @@ export function RunnerNutritionDashboard({ className = '' }: RunnerNutritionDash
   return (
     <div className={className}>
       <Tabs defaultValue="today" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-6">
-          <TabsTrigger value="today">Today</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="trends">Trends</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 mb-4 h-12">
+          <TabsTrigger value="today" className="text-sm font-medium">Today</TabsTrigger>
+          <TabsTrigger value="timeline" className="text-sm font-medium">Timeline</TabsTrigger>
+          <TabsTrigger value="trends" className="text-sm font-medium">Trends</TabsTrigger>
         </TabsList>
 
-        {/* Today Tab */}
-        <TabsContent value="today" className="space-y-6">
+        {/* Today Tab - Mobile Optimized */}
+        <TabsContent value="today" className="space-y-4 mt-0">
           {/* Calorie Ring */}
           <CalorieRing
             baseGoal={data.calories.baseGoal}

@@ -406,20 +406,20 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background p-3 sm:p-4 pb-24">
+    <div className="min-h-screen bg-gradient-background p-4 pb-28 safe-area-inset">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+        {/* Header - Mobile Optimized */}
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold text-foreground leading-tight">
             Good morning! 👋
           </h1>
-          <p className="text-muted-foreground text-sm sm:text-base">
+          <p className="text-muted-foreground text-sm mt-1">
             {format(new Date(), 'EEEE, MMMM do')}
           </p>
         </div>
 
-        {/* Quick Stats Row */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        {/* Quick Stats Row - Mobile Optimized */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
           {/* 1. Daily Score - Compact */}
           <ScoreCard
             title="Score"
@@ -435,46 +435,46 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         </div>
 
         {/* 3. Runner Nutrition Dashboard - Featured Section */}
-        <div className="mb-6">
+        <div className="mb-4">
           <RunnerNutritionDashboard />
         </div>
 
-        {/* 4. Additional Tools */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {/* Quick Recovery Plan */}
-          <Card className="shadow-card">
+        {/* 4. Additional Tools - Mobile Optimized */}
+        <div className="grid grid-cols-1 gap-3 mb-4">
+          {/* Quick Recovery Plan - Touch-Friendly */}
+          <Card className="shadow-card active:scale-[0.98] transition-transform">
             <CardContent className="p-4">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <Camera className="h-6 w-6 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold mb-1">Recovery Plan</h3>
-                  <p className="text-xs text-muted-foreground">Upload activity photo</p>
+                  <h3 className="font-semibold text-base leading-tight">Recovery Plan</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Upload activity photo</p>
                 </div>
                 <Button 
                   onClick={onAnalyzeFitness}
-                  size="sm"
-                  className="flex-shrink-0"
+                  size="lg"
+                  className="flex-shrink-0 h-11 w-11 p-0"
                 >
-                  <Camera className="h-4 w-4" />
+                  <Camera className="h-5 w-5" />
                 </Button>
               </div>
             </CardContent>
           </Card>
 
           {/* Add Meal Quick Action - Info Card */}
-          <Card className="shadow-card bg-gradient-to-br from-orange-50 to-pink-50 dark:from-orange-900/10 dark:to-pink-900/10 border-orange-200 dark:border-orange-800">
+          <Card className="shadow-card bg-gradient-to-br from-orange-50 to-pink-50 dark:from-orange-900/10 dark:to-pink-900/10 border-orange-200 dark:border-orange-800 active:scale-[0.98] transition-transform">
             <CardContent className="p-4">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <Utensils className="h-6 w-6 text-orange-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold mb-1">Quick Log</h3>
-                  <p className="text-xs text-muted-foreground">Tap the orange button →</p>
+                  <h3 className="font-semibold text-base leading-tight">Quick Meal Log</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Tap the orange button below →</p>
                 </div>
-                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center animate-pulse">
+                <div className="w-11 h-11 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center animate-pulse">
                   <Target className="h-5 w-5 text-white" />
                 </div>
               </div>
