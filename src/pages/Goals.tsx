@@ -7,18 +7,26 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { AIMacroEstimation } from '@/components/AIMacroEstimation';
 import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ArrowLeft, Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
+interface TrainingActivity {
+  id?: string;
+  date: string;
+  activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
+  start_time?: string;
+  duration_minutes: number;
+  distance_km?: number;
+  intensity: 'low' | 'moderate' | 'high';
+  estimated_calories: number;
+  notes?: string;
+}
+
 interface DayPlan {
   day: string;
-  activity: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
-  duration: number;
-  distanceKm?: number;
-  estimatedCalories: number;
+  activities: TrainingActivity[];
 }
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -41,9 +49,7 @@ export default function Goals() {
   const [weekPlan, setWeekPlan] = useState<DayPlan[]>(
     DAYS.map((day) => ({
       day,
-      activity: 'rest',
-      duration: 0,
-      estimatedCalories: 0,
+      activities: []
     }))
   );
   
@@ -119,7 +125,7 @@ export default function Goals() {
     }
   };
 
-  const calculateCalories = (activity: string, duration: number, distanceKm?: number): number => {
+  const calculateCalories = (activity: TrainingActivity): number => {
     const caloriesPerMinute: { [key: string]: number } = {
       rest: 0,
       run: 10,
@@ -127,11 +133,23 @@ export default function Goals() {
       cardio: 8,
       other: 7,
     };
+
+    const intensityMultiplier = {
+      low: 0.8,
+      moderate: 1.0,
+      high: 1.2
+    };
+
     // For running, prefer distance-based rough estimate if distance is provided (≈ 60 kcal/km baseline)
-    if (activity === 'run' && typeof distanceKm === 'number' && distanceKm > 0) {
-      return Math.round(60 * distanceKm);
+    if (activity.activity_type === 'run' && typeof activity.distance_km === 'number' && activity.distance_km > 0) {
+      return Math.round(60 * activity.distance_km * intensityMultiplier[activity.intensity]);
     }
-    return Math.round((caloriesPerMinute[activity] || 0) * duration);
+
+    return Math.round(
+      (caloriesPerMinute[activity.activity_type] || 0) * 
+      activity.duration_minutes * 
+      intensityMultiplier[activity.intensity]
+    );
   };
 
   const updateDayPlan = (index: number, field: keyof DayPlan, value: any) => {
@@ -227,70 +245,83 @@ export default function Goals() {
 
     setUploading(true);
     try {
-      // Prepare payload for upsert (insert or update by user_id)
-      const updateData: any = {
-        user_id: user.id,
-        // Preserve historical fitness_goals array but prioritize new fields
-        fitness_goals: [customGoalName.trim()],
-        goal_type: raceGoal || null,
-        goal_name: customGoalName.trim() || null,
-        activity_level: JSON.stringify(weekPlan)
-      };
+      // Start a transaction
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session found');
 
-      // Only add these fields if they have values (in case columns don't exist yet)
-      if (targetDate) {
-        updateData.target_date = targetDate;
-      }
-      if (fitnessLevel) {
-        updateData.fitness_level = fitnessLevel;
-      }
-
-      // Upsert so brand-new users get a row created
-      let { error } = await supabase
+      // 1. Update profile with goal info
+      const { error: profileError } = await supabase
         .from('profiles')
-        .upsert(updateData, { onConflict: 'user_id' });
-
-      // If the new columns don't exist yet, retry without them
-      if (error && (String(error.message).includes('goal_name') || String(error.message).includes('goal_type') || String((error as any).code) === '42703')) {
-        const fallbackData: any = {
+        .upsert({
           user_id: user.id,
           fitness_goals: [customGoalName.trim()],
-          activity_level: JSON.stringify(weekPlan)
-        };
-        if (targetDate) fallbackData.target_date = targetDate;
-        if (fitnessLevel) fallbackData.fitness_level = fitnessLevel;
+          goal_type: raceGoal || null,
+          goal_name: customGoalName.trim() || null,
+          target_date: targetDate || null,
+          fitness_level: fitnessLevel || null
+        }, {
+          onConflict: 'user_id'
+        });
 
-        const retry = await supabase
-          .from('profiles')
-          .upsert(fallbackData, { onConflict: 'user_id' });
-        error = retry.error;
+      if (profileError) throw profileError;
+
+      // 2. Delete existing training activities for the next 7 days
+      const startDate = new Date().toISOString().split('T')[0];
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 7);
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      const { error: deleteError } = await supabase
+        .from('training_activities')
+        .delete()
+        .eq('user_id', user.id)
+        .gte('date', startDate)
+        .lte('date', endDateStr);
+
+      if (deleteError) throw deleteError;
+
+      // 3. Insert new training activities
+      const activities = weekPlan.flatMap((day, index) => {
+        const date = new Date();
+        date.setDate(date.getDate() + index);
+        const dateStr = date.toISOString().split('T')[0];
+
+        return day.activities.map(activity => ({
+          user_id: user.id,
+          date: dateStr,
+          activity_type: activity.activity_type,
+          start_time: activity.start_time,
+          duration_minutes: activity.duration_minutes,
+          distance_km: activity.distance_km,
+          intensity: activity.intensity,
+          estimated_calories: activity.estimated_calories,
+          notes: activity.notes
+        }));
+      });
+
+      if (activities.length > 0) {
+        const { error: insertError } = await supabase
+          .from('training_activities')
+          .insert(activities);
+
+        if (insertError) throw insertError;
       }
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw new Error(error.message || 'Database update failed');
-      }
+      // 4. Regenerate meal plans
+      const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      await supabase.functions.invoke('generate-meal-plan-range', {
+        body: { startDate, weeks: 7 },
+        headers: {
+          ...(apiKey ? { apikey: apiKey } : {}),
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
 
       toast({
         title: "Goals & Plan saved!",
         description: "Your running goal and training plan have been updated",
       });
 
-      // Regenerate meal plans for the next 7 weeks so Dashboard shows updated data
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        const session = (await supabase.auth.getSession()).data.session;
-        const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-        await supabase.functions.invoke('generate-meal-plan-range', {
-          body: { startDate: today, weeks: 7 },
-          headers: {
-            ...(apiKey ? { apikey: apiKey } : {}),
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          }
-        });
-      } catch (regenErr) {
-        console.error('Failed to refresh daily_meal_plans after save:', regenErr);
-      }
     } catch (error) {
       console.error('Error saving goals:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -484,13 +515,15 @@ export default function Goals() {
                 <div className="grid grid-cols-2 gap-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
                   <div>
                     <div className="text-2xl font-bold text-primary">
-                      {weekPlan.filter(day => day.activity !== 'rest').length}
+                      {weekPlan.reduce((sum, day) => sum + day.activities.length, 0)}
                     </div>
-                    <div className="text-sm text-muted-foreground">Active Days</div>
+                    <div className="text-sm text-muted-foreground">Total Activities</div>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-primary">
-                      {weekPlan.reduce((sum, day) => sum + day.estimatedCalories, 0)}
+                      {weekPlan.reduce((sum, day) => 
+                        sum + day.activities.reduce((daySum, activity) => 
+                          daySum + activity.estimated_calories, 0), 0)}
                     </div>
                     <div className="text-sm text-muted-foreground">Weekly Calories</div>
                   </div>
@@ -498,74 +531,154 @@ export default function Goals() {
 
                 {/* Day Plans */}
                 <div className="space-y-4">
-                  {weekPlan.map((dayPlan, index) => (
+                  {weekPlan.map((dayPlan, dayIndex) => (
                     <div
                       key={dayPlan.day}
                       className="p-4 border rounded-lg hover:border-primary/50 transition-colors"
                     >
                       <div className="flex items-center gap-3 mb-3">
-                        {dayPlan.activity === 'rest' ? (
+                        {dayPlan.activities.length === 0 ? (
                           <Pause className="h-4 w-4 text-muted-foreground" />
                         ) : (
                           <Play className="h-4 w-4 text-primary" />
                         )}
                         <div className="font-semibold text-sm flex-1">{dayPlan.day}</div>
-                        {dayPlan.estimatedCalories > 0 && (
+                        {dayPlan.activities.length > 0 && (
                           <div className="text-xs text-primary font-medium">
-                            ~{dayPlan.estimatedCalories} cal
+                            ~{dayPlan.activities.reduce((sum, activity) => sum + activity.estimated_calories, 0)} cal
                           </div>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const date = new Date();
+                            date.setDate(date.getDate() + dayIndex);
+                            addActivity(dayIndex, {
+                              date: date.toISOString().split('T')[0],
+                              activity_type: 'run',
+                              duration_minutes: 30,
+                              intensity: 'moderate',
+                              estimated_calories: 300
+                            });
+                          }}
+                          className="h-8 px-2"
+                        >
+                          + Add Activity
+                        </Button>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Activity</Label>
-                          <Select
-                            value={dayPlan.activity}
-                            onValueChange={(value) => updateDayPlan(index, 'activity', value)}
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="rest">Rest Day</SelectItem>
-                              <SelectItem value="run">Running</SelectItem>
-                              <SelectItem value="strength">Strength Training</SelectItem>
-                              <SelectItem value="cardio">Cardio</SelectItem>
-                              <SelectItem value="other">Other Exercise</SelectItem>
-                            </SelectContent>
-                          </Select>
+                      {dayPlan.activities.map((activity, activityIndex) => (
+                        <div key={activityIndex} className="mb-4 last:mb-0 p-3 bg-muted/50 rounded-lg">
+                          <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Activity</Label>
+                              <Select
+                                value={activity.activity_type}
+                                onValueChange={(value: any) => updateActivity(dayIndex, activityIndex, {
+                                  activity_type: value,
+                                  duration_minutes: activity.duration_minutes,
+                                  distance_km: undefined,
+                                  estimated_calories: calculateCalories({
+                                    ...activity,
+                                    activity_type: value,
+                                    distance_km: undefined
+                                  })
+                                })}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="run">Running</SelectItem>
+                                  <SelectItem value="strength">Strength Training</SelectItem>
+                                  <SelectItem value="cardio">Cardio</SelectItem>
+                                  <SelectItem value="other">Other Exercise</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-xs">Intensity</Label>
+                              <Select
+                                value={activity.intensity}
+                                onValueChange={(value: any) => updateActivity(dayIndex, activityIndex, {
+                                  ...activity,
+                                  intensity: value,
+                                  estimated_calories: calculateCalories({
+                                    ...activity,
+                                    intensity: value
+                                  })
+                                })}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="low">Low</SelectItem>
+                                  <SelectItem value="moderate">Moderate</SelectItem>
+                                  <SelectItem value="high">High</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            {activity.activity_type !== 'run' && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Duration (minutes)</Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="300"
+                                  value={activity.duration_minutes || ''}
+                                  onChange={(e) => updateActivity(dayIndex, activityIndex, {
+                                    ...activity,
+                                    duration_minutes: parseInt(e.target.value) || 0,
+                                    estimated_calories: calculateCalories({
+                                      ...activity,
+                                      duration_minutes: parseInt(e.target.value) || 0
+                                    })
+                                  })}
+                                  placeholder="0"
+                                  className="h-9"
+                                />
+                              </div>
+                            )}
+                            {activity.activity_type === 'run' && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Distance (km)</Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  value={typeof activity.distance_km === 'number' ? activity.distance_km : ''}
+                                  onChange={(e) => updateActivity(dayIndex, activityIndex, {
+                                    ...activity,
+                                    distance_km: parseFloat(e.target.value) || undefined,
+                                    estimated_calories: calculateCalories({
+                                      ...activity,
+                                      distance_km: parseFloat(e.target.value) || undefined
+                                    })
+                                  })}
+                                  placeholder="0.0"
+                                  className="h-9"
+                                />
+                              </div>
+                            )}
+                            <div className="flex items-end">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeActivity(dayIndex, activityIndex)}
+                                className="h-9 px-2 text-destructive hover:text-destructive"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-
-                        {dayPlan.activity !== 'rest' && dayPlan.activity !== 'run' && (
-                          <div className="space-y-1">
-                            <Label className="text-xs">Duration (minutes)</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="300"
-                              value={dayPlan.duration || ''}
-                              onChange={(e) => updateDayPlan(index, 'duration', e.target.value)}
-                              placeholder="0"
-                              className="h-9"
-                            />
-                          </div>
-                        )}
-                        {dayPlan.activity === 'run' && (
-                          <div className="space-y-1">
-                            <Label className="text-xs">Distance (km)</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.1"
-                              value={typeof dayPlan.distanceKm === 'number' ? dayPlan.distanceKm : ''}
-                              onChange={(e) => updateDayPlan(index, 'distanceKm', e.target.value)}
-                              placeholder="0.0"
-                              className="h-9"
-                            />
-                          </div>
-                        )}
-                      </div>
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -593,8 +706,6 @@ export default function Goals() {
             </Card>
           )}
 
-          {/* Nutrition Insights - Show on both steps */}
-          <AIMacroEstimation />
         </div>
       </div>
       <BottomNav onAddMeal={() => setFoodTrackerOpen(true)} />

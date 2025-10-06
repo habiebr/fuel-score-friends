@@ -17,7 +17,9 @@ import { WeeklyMilesCard } from '@/components/WeeklyMilesCard';
 import { UpcomingWorkouts } from '@/components/UpcomingWorkouts';
 import { TodayInsightsCard } from '@/components/TodayInsightsCard';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
-import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
+import { RecoverySuggestion } from '@/components/RecoverySuggestion';
+import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
+import { calculateBMR } from '@/lib/nutrition-engine';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 
 interface MealSuggestion {
@@ -82,9 +84,10 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const { getTodayData: getGoogleFitData, syncGoogleFit, isSyncing: isGoogleFitSyncing } = useGoogleFitSync();
+  const { getTodayData: getGoogleFitData, syncGoogleFit, isSyncing: isGoogleFitSyncing, lastSync, connectGoogleFit } = useGoogleFitSync();
   // Removed manual generate plan action from dashboard
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
+  const [newActivity, setNewActivity] = useState<null | { planned?: string; actual?: string; sessionId: string }>(null);
 
   // Function to determine current meal based on time and Google Fit activity patterns
   const getCurrentMealType = () => {
@@ -310,6 +313,17 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     }
   }, [user]);
 
+  // Periodic sync: check every 5 minutes; if older than 15 minutes, sync
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      if (!lastSync || (Date.now() - new Date(lastSync).getTime()) > (15 * 60 * 1000)) {
+        syncGoogleFit();
+      }
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user, lastSync, syncGoogleFit]);
+
   // Realtime: refresh when profile or meal plans change
   useEffect(() => {
     if (!user) return;
@@ -360,7 +374,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         calories_burned: googleFitData?.caloriesBurned || 0,
         active_minutes: googleFitData?.activeMinutes || 0,
         heart_rate_avg: googleFitData?.heartRateAvg || null,
-        distance_meters: googleFitData?.distanceMeters || 0
+        distance_meters: googleFitData?.distanceMeters || 0,
+        sessions: googleFitData?.sessions || []
       };
 
       // Fetch meal plans for today
@@ -390,18 +405,18 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       const dailyScore = computeDailyScore(plannedNutrition, consumedNutrition, exerciseData.calories_burned);
 
       // Calculate targets from user profile or use defaults
-      const { data: profile } = await supabase
+      const { data: profile } = await (supabase as any)
         .from('profiles')
         .select('age, sex, weight_kg, height_cm, activity_level')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      const bmr = profile ? calculateBMR(
-        profile.age || 30,
-        (profile.sex || 'male'),
-        profile.weight_kg || 70,
-        profile.height_cm || 170
-      ) : 1800;
+      const bmr = profile ? calculateBMR({
+        age: profile.age || 30,
+        sex: profile.sex || 'male',
+        weightKg: profile.weight_kg || 70,
+        heightCm: profile.height_cm || 170
+      }) : 1800;
       
       const activityMultiplier = profile?.activity_level 
         ? getActivityMultiplier(profile.activity_level)
@@ -409,6 +424,30 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       
       const calorieTarget = Math.round(bmr * activityMultiplier);
       const macroTargets = deriveMacrosFromCalories(calorieTarget);
+
+      // Detect planned vs actual activity for notification
+      try {
+        const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+        const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
+        const dayPlan = Array.isArray(weekPlan) ? weekPlan.find((d: any) => d && d.day === todayName) : null;
+        const plannedText = dayPlan ? `${dayPlan.activity || 'rest'}${dayPlan.distanceKm ? ` ${dayPlan.distanceKm} km` : dayPlan.duration ? ` ${dayPlan.duration} min` : ''}` : 'rest';
+
+        const sessions: any[] = Array.isArray(exerciseData.sessions) ? [...exerciseData.sessions] : [];
+        sessions.sort((a, b) => (parseInt(b.endTimeMillis || '0') - parseInt(a.endTimeMillis || '0')));
+        const latest = sessions[0];
+        if (latest) {
+          const id = `${latest.startTimeMillis}-${latest.endTimeMillis}`;
+          const lastAck = localStorage.getItem('lastAckSessionId');
+          // Consider recent if ended within last 6 hours
+          const ended = parseInt(latest.endTimeMillis || '0');
+          const isRecent = Date.now() - ended < 6 * 60 * 60 * 1000;
+          const activityType = (latest.activityType || latest.application || latest.name || 'activity').toString();
+          const actualText = `${activityType}${latest?.distance ? ` ${(latest.distance / 1000).toFixed(1)} km` : ''}`;
+          if (isRecent && id !== lastAck) {
+            setNewActivity({ planned: plannedText, actual: actualText, sessionId: id });
+          }
+        }
+      } catch (_) {}
 
       setData({
         dailyScore,
@@ -467,9 +506,15 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   // Calculate meal score and timing
   const calculateMealScore = () => {
     // Mock calculation based on actual nutrition data
-    const proteinScore = data?.macros?.protein ? Math.min((data.macros.protein.consumed / data.macros.protein.target) * 100, 100) : 0;
-    const carbsScore = data?.macros?.carbs ? Math.min((data.macros.carbs.consumed / data.macros.carbs.target) * 100, 100) : 0;
-    const fatScore = data?.macros?.fat ? Math.min((data.macros.fat.consumed / data.macros.fat.target) * 100, 100) : 0;
+    const safePct = (consumed?: number, target?: number) => {
+      if (!target || target <= 0) return 0;
+      const pct = ((consumed || 0) / target) * 100;
+      if (!isFinite(pct) || isNaN(pct)) return 0;
+      return Math.min(pct, 100);
+    };
+    const proteinScore = safePct(data?.macros?.protein?.consumed, data?.macros?.protein?.target);
+    const carbsScore = safePct(data?.macros?.carbs?.consumed, data?.macros?.carbs?.target);
+    const fatScore = safePct(data?.macros?.fat?.consumed, data?.macros?.fat?.target);
     
     const avgScore = Math.round((proteinScore + carbsScore + fatScore) / 3);
     
@@ -488,10 +533,20 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     distance: 8
   } : undefined;
 
-  // Pre-run meal suggestion
+  // Pre-run meal suggestion with nutrition details
   const preRunMeal = nextWorkout ? {
     food: 'Banana + Almond Butter',
-    time: new Date(nextWorkout.date.getTime() - 30 * 60000) // 30 min before
+    time: new Date(nextWorkout.date.getTime() - 60 * 60000), // 1 hour before
+    calories: 280,
+    carbs: 34,
+    protein: 8,
+    fat: 14,
+    notes: [
+      'Banana provides quick-release carbs for energy',
+      'Almond butter adds healthy fats for sustained energy',
+      'Light and easy to digest before running',
+      'Aim to finish eating 1 hour before your run'
+    ]
   } : undefined;
 
   // Today's insights
@@ -537,17 +592,22 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-2"
-                onClick={() => syncGoogleFit()}
-                disabled={isGoogleFitSyncing}
-              >
-                <Activity className="w-4 h-4" />
-                {isGoogleFitSyncing ? 'Syncing...' : 'Sync Fit'}
-              </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2"
+                  onClick={() => syncGoogleFit()}
+                  disabled={isGoogleFitSyncing}
+                >
+                  <Activity className="w-4 h-4" />
+                  {isGoogleFitSyncing ? 'Syncing...' : 'Sync Fit'}
+                </Button>
+                {lastSync && (
+                  <span className="text-xs text-muted-foreground">Last sync {new Date(lastSync).toLocaleTimeString()}</span>
+                )}
+              </div>
               <Button variant="outline" size="sm" className="gap-2">
                 <Settings className="w-4 h-4" />
                 Customize
@@ -556,18 +616,33 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           </div>
         </div>
 
-        {/* 1. Marathon Countdown */}
-        <div className="mb-4">
-          <RaceGoalWidget />
-        </div>
+        {/* Recovery Suggestion */}
+        {newActivity && (
+          <RecoverySuggestion
+            sessionEnd={new Date(parseInt(newActivity.sessionId.split('-')[1]))}
+            intensity={newActivity.actual.toLowerCase().includes('tempo') || newActivity.actual.toLowerCase().includes('interval') ? 'high' : 'moderate'}
+            duration={60} // TODO: Get from Google Fit session
+            distance={parseFloat(newActivity.actual.match(/(\d+\.?\d*)\s*km/)?.[1] || '0')}
+            calories_burned={data?.caloriesBurned || 0}
+            onDismiss={() => {
+              localStorage.setItem('lastAckSessionId', newActivity.sessionId);
+              setNewActivity(null);
+            }}
+          />
+        )}
 
-        {/* 2. Weekly Score */}
-        <div className="mb-4">
+        {/* 1. Weekly Score (moved to top) */}
+        <div className="mb-3">
           <WeeklyScoreCard
             weeklyScore={82}
             macroBalance={72}
             mealTiming={70}
           />
+        </div>
+
+        {/* 2. Marathon Countdown */}
+        <div className="mb-4">
+          <RaceGoalWidget />
         </div>
 
         {/* 3. Today's Meal Score */}

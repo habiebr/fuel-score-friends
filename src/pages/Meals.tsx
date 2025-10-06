@@ -6,6 +6,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
+import WeeklyFoodDiary from '@/pages/WeeklyFoodDiary';
 import { 
   BookOpen, 
   Utensils, 
@@ -15,9 +16,12 @@ import {
   Apple,
   Zap,
   Award,
-  Clock
+  Clock,
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { 
@@ -40,12 +44,14 @@ interface FoodLog {
   logged_at: string;
 }
 
-type Tab = 'diary' | 'suggestions' | 'training';
+type Tab = 'diary' | 'week' | 'suggestions' | 'training' | 'history';
 type MealFilter = 'all' | 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'pre-run' | 'post-run' | 'race-day';
 
 export default function Meals() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { getTodayData, lastSync } = useGoogleFitSync();
   const [activeTab, setActiveTab] = useState<Tab>('diary');
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
@@ -59,6 +65,10 @@ export default function Meals() {
     carbs: 0,
     fat: 0
   });
+  // Weekly diary state (last 7 days)
+  const [weekLogs, setWeekLogs] = useState<Record<string, FoodLog[]>>({});
+  const [weekTotals, setWeekTotals] = useState<Record<string, { calories: number; protein: number; carbs: number; fat: number }>>({});
+  const [weekDays, setWeekDays] = useState<string[]>([]);
   const [targets, setTargets] = useState({
     calories: 2400,
     protein: 120,
@@ -70,6 +80,10 @@ export default function Meals() {
   const [mealFilter, setMealFilter] = useState<MealFilter>('all');
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [recommendedRecipes, setRecommendedRecipes] = useState<RecipeScore[]>([]);
+  const [aiPlan, setAiPlan] = useState<any | null>(null);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [planKey, setPlanKey] = useState<string>('');
+  const [lastUpdated, setLastUpdated] = useState<string>('');
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({
     dietary_restrictions: [],
     eating_behaviors: [],
@@ -80,7 +94,6 @@ export default function Meals() {
     if (user) {
       loadDiaryData();
       loadUserPreferences();
-      loadRecipes();
     }
   }, [user]);
 
@@ -96,15 +109,21 @@ export default function Meals() {
     setLoading(true);
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+      const start = `${format(sevenDaysAgo, 'yyyy-MM-dd')}T00:00:00`;
+      const end = `${today}T23:59:59`;
       
-      // Load today's food logs
-      const { data: logs } = await supabase
+      // Load last 7 days logs
+      const { data: last7 } = await supabase
         .from('food_logs')
         .select('*')
         .eq('user_id', user.id)
-        .gte('logged_at', `${today}T00:00:00`)
-        .lte('logged_at', `${today}T23:59:59`)
+        .gte('logged_at', start)
+        .lte('logged_at', end)
         .order('logged_at', { ascending: false });
+
+      const logs = (last7 || []).filter(l => l.logged_at?.startsWith(today));
 
       setTodayLogs(logs || []);
 
@@ -118,12 +137,42 @@ export default function Meals() {
 
       setTodayTotals(totals);
 
+      // Group weekly logs by yyyy-MM-dd
+      const grouped: Record<string, FoodLog[]> = {};
+      const totalsByDay: Record<string, { calories: number; protein: number; carbs: number; fat: number }> = {};
+      (last7 || []).forEach((log) => {
+        const day = (log.logged_at || '').slice(0, 10);
+        if (!grouped[day]) grouped[day] = [];
+        grouped[day].push(log);
+      });
+      Object.keys(grouped).forEach((day) => {
+        totalsByDay[day] = grouped[day].reduce((acc, log) => ({
+          calories: acc.calories + (log.calories || 0),
+          protein: acc.protein + (log.protein_grams || 0),
+          carbs: acc.carbs + (log.carbs_grams || 0),
+          fat: acc.fat + (log.fat_grams || 0)
+        }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+      });
+      // Ensure all 7 days exist in order
+      const days: string[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const ds = format(d, 'yyyy-MM-dd');
+        days.push(ds);
+        if (!grouped[ds]) grouped[ds] = [];
+        if (!totalsByDay[ds]) totalsByDay[ds] = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      }
+      setWeekDays(days);
+      setWeekLogs(grouped);
+      setWeekTotals(totalsByDay);
+
       // Load user's nutrition targets from profile
-      const { data: profile } = await supabase
+      const { data: profile } = await (supabase as any)
         .from('profiles')
         .select('weight_kg, height_cm, age, sex')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profile) {
         // Calculate BMR using Mifflin-St Jeor equation
@@ -156,11 +205,11 @@ export default function Meals() {
   const loadUserPreferences = async () => {
     if (!user) return;
     try {
-      const { data: profile } = await supabase
+      const { data: profile } = await (supabase as any)
         .from('profiles')
         .select('dietary_restrictions, eating_behaviors')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profile) {
         setUserPreferences({
@@ -221,120 +270,121 @@ export default function Meals() {
   };
 
   const loadRecipes = async () => {
-    // Recipe database - matches nutrition-engine.ts Recipe interface
-    const mockRecipes: Recipe[] = [
-      {
-        id: '1',
-        name: 'Overnight Oats with Berries',
-        nutrients_per_serving: { calories: 380, cho_g: 58, protein_g: 12, fat_g: 8 },
-        prep_time: 5,
-        cost_est: 3,
-        tags: ['breakfast', 'easy', 'pre-run', 'high-fiber', 'oatmeal'],
-        ingredients: ['rolled oats', 'Greek yogurt', 'chia seeds', 'mixed berries']
-      },
-      {
-        id: '2',
-        name: 'Banana with Almond Butter',
-        nutrients_per_serving: { calories: 190, cho_g: 32, protein_g: 6, fat_g: 8 },
-        prep_time: 2,
-        cost_est: 2,
-        tags: ['snack', 'pre-run', 'easy', 'quick'],
-        ingredients: ['banana', 'almond butter']
-      },
-      {
-        id: '3',
-        name: 'Grilled Chicken with Sweet Potato',
-        nutrients_per_serving: { calories: 520, cho_g: 52, protein_g: 45, fat_g: 12 },
-        prep_time: 30,
-        cost_est: 7,
-        tags: ['lunch', 'dinner', 'post-run', 'high-protein', 'recovery'],
-        ingredients: ['chicken breast', 'sweet potato', 'broccoli', 'olive oil']
-      },
-      {
-        id: '4',
-        name: 'Recovery Smoothie',
-        nutrients_per_serving: { calories: 340, cho_g: 42, protein_g: 28, fat_g: 6 },
-        prep_time: 5,
-        cost_est: 4,
-        tags: ['snack', 'post-run', 'easy', 'protein shake', 'recovery'],
-        ingredients: ['banana', 'protein powder', 'Greek yogurt', 'berries', 'almond milk']
-      },
-      {
-        id: '5',
-        name: 'Race Day Pasta',
-        nutrients_per_serving: { calories: 680, cho_g: 95, protein_g: 38, fat_g: 14 },
-        prep_time: 25,
-        cost_est: 6,
-        tags: ['dinner', 'race-day', 'high-carb', 'pasta'],
-        ingredients: ['whole grain pasta', 'marinara sauce', 'turkey meatballs']
-      },
-      {
-        id: '6',
-        name: 'Scrambled Eggs with Avocado Toast',
-        nutrients_per_serving: { calories: 420, cho_g: 35, protein_g: 22, fat_g: 20 },
-        prep_time: 10,
-        cost_est: 4,
-        tags: ['breakfast', 'eggs', 'easy', 'high-protein'],
-        ingredients: ['eggs', 'whole grain bread', 'avocado', 'salt', 'pepper']
-      },
-      {
-        id: '7',
-        name: 'Salmon with Quinoa and Vegetables',
-        nutrients_per_serving: { calories: 580, cho_g: 48, protein_g: 42, fat_g: 22 },
-        prep_time: 35,
-        cost_est: 10,
-        tags: ['lunch', 'dinner', 'fish', 'omega-3', 'high-protein'],
-        ingredients: ['salmon fillet', 'quinoa', 'mixed vegetables', 'lemon']
-      },
-      {
-        id: '8',
-        name: 'Greek Yogurt Parfait',
-        nutrients_per_serving: { calories: 280, cho_g: 38, protein_g: 18, fat_g: 6 },
-        prep_time: 5,
-        cost_est: 3,
-        tags: ['breakfast', 'snack', 'easy', 'yogurt', 'quick'],
-        ingredients: ['Greek yogurt', 'granola', 'honey', 'berries']
-      },
-      {
-        id: '9',
-        name: 'Turkey and Hummus Wrap',
-        nutrients_per_serving: { calories: 390, cho_g: 42, protein_g: 28, fat_g: 12 },
-        prep_time: 5,
-        cost_est: 5,
-        tags: ['lunch', 'easy', 'quick', 'high-protein'],
-        ingredients: ['whole wheat wrap', 'turkey breast', 'hummus', 'lettuce', 'tomato']
-      },
-      {
-        id: '10',
-        name: 'Plant-Based Protein Bowl',
-        nutrients_per_serving: { calories: 460, cho_g: 58, protein_g: 24, fat_g: 14 },
-        prep_time: 20,
-        cost_est: 6,
-        tags: ['lunch', 'dinner', 'vegan', 'plant-based', 'high-protein'],
-        ingredients: ['chickpeas', 'brown rice', 'tahini', 'vegetables', 'quinoa']
-      },
-      {
-        id: '11',
-        name: 'Energy Balls',
-        nutrients_per_serving: { calories: 150, cho_g: 22, protein_g: 5, fat_g: 6 },
-        prep_time: 15,
-        cost_est: 2,
-        tags: ['snack', 'pre-run', 'easy', 'oatmeal', 'dates'],
-        ingredients: ['dates', 'oats', 'peanut butter', 'chia seeds']
-      },
-      {
-        id: '12',
-        name: 'Chicken Stir-Fry',
-        nutrients_per_serving: { calories: 480, cho_g: 45, protein_g: 38, fat_g: 16 },
-        prep_time: 25,
-        cost_est: 7,
-        tags: ['dinner', 'lunch', 'high-protein', 'chicken'],
-        ingredients: ['chicken breast', 'mixed vegetables', 'soy sauce', 'brown rice']
-      }
-    ];
-
-    setRecipes(mockRecipes);
+    // Deprecated mock recipes removed. Use AI plan or a future recipes table.
+    setRecipes([]);
   };
+
+  const extractRecipesFromAiPlan = (plan: any): Recipe[] => {
+    if (!plan) return [];
+    const meals = ['breakfast','lunch','dinner','snack'];
+    const list: Recipe[] = [];
+    meals.forEach((m) => {
+      const meal = plan[m];
+      if (meal && Array.isArray(meal.suggestions)) {
+        meal.suggestions.forEach((s: any, idx: number) => {
+          list.push({
+            id: `${m}-${idx}`,
+            name: s.name || `Menu ${m}`,
+            nutrients_per_serving: {
+              calories: s.calories || meal.target_calories,
+              cho_g: s.carbs ?? meal.target_carbs,
+              protein_g: s.protein ?? meal.target_protein,
+              fat_g: s.fat ?? meal.target_fat
+            },
+            prep_time: s.prep_time || 10,
+            cost_est: 3,
+            tags: [m, 'indonesian'],
+            ingredients: s.foods || []
+          });
+        });
+      }
+    });
+    return list;
+  };
+
+  const generateAIPlan = async () => {
+    if (!user) return;
+    try {
+      setGeneratingPlan(true);
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const cacheKey = `aiPlan:${today}:${planKey || 'default'}`;
+      const { data: prefData } = await supabase
+        .from('user_preferences')
+        .select('value')
+        .eq('user_id', user.id)
+        .eq('key', cacheKey)
+        .maybeSingle();
+
+      if (prefData?.value?.mealPlan) {
+        setAiPlan(prefData.value.mealPlan);
+        setLastUpdated(prefData.value.updatedAt || new Date().toISOString());
+        setRecommendedRecipes(extractRecipesFromAiPlan(prefData.value.mealPlan).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
+        setGeneratingPlan(false);
+        return;
+      }
+      }
+      const session = (await supabase.auth.getSession()).data.session;
+      const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
+        body: { date: today },
+        headers: {
+          ...(apiKey ? { apikey: apiKey } : {}),
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        }
+      });
+      if (error) throw error;
+      setAiPlan(data?.mealPlan || null);
+      setLastUpdated(new Date().toISOString());
+      const toCache = { mealPlan: data?.mealPlan || null, updatedAt: new Date().toISOString() };
+      await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: user.id,
+          key: cacheKey,
+          value: toCache,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,key'
+        });
+      setRecommendedRecipes(extractRecipesFromAiPlan(data?.mealPlan || null).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
+      toast({ title: 'AI Meal Plan ready', description: 'Personalized Indonesian meal plan generated.' });
+    } catch (e: any) {
+      toast({ title: 'AI generation failed', description: e?.message || 'Please try again', variant: 'destructive' });
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
+
+  const updatePlanKeyFromActivity = async () => {
+    if (!user) return;
+    try {
+      const today = await getTodayData();
+      const steps = today?.steps || 0;
+      const distance = (today as any)?.distance_meters ?? today?.distanceMeters ?? 0;
+      const sessionsCount = Array.isArray(today?.sessions) ? today.sessions.length : 0;
+      const ls = lastSync ? new Date(lastSync).toISOString() : 'nosync';
+      const key = `${steps}|${Math.round(distance)}|${sessionsCount}|${ls}`.slice(0, 128);
+      setPlanKey(key);
+    } catch {
+      setPlanKey('none');
+    }
+  };
+
+  // Recompute plan key whenever Google Fit lastSync changes
+  useEffect(() => {
+    if (user) {
+      updatePlanKeyFromActivity();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSync, user]);
+
+  // Auto-generate when planKey changes (e.g., training plan updated)
+  useEffect(() => {
+    if (user) {
+      generateAIPlan();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planKey]);
 
   const getCompatibilityColor = (compatibility: 'excellent' | 'good' | 'fair' | 'incompatible') => {
     switch (compatibility) {
@@ -405,7 +455,7 @@ export default function Meals() {
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
-        {/* Header */}
+          {/* Header */}
         <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
@@ -431,7 +481,16 @@ export default function Meals() {
               className="flex-shrink-0"
             >
               <BookOpen className="w-4 h-4 mr-2" />
-              Diary
+              Today
+            </Button>
+            <Button
+              variant={activeTab === 'history' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setActiveTab('history')}
+              className="flex-shrink-0"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              History
             </Button>
             <Button
               variant={activeTab === 'suggestions' ? 'default' : 'outline'}
@@ -457,13 +516,18 @@ export default function Meals() {
           </div>
         </div>
 
-        {/* Content */}
+          {/* Content */}
         <div className="p-4 space-y-4">
+          {/* History Tab */}
+          {activeTab === 'history' && (
+            <WeeklyFoodDiary />
+          )}
+
           {/* Diary Tab */}
           {activeTab === 'diary' && (
             <>
               {/* Today's Nutrition Card */}
-              <Card className="shadow-card">
+          <Card className="shadow-card">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-1">Today's Nutrition</h3>
                   <p className="text-sm text-muted-foreground mb-4">
@@ -480,8 +544,8 @@ export default function Meals() {
                           className="h-full bg-gradient-to-r from-orange-500 to-pink-500"
                           style={{ width: `${Math.min(100, (todayTotals.calories / targets.calories) * 100)}%` }}
                         />
-                      </div>
-                    </div>
+              </div>
+                        </div>
 
                     {/* Protein */}
                     <div>
@@ -504,8 +568,8 @@ export default function Meals() {
                           className="h-full bg-green-500"
                           style={{ width: `${Math.min(100, (todayTotals.carbs / targets.carbs) * 100)}%` }}
                         />
-                      </div>
-                    </div>
+                              </div>
+                            </div>
 
                     {/* Fat */}
                     <div>
@@ -516,28 +580,21 @@ export default function Meals() {
                           className="h-full bg-yellow-500"
                           style={{ width: `${Math.min(100, (todayTotals.fat / targets.fat) * 100)}%` }}
                         />
-                      </div>
+                        </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+            </CardContent>
+          </Card>
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  variant="outline"
-                  className="h-12"
-                  onClick={() => navigate('/meals/history')}
-                >
-                  Food Log
-                </Button>
+              {/* Add Food */}
+              <div className="grid grid-cols-1 gap-3">
                 <Button
                   className="h-12 bg-gradient-to-r from-orange-500 to-pink-500 text-white"
                   onClick={() => setFoodTrackerOpen(true)}
                 >
                   Add Food
                 </Button>
-              </div>
+            </div>
 
               {/* Meals by Type */}
               {Object.entries(groupLogsByMeal()).map(([mealType, logs]) => (
@@ -570,9 +627,9 @@ export default function Meals() {
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-1">
                                   P: {log.protein_grams}g C: {log.carbs_grams}g F: {log.fat_grams}g
-                                </div>
                               </div>
-                              <div className="text-right">
+                            </div>
+                            <div className="text-right">
                                 <div className="text-lg font-bold">{log.calories} kcal</div>
                               </div>
                             </div>
@@ -590,10 +647,65 @@ export default function Meals() {
             </>
           )}
 
+          {/* Weekly Diary Tab */}
+          {activeTab === 'week' && (
+            <>
+              <Card className="shadow-card">
+                <CardContent className="p-4">
+                  <h3 className="text-lg font-semibold mb-2">Weekly Food Diary</h3>
+                  <div className="grid grid-cols-7 gap-2">
+                    {weekDays.map((day) => (
+                      <div key={day} className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
+                        <div className="text-xs font-medium mb-1">{format(new Date(day), 'EEE')}</div>
+                        <div className="text-sm font-semibold">{weekTotals[day]?.calories || 0} kcal</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          P {weekTotals[day]?.protein || 0} • C {weekTotals[day]?.carbs || 0} • F {weekTotals[day]?.fat || 0}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {weekDays.map((day) => (
+                      <Card key={`d-${day}`} className="border">
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="font-semibold text-sm">{format(new Date(day), 'EEE, MMM d')}</div>
+                            <div className="text-sm text-muted-foreground">{weekTotals[day]?.calories || 0} kcal</div>
+                          </div>
+                          {(weekLogs[day] || []).length > 0 ? (
+                            <div className="space-y-2">
+                              {(weekLogs[day] || []).map((log) => (
+                                <div key={log.id} className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 rounded-md p-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium truncate">{log.food_name}</div>
+                                    <div className="text-xs text-muted-foreground">{format(new Date(log.logged_at), 'hh:mm a')} • {log.meal_type}</div>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                    <span>P {log.protein_grams}g</span>
+                                    <span>C {log.carbs_grams}g</span>
+                                    <span>F {log.fat_grams}g</span>
+                                    <span className="font-semibold text-foreground">{log.calories} kcal</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">No entries</div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
           {/* Suggestions Tab */}
           {activeTab === 'suggestions' && (
             <>
-              <Card className="shadow-card">
+          <Card className="shadow-card">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-1">Smart Food Suggestions</h3>
                   <p className="text-sm text-muted-foreground mb-4">
@@ -615,11 +727,52 @@ export default function Meals() {
                       </Button>
                     ))}
                   </div>
+              {lastUpdated && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Last updated {new Date(lastUpdated).toLocaleTimeString()}
+                </div>
+              )}
                 </CardContent>
               </Card>
 
-              {/* AI-Recommended Recipe Cards */}
+              {/* AI-Recommended Recipe Cards or AI Plan */}
               <div className="space-y-4">
+                {aiPlan && (
+                  <Card className="shadow-card">
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-base mb-3">AI Meal Plan (Today)</h3>
+                      {['breakfast','lunch','dinner','snack'].map((m) => aiPlan[m] ? (
+                        <div key={m} className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="capitalize font-medium">{m}</div>
+                            <div className="text-xs text-muted-foreground">Target: {aiPlan[m].target_calories} kcal</div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-2">
+                              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{aiPlan[m].target_protein}g</div>
+                              <div className="text-xs text-muted-foreground">Protein</div>
+                            </div>
+                            <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-2">
+                              <div className="text-lg font-bold text-green-600 dark:text-green-400">{aiPlan[m].target_carbs}g</div>
+                              <div className="text-xs text-muted-foreground">Carbs</div>
+                            </div>
+                            <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded-lg py-2">
+                              <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{aiPlan[m].target_fat}g</div>
+                              <div className="text-xs text-muted-foreground">Fat</div>
+                            </div>
+                          </div>
+                          {Array.isArray(aiPlan[m].suggestions) && aiPlan[m].suggestions.length > 0 && (
+                            <ul className="mt-2 text-sm list-disc list-inside text-muted-foreground">
+                              {aiPlan[m].suggestions.slice(0,2).map((s: any, i: number) => (
+                                <li key={i}>{s.name} — {s.calories} kcal</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ) : null)}
+                    </CardContent>
+                  </Card>
+                )}
                 {recommendedRecipes.length === 0 && (
                   <Card className="shadow-card">
                     <CardContent className="p-8 text-center">
@@ -678,8 +831,8 @@ export default function Meals() {
                         <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded-lg py-2">
                           <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{recipe.nutrients_per_serving.fat_g}g</div>
                           <div className="text-xs text-muted-foreground">Fat</div>
-                        </div>
-                      </div>
+            </div>
+          </div>
 
                       {recipe.ingredients && recipe.ingredients.length > 0 && (
                         <div className="mb-3 text-xs text-muted-foreground">

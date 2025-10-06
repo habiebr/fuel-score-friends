@@ -20,15 +20,30 @@ const Index = () => {
       navigate('/auth');
     } else if (!loading && user) {
       // Check if user has seen onboarding
-      const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-      if (!hasSeenOnboarding) {
+      const { data } = await supabase
+        .from('user_preferences')
+        .select('value')
+        .eq('user_id', user.id)
+        .eq('key', 'onboarding')
+        .maybeSingle();
+      
+      if (!data?.value?.hasSeenOnboarding) {
         setShowOnboarding(true);
       }
     }
   }, [user, loading, navigate]);
 
-  const handleOnboardingComplete = () => {
-    localStorage.setItem('hasSeenOnboarding', 'true');
+  const handleOnboardingComplete = async () => {
+    await supabase
+      .from('user_preferences')
+      .upsert({
+        user_id: user.id,
+        key: 'onboarding',
+        value: { hasSeenOnboarding: true },
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,key'
+      });
     setShowOnboarding(false);
   };
 

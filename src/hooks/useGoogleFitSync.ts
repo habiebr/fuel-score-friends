@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +17,108 @@ export function useGoogleFitSync() {
   const { toast } = useToast();
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'success' | 'error' | 'pending' | null>(null);
+
+  // Load last sync time from Supabase on mount
+  useEffect(() => {
+    if (!user) return;
+    const loadLastSync = async () => {
+      try {
+        const { data } = await supabase
+          .from('user_preferences')
+          .select('value')
+          .eq('user_id', user.id)
+          .eq('key', 'googleFitLastSync')
+          .maybeSingle();
+        
+        if (data?.value?.lastSync) {
+          setLastSync(new Date(data.value.lastSync));
+        }
+      } catch (error) {
+        console.error('Error loading last sync time:', error);
+      }
+    };
+    loadLastSync();
+  }, [user]);
+
+  // Save last sync time to Supabase
+  useEffect(() => {
+    if (user && lastSync) {
+      supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: user.id,
+          key: 'googleFitLastSync',
+          value: { lastSync: lastSync.toISOString() },
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,key'
+        })
+        .then(({ error }) => {
+          if (error) console.error('Error saving last sync time:', error);
+        });
+    }
+  }, [user, lastSync]);
+
+  // Check connection status on mount and token refresh
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const token = await getGoogleAccessToken();
+        setIsConnected(!!token);
+      } catch {
+        setIsConnected(false);
+      }
+    };
+    checkConnection();
+  }, [getGoogleAccessToken]);
+
+  // Auto-sync every 15 minutes if connected
+  useEffect(() => {
+    if (!user || !isConnected) return;
+
+    // Initial sync if needed
+    const storedSync = localStorage.getItem(`googleFitLastSync_${user.id}`);
+    const lastSyncTime = storedSync ? new Date(storedSync) : null;
+    if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (15 * 60 * 1000)) {
+      syncGoogleFit();
+    }
+
+    // Set up 15-minute interval
+    const interval = setInterval(() => {
+      syncGoogleFit();
+    }, 15 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [user, isConnected]);
+
+  const connectGoogleFit = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: [
+            'https://www.googleapis.com/auth/fitness.activity.read',
+            'https://www.googleapis.com/auth/fitness.location.read',
+            'https://www.googleapis.com/auth/fitness.heart_rate.read',
+            'https://www.googleapis.com/auth/fitness.body.read'
+          ].join(' '),
+        }
+      });
+      if (error) throw error;
+      setIsConnected(true);
+      return data;
+    } catch (error: any) {
+      toast({
+        title: 'Google Fit connection failed',
+        description: error.message || 'Unable to start Google OAuth',
+        variant: 'destructive'
+      });
+      setIsConnected(false);
+      return null;
+    }
+  }, [toast]);
 
   /**
    * Fetch today's Google Fit data and sync to database
@@ -28,11 +130,19 @@ export function useGoogleFitSync() {
     }
 
     setIsSyncing(true);
+    setSyncStatus('pending');
     
     try {
       const accessToken = await getGoogleAccessToken();
       if (!accessToken) {
-        throw new Error('No Google access token available. Please connect Google Fit.');
+        toast({
+          title: 'Google Fit not connected',
+          description: 'Please connect Google Fit to sync your activity.',
+        });
+        setIsSyncing(false);
+        setIsConnected(false);
+        setSyncStatus('error');
+        return null;
       }
 
       const today = new Date();
@@ -105,7 +215,7 @@ export function useGoogleFitSync() {
       };
 
       // Save to database using upsert (insert or update)
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('google_fit_data')
         .upsert({
           user_id: user.id,
@@ -126,7 +236,10 @@ export function useGoogleFitSync() {
         throw error;
       }
 
-      setLastSync(new Date());
+      const now = new Date();
+      setLastSync(now);
+      setSyncStatus('success');
+      setIsConnected(true);
       
       toast({
         title: "Google Fit synced",
@@ -144,6 +257,11 @@ export function useGoogleFitSync() {
         variant: "destructive",
       });
       
+      setSyncStatus('error');
+      if (error.message?.includes('401')) {
+        setIsConnected(false);
+      }
+      
       return null;
     } finally {
       setIsSyncing(false);
@@ -159,12 +277,12 @@ export function useGoogleFitSync() {
     try {
       const today = new Date().toISOString().split('T')[0];
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('google_fit_data')
         .select('*')
         .eq('user_id', user.id)
         .eq('date', today)
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') { // Ignore "not found" error
         throw error;
@@ -173,6 +291,13 @@ export function useGoogleFitSync() {
       if (!data) {
         // No data for today, trigger a sync
         return await syncGoogleFit();
+      }
+
+      // Check if data is stale (older than 15 minutes)
+      const lastSyncedAt = data.last_synced_at ? new Date(data.last_synced_at) : null;
+      if (!lastSyncedAt || (Date.now() - lastSyncedAt.getTime()) > (15 * 60 * 1000)) {
+        // Data is stale, trigger a background sync
+        syncGoogleFit();
       }
 
       return {
@@ -194,7 +319,9 @@ export function useGoogleFitSync() {
     syncGoogleFit,
     getTodayData,
     isSyncing,
-    lastSync
+    lastSync,
+    isConnected,
+    syncStatus,
+    connectGoogleFit
   };
 }
-

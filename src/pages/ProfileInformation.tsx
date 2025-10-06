@@ -45,7 +45,7 @@ export default function ProfileInformation() {
     const { data } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (data) {
@@ -68,14 +68,14 @@ export default function ProfileInformation() {
       const { error } = await supabase
         .from('profiles')
         .upsert({
-          id: user.id,
+          user_id: user.id,
           full_name: formData.full_name,
           sex: formData.sex,
           weight_kg: parseFloat(formData.weight_kg) || null,
           height_cm: parseFloat(formData.height_cm) || null,
           age: parseInt(formData.age) || null,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'user_id' });
 
       if (error) throw error;
 

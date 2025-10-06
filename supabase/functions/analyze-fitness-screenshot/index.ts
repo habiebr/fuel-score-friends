@@ -127,16 +127,10 @@ Rules:
       console.error('Failed to parse Gemini response as JSON:', parseError);
       console.error('Response text:', responseText);
       
-      // Fallback: create a basic response structure
+      // Recovery suggestions are now handled by generate-recovery-plan function
       suggestions = {
-        instantRecoverySnack: [
-          { name: "Greek yogurt & banana", description: "Quick carb + protein combo", calories: 250, protein: 18, carbs: 35, fat: 4, foods: ["1 cup Greek yogurt", "1 banana"] },
-          { name: "Chocolate milk", description: "Convenient recovery drink", calories: 220, protein: 12, carbs: 30, fat: 6, foods: ["500 ml low‑fat chocolate milk"] }
-        ],
-        recoveryMeal: [
-          { name: "Chicken, rice, veggies", description: "Balanced post‑workout plate", calories: 600, protein: 40, carbs: 70, fat: 15, foods: ["150g chicken breast", "1 cup cooked rice", "1 cup mixed veggies", "1 tsp olive oil"] },
-          { name: "Salmon pasta bowl", description: "Omega‑3 rich recovery", calories: 650, protein: 35, carbs: 70, fat: 22, foods: ["120g salmon", "2 cups cooked pasta", "spinach", "olive oil"] }
-        ]
+        instantRecoverySnack: [],
+        recoveryMeal: []
       };
     }
 

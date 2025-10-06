@@ -81,7 +81,7 @@ export default function Community() {
       console.log(`Found ${scores?.length || 0} nutrition score entries`);
 
       // Get Google Fit data for weekly miles
-      const { data: fitData, error: fitError } = await supabase
+      const { data: fitData, error: fitError } = await (supabase as any)
         .from('google_fit_data')
         .select('user_id, distance_meters, date')
         .gte('date', sevenDaysAgo.toISOString().split('T')[0]);
@@ -90,6 +90,17 @@ export default function Community() {
         console.error('Error loading Google Fit data:', fitError);
       }
       console.log(`Found ${fitData?.length || 0} Google Fit data entries`);
+
+      // Also fetch longer-range data for total miles (past 365 days)
+      const oneYearAgo = new Date();
+      oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+      const { data: fitYear, error: fitYearErr } = await (supabase as any)
+        .from('google_fit_data')
+        .select('user_id, distance_meters, date')
+        .gte('date', oneYearAgo.toISOString().split('T')[0]);
+      if (fitYearErr) {
+        console.error('Error loading yearly Google Fit data:', fitYearErr);
+      }
 
       // Calculate stats per user - include ALL users even with no data
       const userStats = profiles.map(profile => {
@@ -101,10 +112,14 @@ export default function Community() {
           ? Math.round(userScores.reduce((sum, s) => sum + s.daily_score, 0) / userScores.length)
           : 0;
 
-        const userFitData = fitData?.filter(f => f.user_id === userId) || [];
+        const fitDataArr = (fitData as any[]) || [];
+        const userFitData = fitDataArr.filter(f => f.user_id === userId);
         const weeklyMeters = userFitData.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
         const weeklyMiles = Math.round(weeklyMeters / 1609.34);
-        const totalMiles = weeklyMiles * 10; // Placeholder: should be from cumulative data
+        const fitYearArr = (fitYear as any[]) || [];
+        const userFitYear = fitYearArr.filter(f => f.user_id === userId);
+        const yearMeters = userFitYear.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
+        const totalMiles = Math.round(yearMeters / 1609.34); // cumulative miles over last year
 
         // Generate display name: use full_name or show as "Anonymous Runner"
         const displayName = profile.full_name || `Runner ${userId.substring(0, 4)}`;

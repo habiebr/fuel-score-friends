@@ -109,87 +109,32 @@ export function RaceGoalWidget() {
     return () => clearInterval(id);
   }, [raceDate]);
 
-  if (!goalLabel) {
-    return (
-      <Card className="shadow-card mb-6 bg-gradient-to-br from-muted/5 to-muted/10 border-muted/20">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <Target className="h-4 w-4 text-muted-foreground" />
-                <span className="font-semibold text-sm text-muted-foreground">Race Goal</span>
-              </div>
-              <div className="text-lg font-bold text-muted-foreground">No goal set</div>
-              <div className="text-xs text-muted-foreground mt-1">Set your running goal to see countdown timer</div>
+  return (
+    <Card className={`shadow-card mb-6 bg-gradient-to-br ${goalLabel ? 'from-primary/5 to-primary-glow/10 border-primary/20' : 'from-muted/5 to-muted/10 border-muted/20'}`}>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Target className={`h-4 w-4 ${goalLabel ? 'text-primary' : 'text-muted-foreground'}`} />
+            <div className={`font-medium text-sm ${goalLabel ? 'text-primary' : 'text-muted-foreground'}`}>
+              {goalLabel || 'No goal set'}
             </div>
+          </div>
+          {countdown && raceDate ? (
+            <div className="flex items-center gap-2 text-sm text-primary font-medium">
+              <Clock className="h-4 w-4" />
+              <span>{countdown.days}d {countdown.hours}h {countdown.minutes}m</span>
+            </div>
+          ) : (
             <Button 
               variant="ghost" 
               size="sm"
               onClick={() => navigate('/goals')}
               className="text-primary hover:text-primary-glow"
             >
-              Set Goal
+              {goalLabel ? 'Update' : 'Set Goal'}
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="shadow-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <Target className="h-4 w-4 text-primary" />
-              <span className="font-semibold text-sm">Race Goal</span>
-            </div>
-            <div className="text-lg font-bold text-primary">{goalLabel}</div>
-            {raceDate && (
-              <div className="text-xs text-muted-foreground mt-1">
-                Target: {Math.max(0, Math.floor(differenceInDays(raceDate, new Date()) / 30))} months
-              </div>
-            )}
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => navigate('/goals')}
-            className="text-primary hover:text-primary-glow"
-          >
-            Update
-          </Button>
+          )}
         </div>
-        {countdown && raceDate && (
-          <div className="pt-3 border-t border-primary/10">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="h-3 w-3 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground">Time until race:</span>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              <div className="text-center bg-primary/10 rounded-lg p-2">
-                <div className="text-xl font-bold text-primary">{countdown.days}</div>
-                <div className="text-xs text-muted-foreground">Days</div>
-              </div>
-              <div className="text-center bg-primary/10 rounded-lg p-2">
-                <div className="text-xl font-bold text-primary">{countdown.hours}</div>
-                <div className="text-xs text-muted-foreground">Hours</div>
-              </div>
-              <div className="text-center bg-primary/10 rounded-lg p-2">
-                <div className="text-xl font-bold text-primary">{countdown.minutes}</div>
-                <div className="text-xs text-muted-foreground">Mins</div>
-              </div>
-              <div className="text-center bg-primary/10 rounded-lg p-2">
-                <div className="text-xl font-bold text-primary">{countdown.seconds}</div>
-                <div className="text-xs text-muted-foreground">Secs</div>
-              </div>
-            </div>
-            <div className="text-xs text-center text-muted-foreground mt-2">
-              Race date: {format(raceDate, 'MMM dd, yyyy')}
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

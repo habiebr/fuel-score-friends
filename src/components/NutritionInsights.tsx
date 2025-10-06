@@ -122,16 +122,7 @@ export function NutritionInsights({
       });
     }
 
-    // Recovery window advice
-    const currentHour = new Date().getHours();
-    if (currentHour >= 17 && currentHour <= 20 && calories.exercise > 300) {
-      results.push({
-        type: 'info',
-        icon: Lightbulb,
-        message: 'Post-run recovery window',
-        tip: 'Consume protein + carbs within 30-60 min of your run for optimal recovery.',
-      });
-    }
+    // Recovery window advice is now handled by RecoverySuggestion component
 
     return results;
   }, [calories, macros, runningGoal, trainingIntensity, hydrationMl]);

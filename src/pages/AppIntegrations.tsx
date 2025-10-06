@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,11 +14,25 @@ import { useToast } from '@/hooks/use-toast';
 export default function AppIntegrations() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { syncGoogleFit, isSyncing } = useGoogleFitSync();
-  const { signInWithGoogle } = useAuth();
+  const { syncGoogleFit, isSyncing, lastSync, connectGoogleFit } = useGoogleFitSync();
+  const { signInWithGoogle, getGoogleAccessToken } = useAuth();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [syncLabel, setSyncLabel] = useState<string>('');
+
+  useEffect(() => {
+    (async () => {
+      const token = await getGoogleAccessToken();
+      setIsConnected(!!token);
+    })();
+  }, [getGoogleAccessToken]);
+
+  useEffect(() => {
+    if (lastSync) {
+      setSyncLabel(`Last sync ${new Date(lastSync).toLocaleTimeString()}`);
+    }
+  }, [lastSync]);
 
   const handleConnect = async () => {
     try {
@@ -93,7 +107,7 @@ export default function AppIntegrations() {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-base">Google Fit</h3>
                       <p className="text-sm text-muted-foreground">
-                        {isConnected ? 'Connected' : 'Not connected'}
+                        {isConnected ? (syncLabel || 'Connected') : 'Not connected'}
                       </p>
                     </div>
                     <Button
