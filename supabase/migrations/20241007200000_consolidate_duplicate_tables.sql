@@ -55,32 +55,34 @@ END $$;
 
 DO $$ 
 BEGIN
-  -- Check if we have duplicate weight columns
+  -- Consolidate weight columns to weight_kg (NUMERIC)
   IF EXISTS (SELECT 1 FROM information_schema.columns 
-             WHERE table_name = 'profiles' AND column_name = 'weight' 
-             AND data_type = 'integer') THEN
+             WHERE table_name = 'profiles' AND column_name = 'weight') THEN
     
-    -- Move INTEGER weight to NUMERIC weight_kg if weight_kg doesn't exist
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name = 'profiles' AND column_name = 'weight_kg') THEN
+      -- Rename weight to weight_kg
       ALTER TABLE public.profiles RENAME COLUMN weight TO weight_kg;
-      ALTER TABLE public.profiles ALTER COLUMN weight_kg TYPE NUMERIC;
+      -- Ensure it's NUMERIC type
+      ALTER TABLE public.profiles ALTER COLUMN weight_kg TYPE NUMERIC USING weight_kg::NUMERIC;
     ELSE
-      -- If weight_kg exists, drop the integer weight column
+      -- If both exist, keep weight_kg and drop weight
       ALTER TABLE public.profiles DROP COLUMN IF EXISTS weight;
     END IF;
   END IF;
 
-  -- Same for height
+  -- Consolidate height columns to height_cm (NUMERIC)
   IF EXISTS (SELECT 1 FROM information_schema.columns 
-             WHERE table_name = 'profiles' AND column_name = 'height' 
-             AND data_type = 'integer') THEN
+             WHERE table_name = 'profiles' AND column_name = 'height') THEN
     
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name = 'profiles' AND column_name = 'height_cm') THEN
+      -- Rename height to height_cm
       ALTER TABLE public.profiles RENAME COLUMN height TO height_cm;
-      ALTER TABLE public.profiles ALTER COLUMN height_cm TYPE NUMERIC;
+      -- Ensure it's NUMERIC type
+      ALTER TABLE public.profiles ALTER COLUMN height_cm TYPE NUMERIC USING height_cm::NUMERIC;
     ELSE
+      -- If both exist, keep height_cm and drop height
       ALTER TABLE public.profiles DROP COLUMN IF EXISTS height;
     END IF;
   END IF;
@@ -104,23 +106,55 @@ COMMENT ON TABLE public.friends IS 'Friend connections for community features';
 -- ============================================================================
 
 -- View: User summary with all related data
-CREATE OR REPLACE VIEW public.user_summary AS
-SELECT 
-  p.user_id,
-  p.full_name,
-  p.sex,
-  p.weight_kg,
-  p.height_cm,
-  p.age,
-  COUNT(DISTINCT fl.id) as total_meals_logged,
-  COUNT(DISTINCT ns.date) as days_with_scores,
-  AVG(ns.daily_score) as avg_nutrition_score,
-  SUM(COALESCE(gf.distance_meters, 0)) / 1609.34 as total_miles
-FROM public.profiles p
-LEFT JOIN public.food_logs fl ON fl.user_id = p.user_id
-LEFT JOIN public.nutrition_scores ns ON ns.user_id = p.user_id
-LEFT JOIN public.google_fit_data gf ON gf.user_id = p.user_id
-GROUP BY p.user_id, p.full_name, p.sex, p.weight_kg, p.height_cm, p.age;
+-- Only include columns that exist
+DO $$
+DECLARE
+  has_weight_kg BOOLEAN;
+  has_height_cm BOOLEAN;
+BEGIN
+  -- Check if columns exist after consolidation
+  SELECT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'profiles' AND column_name = 'weight_kg') INTO has_weight_kg;
+  SELECT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'profiles' AND column_name = 'height_cm') INTO has_height_cm;
+  
+  -- Create view with appropriate columns
+  IF has_weight_kg AND has_height_cm THEN
+    -- Full view with all metrics
+    EXECUTE 'CREATE OR REPLACE VIEW public.user_summary AS
+      SELECT 
+        p.user_id,
+        p.full_name,
+        p.sex,
+        p.weight_kg,
+        p.height_cm,
+        p.age,
+        COUNT(DISTINCT fl.id) as total_meals_logged,
+        COUNT(DISTINCT ns.date) as days_with_scores,
+        AVG(ns.daily_score) as avg_nutrition_score,
+        SUM(COALESCE(gf.distance_meters, 0)) / 1609.34 as total_miles
+      FROM public.profiles p
+      LEFT JOIN public.food_logs fl ON fl.user_id = p.user_id
+      LEFT JOIN public.nutrition_scores ns ON ns.user_id = p.user_id
+      LEFT JOIN public.google_fit_data gf ON gf.user_id = p.user_id
+      GROUP BY p.user_id, p.full_name, p.sex, p.weight_kg, p.height_cm, p.age';
+  ELSE
+    -- Fallback view without body metrics
+    EXECUTE 'CREATE OR REPLACE VIEW public.user_summary AS
+      SELECT 
+        p.user_id,
+        p.full_name,
+        COUNT(DISTINCT fl.id) as total_meals_logged,
+        COUNT(DISTINCT ns.date) as days_with_scores,
+        AVG(ns.daily_score) as avg_nutrition_score,
+        SUM(COALESCE(gf.distance_meters, 0)) / 1609.34 as total_miles
+      FROM public.profiles p
+      LEFT JOIN public.food_logs fl ON fl.user_id = p.user_id
+      LEFT JOIN public.nutrition_scores ns ON ns.user_id = p.user_id
+      LEFT JOIN public.google_fit_data gf ON gf.user_id = p.user_id
+      GROUP BY p.user_id, p.full_name';
+  END IF;
+END $$;
 
 COMMENT ON VIEW public.user_summary IS 'Consolidated view of user profile with activity summary';
 
