@@ -47,26 +47,24 @@ export default function Community() {
         .select('id, user_id, full_name');
 
       if (profilesError) {
-        console.error('Error loading profiles:', profilesError);
+        console.error('❌ Error loading profiles:', profilesError);
+        setLeaderboard([]); // Set empty to show "No users found" message
+        setLoading(false);
         return;
       }
 
       if (!profiles || profiles.length === 0) {
-        console.log('No profiles found in database');
+        console.log('⚠️ No profiles found in database - users may need to complete onboarding');
+        setLeaderboard([]); // Set empty to show "No users found" message
         setLoading(false);
         return;
       }
 
       console.log(`Found ${profiles.length} total profiles in database`);
       
-      // Get auth users to fetch emails
-      const { data: { users: authUsers }, error: authError } = await supabase.auth.admin.listUsers();
-      
-      if (authError) {
-        console.warn('Could not fetch auth users (admin access required):', authError);
-      }
-      
-      console.log(`Found ${authUsers?.length || 0} auth users`);
+      // Note: We can't use admin.listUsers() in client-side code
+      // Instead, we'll use full_name from profiles or show "Anonymous Runner"
+      console.log('Using profile data for display names (no admin access)');
 
       // Get nutrition scores for the past 7 days
       const sevenDaysAgo = new Date();
@@ -108,17 +106,8 @@ export default function Community() {
         const weeklyMiles = Math.round(weeklyMeters / 1609.34);
         const totalMiles = weeklyMiles * 10; // Placeholder: should be from cumulative data
 
-        // Generate display name: use full_name, or email username, or "Runner"
-        let displayName = 'Anonymous Runner';
-        if (profile.full_name) {
-          displayName = profile.full_name;
-        } else {
-          // Try to find email from auth users
-          const authUser = authUsers?.find(au => au.id === userId);
-          if (authUser?.email) {
-            displayName = authUser.email.split('@')[0];
-          }
-        }
+        // Generate display name: use full_name or show as "Anonymous Runner"
+        const displayName = profile.full_name || `Runner ${userId.substring(0, 4)}`;
 
         return {
           user_id: userId,
@@ -164,18 +153,22 @@ export default function Community() {
         entry.rank = index + 1;
       });
 
+      console.log(`✅ Processed ${userStats.length} users for leaderboard`);
       console.log('Top 5 users:', userStats.slice(0, 5).map(u => ({
         name: u.full_name,
+        user_id: u.user_id.substring(0, 8),
         score: u.nutrition_score,
         miles: u.total_miles,
-        composite: u.composite_score
+        composite: u.composite_score.toFixed(2)
       })));
 
       // Find current user's rank
       const currentUserRank = userStats.find(entry => entry.user_id === user.id);
+      console.log('Current user rank:', currentUserRank ? `#${currentUserRank.rank}` : 'not found');
       setUserRank(currentUserRank || null);
 
       // Set ALL users (not just top 20) so we can show everyone
+      console.log(`📊 Setting ${userStats.length} users to leaderboard state`);
       setLeaderboard(userStats);
 
     } catch (error) {
