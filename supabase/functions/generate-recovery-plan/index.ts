@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { Groq } from 'https://esm.sh/@groq/groq';
+import Groq from 'https://esm.sh/groq-sdk@0.3.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { calculateRecoveryNeeds, getIndonesianRecoveryMeals } from '../_shared/nutrition-unified.ts';
 

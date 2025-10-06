@@ -16,21 +16,25 @@ const Index = () => {
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate('/auth');
-    } else if (!loading && user) {
-      // Check if user has seen onboarding
-      const { data } = await supabase
-        .from('user_preferences')
-        .select('value')
-        .eq('user_id', user.id)
-        .eq('key', 'onboarding')
-        .maybeSingle();
-      
-      if (!data?.value?.hasSeenOnboarding) {
-        setShowOnboarding(true);
+    const checkOnboarding = async () => {
+      if (!loading && !user) {
+        navigate('/auth');
+      } else if (!loading && user) {
+        // Check if user has seen onboarding
+        const { data } = await supabase
+          .from('user_preferences')
+          .select('value')
+          .eq('user_id', user.id)
+          .eq('key', 'onboarding')
+          .maybeSingle();
+        
+        if (!data?.value?.hasSeenOnboarding) {
+          setShowOnboarding(true);
+        }
       }
-    }
+    };
+    
+    checkOnboarding();
   }, [user, loading, navigate]);
 
   const handleOnboardingComplete = async () => {

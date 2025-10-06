@@ -322,7 +322,7 @@ export default function Meals() {
         setGeneratingPlan(false);
         return;
       }
-      }
+      
       const session = (await supabase.auth.getSession()).data.session;
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
