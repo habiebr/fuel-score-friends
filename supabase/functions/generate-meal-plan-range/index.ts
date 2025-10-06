@@ -2,7 +2,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
-import { calculateTDEE } from "../_shared/nutrition.ts";
+import { generateUserMealPlan, mealPlanToDbRecords } from "../_shared/meal-planner.ts";
+import { UserProfile } from "../_shared/nutrition-unified.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -44,17 +45,17 @@ serve(async (req) => {
     // Profile and training plan
     const { data: profile } = await supabaseAdmin
       .from("profiles")
-      .select("*")
+      .select("user_id, weight_kg, height_cm, age, sex, activity_level, fitness_goals")
       .eq("user_id", userId)
       .single();
 
     const fitnessGoal = profile?.goal_type || profile?.fitness_goals?.[0];
     const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
 
-    async function getWearableForDate(dateStr: string) {
+    async function getFitForDate(dateStr: string) {
       const { data } = await supabaseAdmin
-        .from("wearable_data")
-        .select("*")
+        .from("google_fit_data")
+        .select("calories_burned")
         .eq("user_id", userId)
         .eq("date", dateStr)
         .maybeSingle();
@@ -71,26 +72,27 @@ serve(async (req) => {
       const dateStr = d.toISOString().split("T")[0];
 
       try {
-        const wearableData = await getWearableForDate(dateStr);
+        const fit = await getFitForDate(dateStr);
         const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
         const todayPlan = weekPlan ? weekPlan.find((p: any) => p.day === weekday) : null;
 
-        // Prefer distance-based estimate if provided in training plan (approx kcal ≈ weightKg * km)
-        const distanceKm = typeof todayPlan?.distanceKm === 'number' ? todayPlan.distanceKm : undefined;
-        const distanceBasedKcal = distanceKm && profile?.weight ? Math.round(profile.weight * distanceKm) : undefined;
+        const userProfile: UserProfile = {
+          weightKg: profile?.weight_kg || 70,
+          heightCm: profile?.height_cm || 170,
+          age: profile?.age || 30,
+          sex: (profile?.sex || 'male') as 'male' | 'female',
+        };
 
-        const tdee = calculateTDEE({
-          weightKg: profile?.weight,
-          heightCm: profile?.height,
-          ageYears: profile?.age,
-          activityLevel: profile?.activity_level,
-          wearableCaloriesToday: wearableData?.calories_burned || distanceBasedKcal || (todayPlan?.estimatedCalories || 0),
-          fitnessGoal,
-          weekPlan,
+        const plan = await generateUserMealPlan({
+          userId,
+          date: dateStr,
+          userProfile,
+          trainingActivity: todayPlan?.activity || 'rest',
+          trainingDuration: todayPlan?.duration,
+          trainingDistance: todayPlan?.distanceKm,
+          googleFitCalories: fit?.calories_burned || 0,
+          useAI: false,
         });
-
-        const totalDailyCalories = tdee.totalDailyCalories;
-        const trainingIntensity = tdee.trainingIntensity;
 
         const context = `
 You are an expert nutritionist and meal planner. Return ONLY valid JSON.
@@ -166,21 +168,12 @@ Return ONLY valid JSON in this exact format:
   }` : ''}
 }`;
 
-        let mealPlan: any = {
-          breakfast: { target_calories: Math.round(totalDailyCalories * 0.30), target_protein: Math.round((totalDailyCalories * 0.30 * 0.30) / 4), target_carbs: Math.round((totalDailyCalories * 0.30 * 0.40) / 4), target_fat: Math.round((totalDailyCalories * 0.30 * 0.30) / 9), suggestions: [] },
-          lunch: { target_calories: Math.round(totalDailyCalories * 0.40), target_protein: Math.round((totalDailyCalories * 0.40 * 0.30) / 4), target_carbs: Math.round((totalDailyCalories * 0.40 * 0.40) / 4), target_fat: Math.round((totalDailyCalories * 0.40 * 0.30) / 9), suggestions: [] },
-          dinner: { target_calories: Math.round(totalDailyCalories * 0.30), target_protein: Math.round((totalDailyCalories * 0.30 * 0.30) / 4), target_carbs: Math.round((totalDailyCalories * 0.30 * 0.40) / 4), target_fat: Math.round((totalDailyCalories * 0.30 * 0.30) / 9), suggestions: [] },
-        };
-        
-        // Add snack for training days
-        if (isTrainingDay) {
-          mealPlan.snack = { 
-            target_calories: Math.round(totalDailyCalories * 0.10), 
-            target_protein: Math.round((totalDailyCalories * 0.10 * 0.20) / 4), 
-            target_carbs: Math.round((totalDailyCalories * 0.10 * 0.60) / 4), 
-            target_fat: Math.round((totalDailyCalories * 0.10 * 0.20) / 9), 
-            suggestions: [] 
-          };
+        // Convert to DB records and save
+        const records = mealPlanToDbRecords(userId, plan);
+        for (const record of records) {
+          await supabaseAdmin
+            .from("daily_meal_plans")
+            .upsert(record, { onConflict: "user_id,date,meal_type" });
         }
 
         if (GROQ_API_KEY) {
@@ -205,39 +198,6 @@ Return ONLY valid JSON in this exact format:
               try { mealPlan = JSON.parse(content); } catch {}
             }
           }
-        }
-
-        const mealTypes = ["breakfast", "lunch", "dinner"] as const;
-        
-        // Add snack category for training days
-        const isTrainingDay = todayPlan && todayPlan.activity && todayPlan.activity !== 'rest' && (todayPlan.estimatedCalories || todayPlan.distanceKm || todayPlan.duration);
-        if (isTrainingDay) {
-          mealTypes.push("snack");
-        }
-        
-        for (const mealType of mealTypes) {
-          let meal = mealPlan[mealType] || {};
-          const pct = mealType === 'breakfast' ? 0.30 : mealType === 'lunch' ? 0.40 : mealType === 'snack' ? 0.10 : 0.30;
-          
-          // Adjust macro ratios for snacks (more carbs for recovery)
-          const proteinRatio = mealType === 'snack' ? 0.20 : 0.30;
-          const carbsRatio = mealType === 'snack' ? 0.60 : 0.40;
-          const fatRatio = mealType === 'snack' ? 0.20 : 0.30;
-          
-          const record = {
-            user_id: userId,
-            date: dateStr,
-            meal_type: mealType,
-            recommended_calories: meal.target_calories ?? Math.round(totalDailyCalories * pct),
-            recommended_protein_grams: meal.target_protein ?? Math.round((totalDailyCalories * pct * proteinRatio) / 4),
-            recommended_carbs_grams: meal.target_carbs ?? Math.round((totalDailyCalories * pct * carbsRatio) / 4),
-            recommended_fat_grams: meal.target_fat ?? Math.round((totalDailyCalories * pct * fatRatio) / 9),
-            meal_suggestions: Array.isArray(meal.suggestions) ? meal.suggestions : [],
-          };
-
-          await supabaseAdmin
-            .from("daily_meal_plans")
-            .upsert(record, { onConflict: "user_id,date,meal_type" });
         }
 
         results.push({ date: dateStr, ok: true });
