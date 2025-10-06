@@ -18,6 +18,7 @@ import { UpcomingWorkouts } from '@/components/UpcomingWorkouts';
 import { TodayInsightsCard } from '@/components/TodayInsightsCard';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, calculateBMR, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
+import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 
 interface MealSuggestion {
   name: string;
@@ -81,15 +82,16 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const { getTodayData: getGoogleFitData, syncGoogleFit, isSyncing: isGoogleFitSyncing } = useGoogleFitSync();
   // Removed manual generate plan action from dashboard
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
 
-  // Function to determine current meal based on time and wearable data patterns
+  // Function to determine current meal based on time and Google Fit activity patterns
   const getCurrentMealType = () => {
     const now = new Date();
     const currentHour = now.getHours();
     
-    // Check if we have wearable stats to determine patterns
+    // Check if we have Google Fit data to determine activity patterns
     if (data) {
       const steps = data.steps || 0;
       const calories_burned = data.caloriesBurned || 0;
@@ -349,15 +351,17 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         .eq('date', today)
         .maybeSingle();
 
-      // Fetch wearable data for today (pick latest if duplicates exist)
-      const { data: wearableList } = await (supabase as any)
-        .from('wearable_data')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      const wearableData: any = Array.isArray(wearableList) && wearableList.length > 0 ? wearableList[0] : null;
+      // Fetch Google Fit data for today
+      const googleFitData = await getGoogleFitData();
+      
+      // Transform Google Fit data to match expected format
+      const exerciseData = {
+        steps: googleFitData?.steps || 0,
+        calories_burned: googleFitData?.caloriesBurned || 0,
+        active_minutes: googleFitData?.activeMinutes || 0,
+        heart_rate_avg: googleFitData?.heartRateAvg || null,
+        distance_meters: googleFitData?.distanceMeters || 0
+      };
 
       // Fetch meal plans for today
       const { data: plans } = await supabase
@@ -383,7 +387,28 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
       const plannedNutrition = accumulatePlannedFromMealPlans(plans || []);
       const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs || []);
-      const dailyScore = computeDailyScore(plannedNutrition, consumedNutrition, wearableData?.calories_burned || 0);
+      const dailyScore = computeDailyScore(plannedNutrition, consumedNutrition, exerciseData.calories_burned);
+
+      // Calculate targets from user profile or use defaults
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('age, gender, weight_kg, height_cm, activity_level')
+        .eq('id', user.id)
+        .single();
+
+      const bmr = profile ? calculateBMR(
+        profile.age || 30,
+        profile.gender || 'male',
+        profile.weight_kg || 70,
+        profile.height_cm || 170
+      ) : 1800;
+      
+      const activityMultiplier = profile?.activity_level 
+        ? getActivityMultiplier(profile.activity_level)
+        : 1.5;
+      
+      const calorieTarget = Math.round(bmr * activityMultiplier);
+      const macroTargets = deriveMacrosFromCalories(calorieTarget);
 
       setData({
         dailyScore,
@@ -392,10 +417,10 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         carbsGrams: consumedNutrition.carbs,
         fatGrams: consumedNutrition.fat,
         mealsLogged: foodLogs?.length || 0,
-        steps: wearableData?.steps || 0,
-        caloriesBurned: wearableData?.calories_burned || 0,
-        activeMinutes: wearableData?.active_minutes || 0,
-        heartRateAvg: wearableData?.heart_rate_avg ?? null,
+        steps: exerciseData.steps,
+        caloriesBurned: exerciseData.calories_burned,
+        activeMinutes: exerciseData.active_minutes,
+        heartRateAvg: exerciseData.heart_rate_avg,
         plannedCalories: plannedNutrition.calories,
         plannedProtein: plannedNutrition.protein,
         plannedCarbs: plannedNutrition.carbs,
@@ -512,10 +537,22 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Settings className="w-4 h-4" />
-              Customize
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={() => syncGoogleFit()}
+                disabled={isGoogleFitSyncing}
+              >
+                <Activity className="w-4 h-4" />
+                {isGoogleFitSyncing ? 'Syncing...' : 'Sync Fit'}
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Settings className="w-4 h-4" />
+                Customize
+              </Button>
+            </div>
           </div>
         </div>
 
