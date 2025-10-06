@@ -78,12 +78,28 @@ export function useGoogleFitSync() {
   useEffect(() => {
     if (!user || !isConnected) return;
 
-    // Initial sync if needed
-    const storedSync = localStorage.getItem(`googleFitLastSync_${user.id}`);
-    const lastSyncTime = storedSync ? new Date(storedSync) : null;
-    if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (15 * 60 * 1000)) {
-      syncGoogleFit();
-    }
+    // Initial sync if needed - check Supabase data instead of localStorage
+    const checkAndSync = async () => {
+      try {
+        const { data } = await supabase
+          .from('google_fit_data')
+          .select('last_synced_at')
+          .eq('user_id', user.id)
+          .eq('date', new Date().toISOString().split('T')[0])
+          .maybeSingle();
+        
+        const lastSyncTime = data?.last_synced_at ? new Date(data.last_synced_at) : null;
+        if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (15 * 60 * 1000)) {
+          syncGoogleFit();
+        }
+      } catch (error) {
+        console.error('Error checking sync status:', error);
+        // If we can't check, try to sync anyway
+        syncGoogleFit();
+      }
+    };
+
+    checkAndSync();
 
     // Set up 15-minute interval
     const interval = setInterval(() => {

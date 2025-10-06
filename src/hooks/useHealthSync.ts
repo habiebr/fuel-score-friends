@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useGoogleFit } from './useGoogleFit';
+import { useGoogleFitSync } from './useGoogleFitSync';
 import { useHealthKit } from './useHealthKit';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,7 +25,7 @@ interface SyncStatus {
 export function useHealthSync() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const googleFit = useGoogleFit();
+  const googleFit = useGoogleFitSync();
   const healthKit = useHealthKit();
   
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -137,12 +137,17 @@ export function useHealthSync() {
         }
       }
 
-      // 2) If no wearable .fit, try Google Fit (if authorized)
-      if (!newData && googleFit.isAuthorized) {
-        const googleData = await googleFit.fetchTodayData();
+      // 2) If no wearable .fit, try Google Fit (if connected)
+      if (!newData && googleFit.isConnected) {
+        const googleData = await googleFit.getTodayData();
         if (googleData) {
           newData = {
-            ...googleData,
+            steps: googleData.steps,
+            calories: googleData.caloriesBurned,
+            activeMinutes: googleData.activeMinutes,
+            heartRate: googleData.heartRateAvg || 0,
+            distance: googleData.distanceMeters,
+            date: new Date().toISOString().split('T')[0],
             source: 'google_fit'
           };
           source = 'google_fit';
@@ -283,9 +288,9 @@ export function useHealthSync() {
     loadTodayData,
     // Expose individual service states
     googleFit: {
-      isAuthorized: googleFit.isAuthorized,
-      authorize: googleFit.authorize,
-      signOut: googleFit.signOut
+      isConnected: googleFit.isConnected,
+      connectGoogleFit: googleFit.connectGoogleFit,
+      syncGoogleFit: googleFit.syncGoogleFit
     },
     appleHealth: {
       isAvailable: healthKit.isAvailable,

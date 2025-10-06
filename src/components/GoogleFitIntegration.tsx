@@ -15,50 +15,45 @@ import {
   ExternalLink,
   Settings
 } from 'lucide-react';
-import { useGoogleFit } from '@/hooks/useGoogleFit';
+import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useToast } from '@/hooks/use-toast';
 
 interface GoogleFitData {
   steps: number;
-  calories: number;
+  caloriesBurned: number;
   activeMinutes: number;
-  heartRate: number;
-  distance: number;
-  date: string;
+  heartRateAvg?: number;
+  distanceMeters: number;
+  sessions?: any[];
 }
 
 export function GoogleFitIntegration() {
   const { 
-    isLoaded, 
-    isAuthorized, 
-    isLoading, 
-    error, 
-    authorize, 
-    signOut, 
-    fetchTodayData 
-  } = useGoogleFit();
+    isConnected, 
+    isSyncing, 
+    lastSync, 
+    syncStatus, 
+    connectGoogleFit, 
+    getTodayData 
+  } = useGoogleFitSync();
   
   const { toast } = useToast();
   const [healthData, setHealthData] = useState<GoogleFitData | null>(null);
-  const [lastSync, setLastSync] = useState<Date | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
 
-  // Load data when authorized
+  // Load data when connected
   useEffect(() => {
-    if (isAuthorized && isLoaded) {
+    if (isConnected) {
       loadHealthData();
     }
-  }, [isAuthorized, isLoaded]);
+  }, [isConnected]);
 
   const loadHealthData = async () => {
-    if (!isAuthorized) return;
+    if (!isConnected) return;
 
-    setIsSyncing(true);
     try {
-      const data = await fetchTodayData();
+      const data = await getTodayData();
       if (data) {
         setHealthData(data);
-        setLastSync(new Date());
       }
     } catch (err) {
       console.error('Failed to load health data:', err);
@@ -67,15 +62,13 @@ export function GoogleFitIntegration() {
         description: "Could not fetch health data from Google Fit",
         variant: "destructive",
       });
-    } finally {
-      setIsSyncing(false);
     }
   };
 
   const handleAuthorize = async () => {
     try {
-      const success = await authorize();
-      if (success) {
+      const result = await connectGoogleFit();
+      if (result) {
         toast({
           title: "Google Fit connected!",
           description: "Successfully authorized Google Fit access",
@@ -94,9 +87,8 @@ export function GoogleFitIntegration() {
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      // For now, just clear local state since Supabase handles the actual sign out
       setHealthData(null);
-      setLastSync(null);
       toast({
         title: "Disconnected",
         description: "Google Fit has been disconnected",
@@ -119,17 +111,17 @@ export function GoogleFitIntegration() {
 
   const progress = {
     steps: Math.min((healthData?.steps || 0) / goals.steps * 100, 100),
-    calories: Math.min((healthData?.calories || 0) / goals.calories * 100, 100),
+    calories: Math.min((healthData?.caloriesBurned || 0) / goals.calories * 100, 100),
     activeMinutes: Math.min((healthData?.activeMinutes || 0) / goals.activeMinutes * 100, 100)
   };
 
-  if (!isLoaded) {
+  if (isSyncing) {
     return (
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center justify-center">
             <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-            <span>Loading Google Fit API...</span>
+            <span>Syncing Google Fit data...</span>
           </div>
         </CardContent>
       </Card>
@@ -145,7 +137,7 @@ export function GoogleFitIntegration() {
             Google Fit Integration
           </div>
           <div className="flex items-center gap-2">
-            {isAuthorized ? (
+            {isConnected ? (
               <Badge className="bg-green-500">Connected</Badge>
             ) : (
               <Badge variant="secondary">Not Connected</Badge>
@@ -155,15 +147,15 @@ export function GoogleFitIntegration() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Error Display */}
-        {error && (
+        {syncStatus === 'error' && (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
             <AlertCircle className="h-4 w-4 text-red-500" />
-            <span className="text-sm text-red-600">{error}</span>
+            <span className="text-sm text-red-600">Failed to sync with Google Fit</span>
           </div>
         )}
 
         {/* Authorization Section */}
-        {!isAuthorized ? (
+        {!isConnected ? (
           <div className="space-y-4">
             <div className="text-center space-y-2">
               <p className="text-sm text-muted-foreground">
@@ -171,11 +163,11 @@ export function GoogleFitIntegration() {
               </p>
               <Button 
                 onClick={handleAuthorize}
-                disabled={isLoading}
+                disabled={isSyncing}
                 className="w-full"
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
-                {isLoading ? 'Connecting...' : 'Connect Google Fit'}
+                {isSyncing ? 'Connecting...' : 'Connect Google Fit'}
               </Button>
             </div>
             
@@ -205,7 +197,7 @@ export function GoogleFitIntegration() {
                   disabled={isSyncing}
                 >
                   <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                  Sync
+                  {isSyncing ? 'Syncing...' : 'Sync'}
                 </Button>
                 <Button
                   variant="outline"
@@ -222,6 +214,15 @@ export function GoogleFitIntegration() {
             {lastSync && (
               <div className="text-xs text-muted-foreground">
                 Last synced: {lastSync.toLocaleString()}
+                {syncStatus === 'success' && (
+                  <span className="ml-2 text-green-600">✓</span>
+                )}
+                {syncStatus === 'error' && (
+                  <span className="ml-2 text-red-600">✗</span>
+                )}
+                {syncStatus === 'pending' && (
+                  <span className="ml-2 text-blue-600">⟳</span>
+                )}
               </div>
             )}
 
@@ -250,7 +251,7 @@ export function GoogleFitIntegration() {
                     <span className="text-sm font-medium">Calories</span>
                   </div>
                   <div className="text-2xl font-bold">
-                    {Math.round(healthData.calories)}
+                    {Math.round(healthData.caloriesBurned)}
                   </div>
                   <Progress value={progress.calories} className="h-2" />
                   <div className="text-xs text-muted-foreground">
@@ -280,7 +281,7 @@ export function GoogleFitIntegration() {
                     <span className="text-sm font-medium">Heart Rate</span>
                   </div>
                   <div className="text-2xl font-bold">
-                    {healthData.heartRate || 'N/A'}
+                    {healthData.heartRateAvg ? Math.round(healthData.heartRateAvg) : 'N/A'}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     BPM
