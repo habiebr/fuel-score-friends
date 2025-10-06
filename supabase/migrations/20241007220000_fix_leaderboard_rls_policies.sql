@@ -4,6 +4,10 @@
 -- Drop the old restrictive policy that only allows viewing own profile
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 
+-- Drop existing policies to recreate them
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+
 -- Create new policies that allow:
 -- 1. All authenticated users can VIEW all profiles (for leaderboard)
 -- 2. Users can only UPDATE/INSERT their own profile (for security)
@@ -25,6 +29,8 @@ WITH CHECK (auth.uid() = user_id);
 
 -- Also fix nutrition_scores to allow viewing all scores for leaderboard
 DROP POLICY IF EXISTS "Users can view their own nutrition scores" ON public.nutrition_scores;
+DROP POLICY IF EXISTS "Users can insert their own nutrition scores" ON public.nutrition_scores;
+DROP POLICY IF EXISTS "Users can update their own nutrition scores" ON public.nutrition_scores;
 
 CREATE POLICY "Authenticated users can view all nutrition scores for leaderboard" 
 ON public.nutrition_scores FOR SELECT 
@@ -44,6 +50,10 @@ USING (auth.uid() = user_id);
 
 -- Fix google_fit_data policies for leaderboard visibility
 DROP POLICY IF EXISTS "Users can view their own wearable data" ON public.google_fit_data;
+DROP POLICY IF EXISTS "Users can insert their own wearable data" ON public.google_fit_data;
+DROP POLICY IF EXISTS "Users can update their own wearable data" ON public.google_fit_data;
+DROP POLICY IF EXISTS "Users can insert their own Google Fit data" ON public.google_fit_data;
+DROP POLICY IF EXISTS "Users can update their own Google Fit data" ON public.google_fit_data;
 
 CREATE POLICY "Authenticated users can view all Google Fit data for leaderboard" 
 ON public.google_fit_data FOR SELECT 
