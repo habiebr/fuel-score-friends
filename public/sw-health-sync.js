@@ -291,6 +291,52 @@ async function updateSyncStatus(status, timestamp, error = null) {
   });
 }
 
+// Intercept fetches to Supabase REST to inject required headers
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  const isSupabaseRest = url.hostname.includes('supabase.co') && url.pathname.includes('/rest/v1/');
+  if (!isSupabaseRest) return;
+
+  event.respondWith((async () => {
+    try {
+      // Attempt to get anon key from clients (postMessage-based, fallback to cache env var if injected)
+      const anonKey = self.__VITE_SUPABASE_ANON_KEY__ || (self.env && self.env.VITE_SUPABASE_ANON_KEY) || undefined;
+      const authHeader = await getCurrentAuthHeader();
+
+      const headers = new Headers(event.request.headers);
+      if (anonKey && !headers.has('apikey')) headers.set('apikey', anonKey);
+      if (authHeader && !headers.has('Authorization')) headers.set('Authorization', authHeader);
+
+      const req = new Request(event.request, { headers });
+      return await fetch(req);
+    } catch (e) {
+      return fetch(event.request);
+    }
+  })());
+});
+
+// Helper to get the latest session token from clients
+async function getCurrentAuthHeader() {
+  try {
+    const allClients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+    if (allClients.length === 0) return undefined;
+
+    // Ask the first client for its auth header
+    const client = allClients[0];
+    const channel = new MessageChannel();
+    const response = await new Promise((resolve) => {
+      channel.port1.onmessage = (e) => resolve(e.data);
+      client.postMessage({ type: 'REQUEST_AUTH_HEADER' }, [channel.port2]);
+      setTimeout(() => resolve(undefined), 500);
+    });
+
+    if (response && response.accessToken) {
+      return `Bearer ${response.accessToken}`;
+    }
+  } catch (_) {}
+  return undefined;
+}
+
 // Cleanup old caches
 async function cleanupOldCaches() {
   const cacheNames = await caches.keys();
