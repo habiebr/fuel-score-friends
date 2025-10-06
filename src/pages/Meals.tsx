@@ -20,6 +20,14 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { 
+  Recipe,
+  RecipeScore,
+  UserPreferences,
+  recommendRecipesForMeal,
+  calculateBMR,
+  getActivityFactor
+} from '@/lib/nutrition-engine';
 
 interface FoodLog {
   id: string;
@@ -30,20 +38,6 @@ interface FoodLog {
   carbs_grams: number;
   fat_grams: number;
   logged_at: string;
-}
-
-interface Recipe {
-  id: string;
-  name: string;
-  description: string;
-  calories: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  prep_time_min: number;
-  difficulty: 'easy' | 'medium' | 'hard';
-  meal_type: string[];
-  timing_tags: string[];
 }
 
 type Tab = 'diary' | 'suggestions' | 'training';
@@ -75,13 +69,27 @@ export default function Meals() {
   // Suggestions tab state
   const [mealFilter, setMealFilter] = useState<MealFilter>('all');
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [recommendedRecipes, setRecommendedRecipes] = useState<RecipeScore[]>([]);
+  const [userPreferences, setUserPreferences] = useState<UserPreferences>({
+    dietary_restrictions: [],
+    eating_behaviors: [],
+    time_budget_min: 60
+  });
 
   useEffect(() => {
     if (user) {
       loadDiaryData();
+      loadUserPreferences();
       loadRecipes();
     }
   }, [user]);
+
+  // Recalculate recommendations when filter or preferences change
+  useEffect(() => {
+    if (recipes.length > 0 && userPreferences) {
+      generateRecommendations();
+    }
+  }, [mealFilter, recipes, userPreferences]);
 
   const loadDiaryData = async () => {
     if (!user) return;
@@ -145,85 +153,196 @@ export default function Meals() {
     }
   };
 
+  const loadUserPreferences = async () => {
+    if (!user) return;
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('dietary_restrictions, eating_behaviors')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profile) {
+        setUserPreferences({
+          dietary_restrictions: profile.dietary_restrictions || [],
+          eating_behaviors: profile.eating_behaviors || [],
+          time_budget_min: 60
+        });
+      }
+    } catch (error) {
+      console.error('Error loading user preferences:', error);
+    }
+  };
+
+  const generateRecommendations = () => {
+    if (recipes.length === 0) return;
+
+    // Get meal target based on filter
+    let mealTarget = {
+      kcal: targets.calories / 3,
+      cho_g: targets.carbs / 3,
+      protein_g: targets.protein / 3,
+      fat_g: targets.fat / 3
+    };
+
+    // Adjust for meal type
+    if (mealFilter === 'breakfast') {
+      mealTarget.kcal = targets.calories * 0.25;
+      mealTarget.cho_g = targets.carbs * 0.25;
+      mealTarget.protein_g = targets.protein * 0.25;
+      mealTarget.fat_g = targets.fat * 0.25;
+    } else if (mealFilter === 'lunch') {
+      mealTarget.kcal = targets.calories * 0.35;
+      mealTarget.cho_g = targets.carbs * 0.35;
+      mealTarget.protein_g = targets.protein * 0.35;
+      mealTarget.fat_g = targets.fat * 0.35;
+    } else if (mealFilter === 'dinner') {
+      mealTarget.kcal = targets.calories * 0.30;
+      mealTarget.cho_g = targets.carbs * 0.30;
+      mealTarget.protein_g = targets.protein * 0.30;
+      mealTarget.fat_g = targets.fat * 0.30;
+    } else if (mealFilter === 'snack' || mealFilter === 'pre-run' || mealFilter === 'post-run') {
+      mealTarget.kcal = targets.calories * 0.10;
+      mealTarget.cho_g = targets.carbs * 0.15;
+      mealTarget.protein_g = targets.protein * 0.10;
+      mealTarget.fat_g = targets.fat * 0.05;
+    }
+
+    // Use the recommendation engine
+    const recommendations = recommendRecipesForMeal(
+      recipes,
+      mealTarget,
+      mealFilter === 'all' ? 'breakfast' : mealFilter as any,
+      userPreferences,
+      20 // Top 20 recipes
+    );
+
+    setRecommendedRecipes(recommendations);
+  };
+
   const loadRecipes = async () => {
-    // Mock recipe data - in production, this would come from a database
+    // Recipe database - matches nutrition-engine.ts Recipe interface
     const mockRecipes: Recipe[] = [
       {
         id: '1',
         name: 'Overnight Oats with Berries',
-        description: 'Rolled oats soaked overnight with Greek yogurt, chia seeds, and mixed berries',
-        calories: 380,
-        protein_g: 12,
-        carbs_g: 58,
-        fat_g: 8,
-        prep_time_min: 5,
-        difficulty: 'easy',
-        meal_type: ['breakfast'],
-        timing_tags: ['2-3 hours before run']
+        nutrients_per_serving: { calories: 380, cho_g: 58, protein_g: 12, fat_g: 8 },
+        prep_time: 5,
+        cost_est: 3,
+        tags: ['breakfast', 'easy', 'pre-run', 'high-fiber', 'oatmeal'],
+        ingredients: ['rolled oats', 'Greek yogurt', 'chia seeds', 'mixed berries']
       },
       {
         id: '2',
         name: 'Banana with Almond Butter',
-        description: 'One medium banana with 1 tbsp natural almond butter',
-        calories: 190,
-        protein_g: 6,
-        carbs_g: 32,
-        fat_g: 8,
-        prep_time_min: 2,
-        difficulty: 'easy',
-        meal_type: ['snack'],
-        timing_tags: ['30-60 min before run']
+        nutrients_per_serving: { calories: 190, cho_g: 32, protein_g: 6, fat_g: 8 },
+        prep_time: 2,
+        cost_est: 2,
+        tags: ['snack', 'pre-run', 'easy', 'quick'],
+        ingredients: ['banana', 'almond butter']
       },
       {
         id: '3',
         name: 'Grilled Chicken with Sweet Potato',
-        description: 'Grilled chicken breast with roasted sweet potato and steamed broccoli',
-        calories: 520,
-        protein_g: 45,
-        carbs_g: 52,
-        fat_g: 12,
-        prep_time_min: 30,
-        difficulty: 'medium',
-        meal_type: ['lunch', 'dinner'],
-        timing_tags: ['recovery meal']
+        nutrients_per_serving: { calories: 520, cho_g: 52, protein_g: 45, fat_g: 12 },
+        prep_time: 30,
+        cost_est: 7,
+        tags: ['lunch', 'dinner', 'post-run', 'high-protein', 'recovery'],
+        ingredients: ['chicken breast', 'sweet potato', 'broccoli', 'olive oil']
       },
       {
         id: '4',
         name: 'Recovery Smoothie',
-        description: 'Banana, protein powder, Greek yogurt, berries, and almond milk',
-        calories: 340,
-        protein_g: 28,
-        carbs_g: 42,
-        fat_g: 6,
-        prep_time_min: 5,
-        difficulty: 'easy',
-        meal_type: ['snack'],
-        timing_tags: ['within 30 min after run']
+        nutrients_per_serving: { calories: 340, cho_g: 42, protein_g: 28, fat_g: 6 },
+        prep_time: 5,
+        cost_est: 4,
+        tags: ['snack', 'post-run', 'easy', 'protein shake', 'recovery'],
+        ingredients: ['banana', 'protein powder', 'Greek yogurt', 'berries', 'almond milk']
       },
       {
         id: '5',
         name: 'Race Day Pasta',
-        description: 'Whole grain pasta with marinara sauce and lean turkey meatballs',
-        calories: 680,
-        protein_g: 38,
-        carbs_g: 95,
-        fat_g: 14,
-        prep_time_min: 25,
-        difficulty: 'medium',
-        meal_type: ['dinner'],
-        timing_tags: ['night before race']
+        nutrients_per_serving: { calories: 680, cho_g: 95, protein_g: 38, fat_g: 14 },
+        prep_time: 25,
+        cost_est: 6,
+        tags: ['dinner', 'race-day', 'high-carb', 'pasta'],
+        ingredients: ['whole grain pasta', 'marinara sauce', 'turkey meatballs']
+      },
+      {
+        id: '6',
+        name: 'Scrambled Eggs with Avocado Toast',
+        nutrients_per_serving: { calories: 420, cho_g: 35, protein_g: 22, fat_g: 20 },
+        prep_time: 10,
+        cost_est: 4,
+        tags: ['breakfast', 'eggs', 'easy', 'high-protein'],
+        ingredients: ['eggs', 'whole grain bread', 'avocado', 'salt', 'pepper']
+      },
+      {
+        id: '7',
+        name: 'Salmon with Quinoa and Vegetables',
+        nutrients_per_serving: { calories: 580, cho_g: 48, protein_g: 42, fat_g: 22 },
+        prep_time: 35,
+        cost_est: 10,
+        tags: ['lunch', 'dinner', 'fish', 'omega-3', 'high-protein'],
+        ingredients: ['salmon fillet', 'quinoa', 'mixed vegetables', 'lemon']
+      },
+      {
+        id: '8',
+        name: 'Greek Yogurt Parfait',
+        nutrients_per_serving: { calories: 280, cho_g: 38, protein_g: 18, fat_g: 6 },
+        prep_time: 5,
+        cost_est: 3,
+        tags: ['breakfast', 'snack', 'easy', 'yogurt', 'quick'],
+        ingredients: ['Greek yogurt', 'granola', 'honey', 'berries']
+      },
+      {
+        id: '9',
+        name: 'Turkey and Hummus Wrap',
+        nutrients_per_serving: { calories: 390, cho_g: 42, protein_g: 28, fat_g: 12 },
+        prep_time: 5,
+        cost_est: 5,
+        tags: ['lunch', 'easy', 'quick', 'high-protein'],
+        ingredients: ['whole wheat wrap', 'turkey breast', 'hummus', 'lettuce', 'tomato']
+      },
+      {
+        id: '10',
+        name: 'Plant-Based Protein Bowl',
+        nutrients_per_serving: { calories: 460, cho_g: 58, protein_g: 24, fat_g: 14 },
+        prep_time: 20,
+        cost_est: 6,
+        tags: ['lunch', 'dinner', 'vegan', 'plant-based', 'high-protein'],
+        ingredients: ['chickpeas', 'brown rice', 'tahini', 'vegetables', 'quinoa']
+      },
+      {
+        id: '11',
+        name: 'Energy Balls',
+        nutrients_per_serving: { calories: 150, cho_g: 22, protein_g: 5, fat_g: 6 },
+        prep_time: 15,
+        cost_est: 2,
+        tags: ['snack', 'pre-run', 'easy', 'oatmeal', 'dates'],
+        ingredients: ['dates', 'oats', 'peanut butter', 'chia seeds']
+      },
+      {
+        id: '12',
+        name: 'Chicken Stir-Fry',
+        nutrients_per_serving: { calories: 480, cho_g: 45, protein_g: 38, fat_g: 16 },
+        prep_time: 25,
+        cost_est: 7,
+        tags: ['dinner', 'lunch', 'high-protein', 'chicken'],
+        ingredients: ['chicken breast', 'mixed vegetables', 'soy sauce', 'brown rice']
       }
     ];
 
     setRecipes(mockRecipes);
   };
 
-  const getFilteredRecipes = () => {
-    if (mealFilter === 'all') return recipes;
-    if (mealFilter === 'pre-run') return recipes.filter(r => r.timing_tags.some(t => t.includes('before')));
-    if (mealFilter === 'post-run') return recipes.filter(r => r.timing_tags.some(t => t.includes('after')));
-    if (mealFilter === 'race-day') return recipes.filter(r => r.timing_tags.some(t => t.includes('race')));
-    return recipes.filter(r => r.meal_type.includes(mealFilter));
+  const getCompatibilityColor = (compatibility: 'excellent' | 'good' | 'fair' | 'incompatible') => {
+    switch (compatibility) {
+      case 'excellent': return 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400';
+      case 'good': return 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400';
+      case 'fair': return 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400';
+      case 'incompatible': return 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400';
+    }
   };
 
   const getMealTypeIcon = (type: MealFilter) => {
@@ -499,63 +618,72 @@ export default function Meals() {
                 </CardContent>
               </Card>
 
-              {/* Recipe Cards */}
+              {/* AI-Recommended Recipe Cards */}
               <div className="space-y-4">
-                {getFilteredRecipes().map((recipe) => (
+                {recommendedRecipes.length === 0 && (
+                  <Card className="shadow-card">
+                    <CardContent className="p-8 text-center">
+                      <Utensils className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                      <p className="text-muted-foreground">Loading personalized recommendations...</p>
+                    </CardContent>
+                  </Card>
+                )}
+                {recommendedRecipes.map(({ recipe, score, reasons, compatibility }) => (
                   <Card key={recipe.id} className="shadow-card">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <h3 className="font-semibold text-lg mb-1">{recipe.name}</h3>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 rounded-full capitalize">
-                              {recipe.meal_type[0]}
-                            </span>
-                            <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-full">
-                              {recipe.difficulty}
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            {recipe.tags.slice(0, 2).map((tag) => (
+                              <span key={tag} className="text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 rounded-full capitalize">
+                                {tag.replace('-', ' ')}
+                              </span>
+                            ))}
+                            <span className={`text-xs px-2 py-0.5 rounded-full capitalize font-medium ${getCompatibilityColor(compatibility)}`}>
+                              {compatibility} ({Math.round(score)}%)
                             </span>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-xl font-bold">{recipe.calories} kcal</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <div className="text-right flex-shrink-0 ml-2">
+                          <div className="text-xl font-bold">{recipe.nutrients_per_serving.calories} kcal</div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 justify-end">
                             <Clock className="w-3 h-3" />
-                            {recipe.prep_time_min} min {recipe.timing_tags[0] && `(${recipe.timing_tags[0]})`}
+                            {recipe.prep_time} min
                           </div>
                         </div>
                       </div>
 
-                      <p className="text-sm text-muted-foreground mb-3">{recipe.description}</p>
+                      {/* AI Reasons */}
+                      {reasons.length > 0 && (
+                        <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <div className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">🤖 Why we recommend this:</div>
+                          <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                            {reasons.map((reason, idx) => (
+                              <li key={idx}>• {reason}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-3 gap-3 mb-3">
                         <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-2">
-                          <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{recipe.protein_g}g</div>
+                          <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{recipe.nutrients_per_serving.protein_g}g</div>
                           <div className="text-xs text-muted-foreground">Protein</div>
                         </div>
                         <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-2">
-                          <div className="text-lg font-bold text-green-600 dark:text-green-400">{recipe.carbs_g}g</div>
+                          <div className="text-lg font-bold text-green-600 dark:text-green-400">{recipe.nutrients_per_serving.cho_g}g</div>
                           <div className="text-xs text-muted-foreground">Carbs</div>
                         </div>
                         <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded-lg py-2">
-                          <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{recipe.fat_g}g</div>
+                          <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{recipe.nutrients_per_serving.fat_g}g</div>
                           <div className="text-xs text-muted-foreground">Fat</div>
                         </div>
                       </div>
 
-                      {recipe.timing_tags.length > 0 && (
-                        <div className="text-xs text-blue-600 dark:text-blue-400 mb-3">
-                          <strong>Timing:</strong> {recipe.timing_tags[0]}
-                        </div>
-                      )}
-
-                      {recipe.timing_tags.some(t => t.includes('energy') || t.includes('fiber') || t.includes('Antioxidants')) && (
-                        <div className="mb-3">
-                          <strong className="text-xs">Benefits:</strong>
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full">Sustained energy</span>
-                            <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full">High fiber</span>
-                            <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full">Antioxidants</span>
-                          </div>
+                      {recipe.ingredients && recipe.ingredients.length > 0 && (
+                        <div className="mb-3 text-xs text-muted-foreground">
+                          <strong>Ingredients:</strong> {recipe.ingredients.join(', ')}
                         </div>
                       )}
 
