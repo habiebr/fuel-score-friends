@@ -2,13 +2,10 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// Single source of truth: VITE env variables only
-
-// Disallow localStorage and window-global overrides in production builds
-
-// Remove async fetch-based fallbacks to ensure compatibility with older build targets
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+// Single source of truth: VITE env; allow optional window globals for runtime override in index.html
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const w: any = (typeof window !== 'undefined' ? window : {}) as any;
+const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || w.__SUPABASE_URL__) as string;
 
 // Use only anon/public key for frontend auth
 // Prefer anon key for Realtime stability; fall back to publishable if anon not set
@@ -36,8 +33,8 @@ try {
 } catch {}
 
 // Fail-fast with a clear error if env vars are not configured
-const missingUrl = !import.meta.env.VITE_SUPABASE_URL;
-const missingKey = !((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY);
+const missingUrl = !(((import.meta as any).env?.VITE_SUPABASE_URL) || w.__SUPABASE_URL__);
+const missingKey = !(((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || (w.__SUPABASE_PUBLISHABLE_DEFAULT_KEY__ || w.__SUPABASE_ANON_KEY__));
 const usingPlaceholders = false;
 
 if (missingUrl || missingKey || usingPlaceholders) {
@@ -48,9 +45,9 @@ if (missingUrl || missingKey || usingPlaceholders) {
   ].join(' ');
   // eslint-disable-next-line no-console
   console.warn(message, {
-    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET',
-    VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ? 'SET' : 'NOT SET',
-    VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET',
+    VITE_SUPABASE_URL: ((import.meta as any).env?.VITE_SUPABASE_URL || w.__SUPABASE_URL__) ? 'SET' : 'NOT SET',
+    VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || w.__SUPABASE_PUBLISHABLE_DEFAULT_KEY__) ? 'SET' : 'NOT SET',
+    VITE_SUPABASE_ANON_KEY: ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || w.__SUPABASE_ANON_KEY__) ? 'SET' : 'NOT SET',
   });
 }
 
