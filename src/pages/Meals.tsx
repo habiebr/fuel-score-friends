@@ -19,6 +19,7 @@ import {
   Clock,
   Calendar
 } from 'lucide-react';
+import AppHeader from '@/components/AppHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useToast } from '@/hooks/use-toast';
@@ -457,15 +458,7 @@ export default function Meals() {
       <div className="min-h-screen bg-gradient-background pb-20">
           {/* Header */}
         <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
-              <Activity className="w-6 h-6 text-white dark:text-black" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold leading-tight">NutriSync</h1>
-              <p className="text-sm text-muted-foreground">Fuel Your Run</p>
-            </div>
-          </div>
+          <AppHeader className="mb-4" />
 
           <div>
             <h2 className="text-2xl font-bold mb-1">Food & Nutrition</h2>

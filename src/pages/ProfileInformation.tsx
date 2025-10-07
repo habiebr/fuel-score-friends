@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, Activity } from 'lucide-react';
+import AppHeader from '@/components/AppHeader';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BottomNav } from '@/components/BottomNav';
@@ -116,10 +117,7 @@ export default function ProfileInformation() {
                   <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
                     <Activity className="w-6 h-6 text-white dark:text-black" />
                   </div>
-                  <div>
-                    <h1 className="text-xl font-bold leading-tight">NutriSync</h1>
-                    <p className="text-sm text-muted-foreground">Fuel Your Run</p>
-                  </div>
+                <AppHeader />
                 </div>
               </div>
             </div>

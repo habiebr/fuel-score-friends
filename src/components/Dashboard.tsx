@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils, Settings, Activity } from 'lucide-react';
+import AppHeader from '@/components/AppHeader';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
@@ -579,19 +580,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         {/* Header - NutriSync Branding */}
         <div className="mb-6 pt-2">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center">
-                <Activity className="w-6 h-6 text-white dark:text-black" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground leading-tight">
-                  NutriSync
-                </h1>
-                <p className="text-muted-foreground text-sm">
-                  Fuel Your Run
-                </p>
-              </div>
-            </div>
+            <AppHeader />
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <Button 

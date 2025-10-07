@@ -6,6 +6,7 @@ import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Button } from '@/components/ui/button';
 import { Trophy, MapPin, Activity as ActivityIcon, Target, Users, Crown } from 'lucide-react';
+import AppHeader from '@/components/AppHeader';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -236,10 +237,7 @@ export default function Community() {
               <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
                 <ActivityIcon className="w-6 h-6 text-white dark:text-black" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold leading-tight">NutriSync</h1>
-                <p className="text-sm text-muted-foreground">Fuel Your Run</p>
-              </div>
+              <AppHeader />
             </div>
           </div>
 
