@@ -326,14 +326,30 @@ export default function Meals() {
       
       const session = (await supabase.auth.getSession()).data.session;
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-      const { data, error } = await supabase.functions.invoke('generate-nutrition-suggestions', {
-        body: { date: today },
-        headers: {
-          ...(apiKey ? { apikey: apiKey } : {}),
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
-        }
-      });
-      if (error) throw error;
+      let data: any = null;
+      try {
+        const res = await supabase.functions.invoke('generate-nutrition-suggestions', {
+          body: { date: today },
+          headers: {
+            ...(apiKey ? { apikey: apiKey } : {}),
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+          }
+        });
+        if (res.error) throw res.error;
+        data = res.data;
+      } catch (primaryErr: any) {
+        console.warn('Primary suggestions function failed, falling back:', primaryErr?.message || primaryErr);
+        // Fallback to engine-based function that does not require external AI
+        const fallback = await supabase.functions.invoke('daily-meal-generation', {
+          body: { date: today },
+          headers: {
+            ...(apiKey ? { apikey: apiKey } : {}),
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+          }
+        });
+        if (fallback.error) throw fallback.error;
+        data = fallback.data;
+      }
       setAiPlan(data?.meals || null);
       setLastUpdated(new Date().toISOString());
       const toCache = { meals: data?.meals || null, updatedAt: new Date().toISOString() };
@@ -350,6 +366,7 @@ export default function Meals() {
       setRecommendedRecipes(extractRecipesFromAiPlan(data?.meals || null).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
       toast({ title: 'Nutrition suggestions ready', description: 'Personalized suggestions generated for today.' });
     } catch (e: any) {
+      console.error('Suggestion generation error:', e);
       toast({ title: 'AI generation failed', description: e?.message || 'Please try again', variant: 'destructive' });
     } finally {
       setGeneratingPlan(false);
