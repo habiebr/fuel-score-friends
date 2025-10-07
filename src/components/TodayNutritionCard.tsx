@@ -64,43 +64,7 @@ export function TodayNutritionCard({
     }
   };
 
-  const MacroBar = ({ macro, label }: { macro: MacroData; label: 'Protein' | 'Carbs' | 'Fat' }) => {
-    const percentage = Math.round((macro.current / macro.target) * 100);
-    
-    return (
-      <div className="text-center relative">
-        <div className="flex items-center justify-center gap-1 text-sm text-gray-600 dark:text-gray-400 mb-1">
-          <span>{label}</span>
-          <button aria-label={`${label} info`} onClick={() => setOpenTip(openTip === label ? null : label)}>
-            <Info className="w-3 h-3" />
-          </button>
-        </div>
-        <div className={`text-2xl font-bold mb-1 ${macro.color}`}>
-          {macro.current}g
-        </div>
-        <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-          of {macro.target}g
-        </div>
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div
-            className="bg-black dark:bg-white h-2 rounded-full transition-all duration-500"
-            style={{ width: `${Math.min(percentage, 100)}%` }}
-          />
-        </div>
-        {openTip === label && (
-          <div className="absolute z-20 left-1/2 -translate-x-1/2 mt-2 w-80 text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-4">
-            <div className="font-semibold text-lg mb-2">{tips[label].title}</div>
-            <ul className="text-sm space-y-1 list-disc list-inside text-gray-700 dark:text-gray-300">
-              {tips[label].points.map((p, i) => (
-                <li key={i}>{p}</li>
-              ))}
-            </ul>
-            <div className="text-sm mt-3 font-medium text-gray-900 dark:text-gray-100">{tips[label].target}</div>
-          </div>
-        )}
-      </div>
-    );
-  };
+  // Replace linear macro bars with circular rings in a horizontal layout
 
   return (
     <Card className="bg-white dark:bg-gray-800">
@@ -117,11 +81,44 @@ export function TodayNutritionCard({
           />
         </div>
 
-        {/* Macros Grid */}
-        <div className="grid grid-cols-3 gap-4">
-          <MacroBar macro={protein} label="Protein" />
-          <MacroBar macro={carbs} label="Carbs" />
-          <MacroBar macro={fat} label="Fat" />
+        {/* Horizontal Rings: Calories + Macros */}
+        <div className="grid grid-cols-4 gap-4">
+          <div className="flex flex-col items-center">
+            <CalorieRing
+              baseGoal={calories.target}
+              consumed={calories.current}
+              exercise={0}
+              remaining={Math.max(0, calories.target - calories.current)}
+            />
+            <div className="mt-2 text-xs text-muted-foreground">Calories</div>
+          </div>
+          <div className="flex flex-col items-center">
+            <CalorieRing
+              baseGoal={protein.target}
+              consumed={protein.current}
+              exercise={0}
+              remaining={Math.max(0, protein.target - protein.current)}
+            />
+            <div className="mt-2 text-xs text-muted-foreground">Protein</div>
+          </div>
+          <div className="flex flex-col items-center">
+            <CalorieRing
+              baseGoal={carbs.target}
+              consumed={carbs.current}
+              exercise={0}
+              remaining={Math.max(0, carbs.target - carbs.current)}
+            />
+            <div className="mt-2 text-xs text-muted-foreground">Carbs</div>
+          </div>
+          <div className="flex flex-col items-center">
+            <CalorieRing
+              baseGoal={fat.target}
+              consumed={fat.current}
+              exercise={0}
+              remaining={Math.max(0, fat.target - fat.current)}
+            />
+            <div className="mt-2 text-xs text-muted-foreground">Fat</div>
+          </div>
         </div>
 
         {/* Education section removed: Info available via (i) buttons above */}
