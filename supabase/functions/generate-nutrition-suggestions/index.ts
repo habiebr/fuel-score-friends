@@ -182,6 +182,17 @@ Return ONLY strict JSON with keys breakfast, lunch, dinner${dayTarget.meals.find
       };
     }
 
+    // Cache into user_preferences for the day
+    const cacheKey = `nutritionSuggestions:${requestDate}:default`;
+    await supabaseAdmin
+      .from('user_preferences')
+      .upsert({
+        user_id: userId,
+        key: cacheKey,
+        value: { meals: baseOut, updatedAt: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,key' });
+
     return new Response(
       JSON.stringify({ success: true, date: requestDate, load: dayTarget.load, kcal: dayTarget.kcal, targets: dayTarget.grams, fueling: dayTarget.fueling, meals: baseOut }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

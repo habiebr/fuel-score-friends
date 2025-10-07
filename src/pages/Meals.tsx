@@ -324,7 +324,16 @@ export default function Meals() {
         return;
       }
       
-      const session = (await supabase.auth.getSession()).data.session;
+      let session = (await supabase.auth.getSession()).data.session;
+      if (!session) {
+        try {
+          const refreshed = await supabase.auth.refreshSession();
+          session = refreshed.data.session;
+        } catch (_) {}
+      }
+      if (!session?.access_token) {
+        throw new Error('Missing authorization header');
+      }
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       let data: any = null;
       try {
@@ -332,7 +341,7 @@ export default function Meals() {
           body: { date: today },
           headers: {
             ...(apiKey ? { apikey: apiKey } : {}),
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+            Authorization: `Bearer ${session.access_token}`
           }
         });
         if (res.error) throw res.error;
@@ -344,7 +353,7 @@ export default function Meals() {
           body: { date: today },
           headers: {
             ...(apiKey ? { apikey: apiKey } : {}),
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+            Authorization: `Bearer ${session.access_token}`
           }
         });
         if (fallback.error) throw fallback.error;
