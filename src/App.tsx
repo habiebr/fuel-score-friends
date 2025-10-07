@@ -14,6 +14,7 @@ import NotificationsSettings from "./pages/NotificationsSettings";
 import AppIntegrations from "./pages/AppIntegrations";
 import Goals from "./pages/Goals";
 import Training from "./pages/Training.tsx";
+import TrainingCalendar from "./pages/TrainingCalendar";
 import Community from "./pages/Community";
 import Auth from "./pages/Auth";
 import Import from "./pages/Import";
@@ -90,6 +91,7 @@ function App() {
                   <Route path="/profile/integrations" element={<AppIntegrations />} />
                   <Route path="/goals" element={<Goals />} />
                   <Route path="/training" element={<Training />} />
+                  <Route path="/training-calendar" element={<TrainingCalendar />} />
                   <Route path="/marathons" element={<MarathonCalendarPage />} />
                   <Route path="/community" element={<Community />} />
                   <Route path="/import" element={<Import />} />
