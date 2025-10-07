@@ -34,6 +34,7 @@ export default function Training() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activitiesByDate, setActivitiesByDate] = useState<Record<string, TrainingActivity[]>>({});
+  const [expandedEditor, setExpandedEditor] = useState<{ date: string; index: number } | null>(null);
 
   const datesOfWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
@@ -63,7 +64,7 @@ export default function Training() {
     try {
       const start = format(weekStart, 'yyyy-MM-dd');
       const end = format(addDays(weekStart, 6), 'yyyy-MM-dd');
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('training_activities')
         .select('*')
         .eq('user_id', user!.id)
@@ -117,6 +118,9 @@ export default function Training() {
       next[dateStr] = [...(next[dateStr] || []), base];
       return next;
     });
+    // Open the just-added activity editor
+    const idx = (activitiesByDate[dateStr]?.length || 0);
+    setExpandedEditor({ date: dateStr, index: idx });
   };
 
   const updateActivity = (dateStr: string, index: number, patch: Partial<TrainingActivity>) => {
@@ -145,7 +149,7 @@ export default function Training() {
     try {
       const start = format(weekStart, 'yyyy-MM-dd');
       const end = format(addDays(weekStart, 6), 'yyyy-MM-dd');
-      const { error: delErr } = await supabase
+      const { error: delErr } = await (supabase as any)
         .from('training_activities')
         .delete()
         .eq('user_id', user.id)
@@ -172,7 +176,7 @@ export default function Training() {
       }
 
       if (rows.length > 0) {
-        const { error: insErr } = await supabase.from('training_activities').insert(rows);
+        const { error: insErr } = await (supabase as any).from('training_activities').insert(rows);
         if (insErr) throw insErr;
       }
 
@@ -227,52 +231,69 @@ export default function Training() {
                         {list.length === 0 && (
                           <div className="text-xs text-muted-foreground">No activities</div>
                         )}
-                        {list.map((a, i) => (
-                          <div key={i} className="p-2 rounded bg-muted/50">
-                            <div className="text-xs font-medium mb-2">{a.activity_type} · {a.estimated_calories} kcal</div>
-                            <div className="grid grid-cols-2 gap-2 mb-2">
-                              <div className="space-y-1">
-                                <Label className="text-xs">Type</Label>
-                                <Select value={a.activity_type} onValueChange={(v: any) => updateActivity(key, i, { activity_type: v as ActivityType, distance_km: a.activity_type === 'run' ? a.distance_km : null })}>
-                                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="run">Running</SelectItem>
-                                    <SelectItem value="strength">Strength</SelectItem>
-                                    <SelectItem value="cardio">Cardio</SelectItem>
-                                    <SelectItem value="other">Other</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">Intensity</Label>
-                                <Select value={a.intensity} onValueChange={(v: any) => updateActivity(key, i, { intensity: v as Intensity })}>
-                                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="low">Low</SelectItem>
-                                    <SelectItem value="moderate">Moderate</SelectItem>
-                                    <SelectItem value="high">High</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {a.activity_type === 'run' ? (
-                                <div className="space-y-1">
-                                  <Label className="text-xs">Distance (km)</Label>
-                                  <Input className="h-8" type="number" step="0.1" value={typeof a.distance_km === 'number' ? a.distance_km : ''} onChange={(e) => updateActivity(key, i, { distance_km: e.target.value === '' ? null : parseFloat(e.target.value) })} />
-                                </div>
-                              ) : (
-                                <div className="space-y-1">
-                                  <Label className="text-xs">Duration (min)</Label>
-                                  <Input className="h-8" type="number" value={a.duration_minutes} onChange={(e) => updateActivity(key, i, { duration_minutes: parseInt(e.target.value) || 0 })} />
+                        {list.map((a, i) => {
+                          const isExpanded = expandedEditor && expandedEditor.date === key && expandedEditor.index === i;
+                          return (
+                            <div key={i} className="p-2 rounded bg-muted/50">
+                              {/* Compact row */}
+                              {!isExpanded && (
+                                <div className="flex items-center justify-between text-xs">
+                                  <div className="font-medium capitalize">{a.activity_type}</div>
+                                  <div className="text-muted-foreground">{a.activity_type === 'run' ? (a.distance_km ? `${a.distance_km} km` : `${a.duration_minutes} min`) : `${a.duration_minutes} min`} · {a.intensity}</div>
+                                  <div className="font-semibold">{a.estimated_calories} kcal</div>
+                                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setExpandedEditor({ date: key, index: i })}>Edit</Button>
                                 </div>
                               )}
-                              <div className="flex items-end">
-                                <Button variant="ghost" size="sm" className="h-8 px-2 text-destructive" onClick={() => removeActivity(key, i)}>Remove</Button>
-                              </div>
+                              {/* Editor */}
+                              {isExpanded && (
+                                <div className="mt-2">
+                                  <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">Type</Label>
+                                      <Select value={a.activity_type} onValueChange={(v: any) => updateActivity(key, i, { activity_type: v as ActivityType, distance_km: a.activity_type === 'run' ? a.distance_km : null })}>
+                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="run">Running</SelectItem>
+                                          <SelectItem value="strength">Strength</SelectItem>
+                                          <SelectItem value="cardio">Cardio</SelectItem>
+                                          <SelectItem value="other">Other</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">Intensity</Label>
+                                      <Select value={a.intensity} onValueChange={(v: any) => updateActivity(key, i, { intensity: v as Intensity })}>
+                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="low">Low</SelectItem>
+                                          <SelectItem value="moderate">Moderate</SelectItem>
+                                          <SelectItem value="high">High</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {a.activity_type === 'run' ? (
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Distance (km)</Label>
+                                        <Input className="h-8" type="number" step="0.1" value={typeof a.distance_km === 'number' ? a.distance_km : ''} onChange={(e) => updateActivity(key, i, { distance_km: e.target.value === '' ? null : parseFloat(e.target.value) })} />
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Duration (min)</Label>
+                                        <Input className="h-8" type="number" value={a.duration_minutes} onChange={(e) => updateActivity(key, i, { duration_minutes: parseInt(e.target.value) || 0 })} />
+                                      </div>
+                                    )}
+                                    <div className="flex items-end gap-2">
+                                      <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setExpandedEditor(null)}>Done</Button>
+                                      <Button variant="ghost" size="sm" className="h-8 px-2 text-destructive" onClick={() => { removeActivity(key, i); setExpandedEditor(null); }}>Remove</Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
                       </div>
                     </div>
