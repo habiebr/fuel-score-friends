@@ -87,6 +87,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [weeklyScore, setWeeklyScore] = useState(0);
+  const [todayScore, setTodayScore] = useState(0);
   const [todayBreakdown, setTodayBreakdown] = useState<{ nutrition: number; training: number; bonuses?: number; penalties?: number }>({ nutrition: 0, training: 0 });
   const { getTodayData: getGoogleFitData, syncGoogleFit, isSyncing: isGoogleFitSyncing, lastSync, connectGoogleFit } = useGoogleFitSync();
   // Removed manual generate plan action from dashboard
@@ -494,9 +495,11 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       // Scoring engine: today + weekly (persisted Monday–Sunday)
       try {
         const todayScoreRes = await getTodayScore(user.id);
+        setTodayScore(todayScoreRes.score);
         setTodayBreakdown(todayScoreRes.breakdown);
       } catch (e) {
         // ignore scoring errors to not break dashboard
+        setTodayScore(0);
         setTodayBreakdown({ nutrition: 0, training: 0 });
       }
       try {
@@ -638,13 +641,10 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
         )}
 
-        {/* 1. Weekly Score (persisted Monday–Sunday average) */}
-        <div className="mb-3">
-          <WeeklyScoreCard
-            weeklyScore={weeklyScore}
-            macroBalance={Math.round(todayBreakdown.nutrition)}
-            mealTiming={Math.max(0, Math.min(100, 100 - Math.abs(50 - todayBreakdown.nutrition)))}
-          />
+        {/* 1. Today & Weekly Scores */}
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <ScoreCard title="Daily Score" score={todayScore} subtitle="Today" variant="success" />
+          <ScoreCard title="Weekly Score" score={weeklyScore} subtitle="Mon–Sun avg" variant="warning" />
         </div>
 
         {/* 2. Marathon Countdown */}
