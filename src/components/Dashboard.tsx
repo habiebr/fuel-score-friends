@@ -12,7 +12,7 @@ import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
 import { WeeklyScoreCard } from '@/components/WeeklyScoreCard';
-import { getTodayScore, getWeeklyScore } from '@/services/score.service';
+import { getTodayScore, getWeeklyScorePersisted } from '@/services/score.service';
 import { TodayMealScoreCard } from '@/components/TodayMealScoreCard';
 import { TodayNutritionCard } from '@/components/TodayNutritionCard';
 import { WeeklyMilesCard } from '@/components/WeeklyMilesCard';
@@ -86,6 +86,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [weeklyScore, setWeeklyScore] = useState(0);
+  const [todayBreakdown, setTodayBreakdown] = useState<{ nutrition: number; training: number; bonuses?: number; penalties?: number }>({ nutrition: 0, training: 0 });
   const { getTodayData: getGoogleFitData, syncGoogleFit, isSyncing: isGoogleFitSyncing, lastSync, connectGoogleFit } = useGoogleFitSync();
   // Removed manual generate plan action from dashboard
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
@@ -488,6 +490,21 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           }
         }
       });
+
+      // Scoring engine: today + weekly (persisted Monday–Sunday)
+      try {
+        const todayScoreRes = await getTodayScore(user.id);
+        setTodayBreakdown(todayScoreRes.breakdown);
+      } catch (e) {
+        // ignore scoring errors to not break dashboard
+        setTodayBreakdown({ nutrition: 0, training: 0 });
+      }
+      try {
+        const weekly = await getWeeklyScorePersisted(user.id);
+        setWeeklyScore(weekly);
+      } catch (e) {
+        setWeeklyScore(0);
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
@@ -621,7 +638,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
         )}
 
-        {/* 1. Weekly Score (from scoring engine) */}
+        {/* 1. Weekly Score (persisted Monday–Sunday average) */}
         <div className="mb-3">
           <WeeklyScoreCard
             weeklyScore={weeklyScore}

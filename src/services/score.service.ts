@@ -153,4 +153,37 @@ export async function getWeeklyScore(userId: string, endDateISO?: string): Promi
   return avg;
 }
 
+export async function getWeeklyScorePersisted(userId: string, anyDateISO?: string): Promise<number> {
+  const anyDate = anyDateISO ? new Date(anyDateISO) : new Date();
+  const weekStart = startOfWeek(anyDate, { weekStartsOn: 1 });
+  const dates: string[] = Array.from({ length: 7 }, (_, i) => format(addDays(weekStart, i), 'yyyy-MM-dd'));
+
+  // Fetch existing daily scores
+  const { data: rows } = await (supabase as any)
+    .from('nutrition_scores')
+    .select('date, daily_score')
+    .eq('user_id', userId)
+    .gte('date', dates[0])
+    .lte('date', dates[6]);
+
+  const dateToScore: Record<string, number> = {};
+  (rows || []).forEach((r: any) => {
+    if (typeof r.daily_score === 'number') dateToScore[r.date] = r.daily_score;
+  });
+
+  // Backfill missing days using engine and persist
+  for (const d of dates) {
+    if (dateToScore[d] === undefined) {
+      const { score } = await getDailyScoreForDate(userId, d);
+      dateToScore[d] = score;
+      await (supabase as any)
+        .from('nutrition_scores')
+        .upsert({ user_id: userId, date: d, daily_score: score }, { onConflict: 'user_id,date' });
+    }
+  }
+
+  const avg = Math.round(dates.reduce((s, d) => s + (dateToScore[d] || 0), 0) / dates.length);
+  return avg;
+}
+
 
