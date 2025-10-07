@@ -214,92 +214,226 @@ export default function Training() {
 
           <Card className="shadow-card">
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+              <CardTitle className="flex items-center justify-between text-xl font-semibold">
                 <span>Summary</span>
                 <span className="text-primary font-semibold">{weeklyCalories} kcal</span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {datesOfWeek.map((d, idx) => {
-                  const key = format(d, 'yyyy-MM-dd');
-                  const list = activitiesByDate[key] || [];
-                  return (
-                    <div key={key} className="p-3 border rounded-lg">
-                      <div className="text-sm font-semibold mb-2">{DAYS[idx]} ({format(d, 'MM/dd')})</div>
-                      <div className="space-y-2">
-                        {list.length === 0 && (
-                          <div className="text-xs text-muted-foreground">No activities</div>
-                        )}
-                        {list.map((a, i) => {
-                          const isExpanded = expandedEditor && expandedEditor.date === key && expandedEditor.index === i;
-                          return (
-                            <div key={i} className="p-2 rounded bg-muted/50">
-                              {/* Compact row */}
-                              {!isExpanded && (
-                                <div className="flex items-center justify-between text-xs">
-                                  <div className="font-medium capitalize">{a.activity_type}</div>
-                                  <div className="text-muted-foreground">{a.activity_type === 'run' ? (a.distance_km ? `${a.distance_km} km` : `${a.duration_minutes} min`) : `${a.duration_minutes} min`} · {a.intensity}</div>
-                                  <div className="font-semibold">{a.estimated_calories} kcal</div>
-                                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setExpandedEditor({ date: key, index: i })}>Edit</Button>
-                                </div>
-                              )}
-                              {/* Editor */}
-                              {isExpanded && (
-                                <div className="mt-2">
-                                  <div className="grid grid-cols-2 gap-2 mb-2">
-                                    <div className="space-y-1">
-                                      <Label className="text-xs">Type</Label>
-                                      <Select value={a.activity_type} onValueChange={(v: any) => updateActivity(key, i, { activity_type: v as ActivityType, distance_km: a.activity_type === 'run' ? a.distance_km : null })}>
-                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="run">Running</SelectItem>
-                                          <SelectItem value="strength">Strength</SelectItem>
-                                          <SelectItem value="cardio">Cardio</SelectItem>
-                                          <SelectItem value="other">Other</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <Label className="text-xs">Intensity</Label>
-                                      <Select value={a.intensity} onValueChange={(v: any) => updateActivity(key, i, { intensity: v as Intensity })}>
-                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="low">Low</SelectItem>
-                                          <SelectItem value="moderate">Moderate</SelectItem>
-                                          <SelectItem value="high">High</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {a.activity_type === 'run' ? (
-                                      <div className="space-y-1">
-                                        <Label className="text-xs">Distance (km)</Label>
-                                        <Input className="h-8" type="number" step="0.1" value={typeof a.distance_km === 'number' ? a.distance_km : ''} onChange={(e) => updateActivity(key, i, { distance_km: e.target.value === '' ? null : parseFloat(e.target.value) })} />
+            <CardContent className="space-y-4">
+              {datesOfWeek.map((d, idx) => {
+                const key = format(d, 'yyyy-MM-dd');
+                const list = activitiesByDate[key] || [];
+                const totalDistance = list.reduce((sum, a) => sum + (a.distance_km || 0), 0);
+                const totalDuration = list.reduce((sum, a) => sum + (a.duration_minutes || 0), 0);
+                const totalCalories = list.reduce((sum, a) => sum + (a.estimated_calories || 0), 0);
+                const primarySummary =
+                  totalDistance > 0
+                    ? `${parseFloat(totalDistance.toFixed(totalDistance >= 10 ? 0 : 1))} km`
+                    : totalDuration > 0
+                    ? `${totalDuration} min`
+                    : 'Rest day';
+                const intensitySummary = list.length === 0 ? 'rest' : list.length === 1 ? list[0].intensity : 'mixed';
+
+                return (
+                  <div
+                    key={key}
+                    className="relative overflow-hidden rounded-3xl border border-border/60 bg-card/75 p-5 shadow-card backdrop-blur"
+                  >
+                    <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-r from-primary/5 via-transparent to-primary/10 opacity-70" />
+                    <div className="relative flex items-start gap-4">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-muted/60 text-lg font-semibold text-foreground">
+                        {format(d, 'dd')}
+                      </div>
+                      <div className="flex-1 space-y-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">Day {idx + 1}</p>
+                            <h3 className="text-lg font-semibold">{DAYS[idx]}</h3>
+                            <p className="text-xs text-muted-foreground">{format(d, 'EEEE, MMM dd')}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground">
+                            <span className="rounded-full border border-border/40 bg-background/70 px-3 py-1">
+                              {primarySummary}
+                            </span>
+                            <span className="rounded-full border border-border/40 bg-background/70 px-3 py-1">
+                              {totalCalories} kcal
+                            </span>
+                            <span className="rounded-full border border-border/40 bg-background/70 px-3 py-1 capitalize">
+                              {intensitySummary}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {list.length === 0 && (
+                            <div className="flex items-center justify-between rounded-2xl border border-dashed border-border/50 bg-background/50 px-4 py-3 text-sm text-muted-foreground">
+                              No activities scheduled — tap below to add one.
+                              <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Rest day</span>
+                            </div>
+                          )}
+
+                          {list.map((a, i) => {
+                            const isExpanded = expandedEditor && expandedEditor.date === key && expandedEditor.index === i;
+                            const isRun = a.activity_type === 'run';
+                            const primaryMetric = isRun
+                              ? a.distance_km
+                                ? `${a.distance_km} km`
+                                : `${a.duration_minutes} min`
+                              : `${a.duration_minutes} min`;
+                            const metricLabel = isRun && a.distance_km ? 'distance' : 'duration';
+                            const startTimeLabel = a.start_time
+                              ? format(new Date(`1970-01-01T${a.start_time}`), 'hh:mm a')
+                              : null;
+
+                            return (
+                              <div
+                                key={i}
+                                className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm shadow-inner shadow-black/10 backdrop-blur"
+                              >
+                                {!isExpanded && (
+                                  <div className="flex flex-col gap-2">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(49,255,176,0.5)]" />
+                                        <span className="text-sm font-semibold capitalize">{a.activity_type}</span>
                                       </div>
-                                    ) : (
-                                      <div className="space-y-1">
-                                        <Label className="text-xs">Duration (min)</Label>
-                                        <Input className="h-8" type="number" value={a.duration_minutes} onChange={(e) => updateActivity(key, i, { duration_minutes: parseInt(e.target.value) || 0 })} />
+                                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                        <span className="uppercase tracking-wide">{a.intensity}</span>
+                                        <span>{primaryMetric}</span>
+                                        <span>{a.estimated_calories} kcal</span>
+                                      </div>
+                                      <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setExpandedEditor({ date: key, index: i })}>
+                                        Edit
+                                      </Button>
+                                    </div>
+                                    {a.notes && (
+                                      <div className="rounded-xl border border-border/40 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                                        {a.notes}
                                       </div>
                                     )}
-                                    <div className="flex items-end gap-2">
-                                      <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setExpandedEditor(null)}>Done</Button>
-                                      <Button variant="ghost" size="sm" className="h-8 px-2 text-destructive" onClick={() => { removeActivity(key, i); setExpandedEditor(null); }}>Remove</Button>
+                                  </div>
+                                )}
+
+                                {isExpanded && (
+                                  <div className="space-y-3">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Type</Label>
+                                        <Select
+                                          value={a.activity_type}
+                                          onValueChange={(v: any) =>
+                                            updateActivity(key, i, {
+                                              activity_type: v as ActivityType,
+                                              distance_km: v === 'run' ? a.distance_km : null,
+                                            })
+                                          }
+                                        >
+                                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="run">Running</SelectItem>
+                                            <SelectItem value="strength">Strength</SelectItem>
+                                            <SelectItem value="cardio">Cardio</SelectItem>
+                                            <SelectItem value="other">Other</SelectItem>
+                                            <SelectItem value="rest">Rest</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Intensity</Label>
+                                        <Select value={a.intensity} onValueChange={(v: any) => updateActivity(key, i, { intensity: v as Intensity })}>
+                                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="low">Low</SelectItem>
+                                            <SelectItem value="moderate">Moderate</SelectItem>
+                                            <SelectItem value="high">High</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                      {a.activity_type === 'run' ? (
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">Distance (km)</Label>
+                                          <Input
+                                            className="h-9"
+                                            type="number"
+                                            step="0.1"
+                                            value={typeof a.distance_km === 'number' ? a.distance_km : ''}
+                                            onChange={(e) =>
+                                              updateActivity(key, i, {
+                                                distance_km: e.target.value === '' ? null : parseFloat(e.target.value),
+                                              })
+                                            }
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          <Label className="text-xs">Duration (min)</Label>
+                                          <Input
+                                            className="h-9"
+                                            type="number"
+                                            value={a.duration_minutes}
+                                            onChange={(e) => updateActivity(key, i, { duration_minutes: parseInt(e.target.value) || 0 })}
+                                          />
+                                        </div>
+                                      )}
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Start Time (optional)</Label>
+                                        <Input
+                                          className="h-9"
+                                          type="time"
+                                          value={a.start_time ?? ''}
+                                          onChange={(e) => updateActivity(key, i, { start_time: e.target.value || null })}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">Notes</Label>
+                                      <Input
+                                        className="h-9"
+                                        value={a.notes ?? ''}
+                                        onChange={(e) => updateActivity(key, i, { notes: e.target.value || null })}
+                                        placeholder="Fueling cues, pacing, etc."
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2">
+                                      <span className="text-xs text-muted-foreground">
+                                        Est. calories: <span className="font-semibold text-foreground">{a.estimated_calories}</span>
+                                      </span>
+                                      <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => setExpandedEditor(null)}>
+                                        Done
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-3 text-destructive"
+                                        onClick={() => {
+                                          removeActivity(key, i);
+                                          setExpandedEditor(null);
+                                        }}
+                                      >
+                                        Remove
+                                      </Button>
                                     </div>
                                   </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                        <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 rounded-full border-primary/40 bg-background/70 text-xs font-semibold uppercase tracking-wide text-primary shadow-[0_12px_35px_rgba(49,255,176,0.25)] hover:border-primary hover:bg-primary/10 hover:text-primary-foreground"
+                            onClick={() => addActivity(key)}
+                          >
+                            + Add Activity
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         </div>
@@ -308,5 +442,4 @@ export default function Training() {
     </>
   );
 }
-
 
