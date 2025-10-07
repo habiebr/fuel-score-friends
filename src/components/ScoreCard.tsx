@@ -1,4 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ScoreCardProps {
@@ -8,6 +10,7 @@ interface ScoreCardProps {
   subtitle?: string;
   className?: string;
   variant?: "default" | "success" | "warning" | "info";
+  tooltip?: string;
 }
 
 export function ScoreCard({ 
@@ -16,7 +19,8 @@ export function ScoreCard({
   maxScore = 100, 
   subtitle, 
   className,
-  variant = "default" 
+  variant = "default",
+  tooltip
 }: ScoreCardProps) {
   const percentage = (score / maxScore) * 100;
   
@@ -42,7 +46,23 @@ export function ScoreCard({
     )}>
       <CardContent className="p-4 sm:p-6">
         <div className="text-center">
-          <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2">{title}</h3>
+          <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2 flex items-center justify-center gap-1">
+            <span>{title}</span>
+            {tooltip && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button aria-label={`${title} info`} className="text-muted-foreground hover:text-foreground">
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                    {tooltip}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </h3>
           <div className={cn("text-2xl sm:text-4xl font-bold mb-1", getScoreColor())}>
             {score}
             {maxScore && <span className="text-sm sm:text-xl text-muted-foreground">/{maxScore}</span>}
