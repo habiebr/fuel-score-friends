@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "*",
@@ -8,9 +7,10 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
   "Vary": "Origin"
 };
-import { getSupabaseAdmin } from "../_shared/env.ts";
+import { getSupabaseAdmin, getGroqKey } from "../_shared/env.ts";
 import {
-  TrainingLoad,
+  type TrainingLoad,
+  type UserProfile,
   determineTrainingLoad,
   generateDayTarget,
   shouldIncludeSnack,
@@ -121,13 +121,11 @@ serve(async (req) => {
 
     // Generate day target using unified engine
     const dayTarget = generateDayTarget(userProfile, requestDate, trainingLoad);
-    // Precompute unified meal plan and snack flag
-    const includeSnack = shouldIncludeSnack(trainingLoad);
-    const unifiedMealPlan = generateMealPlan(dayTarget, includeSnack);
     
     const totalDailyCalories = dayTarget.kcal;
     const targetDate = profile?.target_date;
     const fitnessLevel = profile?.fitness_level;
+    const plannedCalories = dayPlan?.estimatedCalories ?? dayPlan?.plannedCalories ?? null;
     
     console.log(`Calculated nutrition needs using unified engine:`);
     console.log(`- Training Load: ${trainingLoad}`);
@@ -146,6 +144,13 @@ serve(async (req) => {
     // Use AI to generate detailed meal suggestions
     console.log("5. Preparing AI request...");
     const GROQ_API_KEY = getGroqKey();
+    const trainingDescription = dayPlan
+      ? `${dayPlan.activity}${typeof dayPlan.distanceKm === 'number'
+        ? ` ${dayPlan.distanceKm} km`
+        : dayPlan.duration
+          ? ` for ${dayPlan.duration} minutes`
+          : ''}${plannedCalories !== null ? ` (${plannedCalories} calories est.)` : ''}`
+      : "rest day";
 
     const context = `
 Date: ${requestDate} (${requestWeekday})
@@ -171,7 +176,7 @@ Running Goals & Training Plan:
 - Target Date: ${targetDate || "not specified"}
 - Current Fitness Level: ${fitnessLevel || "intermediate"}
 - Weekly Training Plan: ${weekPlan ? JSON.stringify(weekPlan, null, 2) : "not set"}
-- Today's Training: ${dayPlan ? `${dayPlan.activity}${typeof dayPlan.distanceKm==='number' ? ` ${dayPlan.distanceKm} km` : dayPlan.duration?` for ${dayPlan.duration} minutes`:''} (${plannedCalories} calories est.)` : "rest day"}
+- Today's Training: ${trainingDescription}
 
 Today's Activity Metrics (Google Fit):
 - Calories burned: ${googleFitData?.calories_burned || 0} kcal
