@@ -550,10 +550,7 @@ export default function Goals() {
                   <div className="text-sm text-muted-foreground">
                     Weekly pattern (Mon–Sun)
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>Prev</Button>
-                    <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>Next</Button>
-                  </div>
+                  <div className="flex items-center gap-2"></div>
                 </div>
                 {/* Weekly Editor */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
