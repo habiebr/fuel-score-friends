@@ -145,7 +145,7 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground text-[15px] sm:text-base; /* mobile-friendly base */
+    @apply bg-background text-foreground text-[15px] sm:text-base max-w-[480px] mx-auto; /* mobile canvas */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
