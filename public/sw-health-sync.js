@@ -51,6 +51,15 @@ self.addEventListener('periodicsync', (event) => {
   }
 });
 
+// Allow clients to actively trigger a sync
+self.addEventListener('message', (event) => {
+  try {
+    if (event && event.data && event.data.type === 'TRIGGER_HEALTH_SYNC') {
+      event.waitUntil(performHealthSync());
+    }
+  } catch {}
+});
+
 // Push notifications for health milestones
 self.addEventListener('push', (event) => {
   if (event.data) {
@@ -292,28 +301,9 @@ async function updateSyncStatus(status, timestamp, error = null) {
 }
 
 // Intercept fetches to Supabase REST to inject required headers
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  const isSupabaseRest = url.hostname.includes('supabase.co') && url.pathname.includes('/rest/v1/');
-  if (!isSupabaseRest) return;
+let __cachedAnonKey = undefined;
 
-  event.respondWith((async () => {
-    try {
-      // Attempt to get anon key from clients (postMessage-based, fallback to cache env var if injected)
-      const anonKey = self.__VITE_SUPABASE_ANON_KEY__ || (self.env && self.env.VITE_SUPABASE_ANON_KEY) || undefined;
-      const authHeader = await getCurrentAuthHeader();
-
-      const headers = new Headers(event.request.headers);
-      if (anonKey && !headers.has('apikey')) headers.set('apikey', anonKey);
-      if (authHeader && !headers.has('Authorization')) headers.set('Authorization', authHeader);
-
-      const req = new Request(event.request, { headers });
-      return await fetch(req);
-    } catch (e) {
-      return fetch(event.request);
-    }
-  })());
-});
+// Do not intercept Supabase REST; let supabase-js attach headers itself
 
 // Helper to get the latest session token from clients
 async function getCurrentAuthHeader() {
@@ -332,6 +322,28 @@ async function getCurrentAuthHeader() {
 
     if (response && response.accessToken) {
       return `Bearer ${response.accessToken}`;
+    }
+  } catch (_) {}
+  return undefined;
+}
+
+// Helper to get the Supabase anon key from the first available client
+async function getCurrentAnonKey() {
+  try {
+    const allClients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+    if (allClients.length === 0) return undefined;
+
+    const client = allClients[0];
+    const channel = new MessageChannel();
+    const response = await new Promise((resolve) => {
+      channel.port1.onmessage = (e) => resolve(e.data);
+      client.postMessage({ type: 'REQUEST_SUPABASE_ANON' }, [channel.port2]);
+      setTimeout(() => resolve(undefined), 2000);
+    });
+
+    if (response && response.anonKey) {
+      __cachedAnonKey = response.anonKey;
+      return __cachedAnonKey;
     }
   } catch (_) {}
   return undefined;

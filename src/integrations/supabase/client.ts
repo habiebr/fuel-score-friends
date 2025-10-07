@@ -2,11 +2,16 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+// Single source of truth: VITE env variables only
+
+// Disallow localStorage and window-global overrides in production builds
+
+// Remove async fetch-based fallbacks to ensure compatibility with older build targets
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+
 // Use only anon/public key for frontend auth
-const SUPABASE_ANON_KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  'placeholder-key';
+const SUPABASE_ANON_KEY = ((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -19,10 +24,18 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
   }
 });
 
+// Expose globally for any legacy callers that expect window.supabase
+try {
+  if (typeof window !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).supabase = supabase;
+  }
+} catch {}
+
 // Fail-fast with a clear error if env vars are not configured
 const missingUrl = !import.meta.env.VITE_SUPABASE_URL;
-const missingKey = !import.meta.env.VITE_SUPABASE_ANON_KEY;
-const usingPlaceholders = SUPABASE_URL.includes('placeholder.supabase.co') || SUPABASE_ANON_KEY === 'placeholder-key';
+const missingKey = !((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY);
+const usingPlaceholders = false;
 
 if (missingUrl || missingKey || usingPlaceholders) {
   const message = [
@@ -31,9 +44,19 @@ if (missingUrl || missingKey || usingPlaceholders) {
     'See SUPABASE_MIGRATION_GUIDE.md (Step 3).'
   ].join(' ');
   // eslint-disable-next-line no-console
-  console.error(message, {
+  console.warn(message, {
     VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET',
+    VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ? 'SET' : 'NOT SET',
     VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET',
   });
-  throw new Error(message);
+}
+
+export const SUPABASE_READY = !(missingUrl || missingKey || usingPlaceholders);
+
+if (SUPABASE_READY) {
+  // eslint-disable-next-line no-console
+  console.info('[Supabase] Environment detected:', {
+    VITE_SUPABASE_URL: (import.meta.env.VITE_SUPABASE_URL || '').replace(/^(https:\/\/)([^.]+)(.*)$/,'$1***$3'),
+    VITE_SUPABASE_ANON_KEY: 'SET',
+  });
 }

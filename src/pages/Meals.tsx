@@ -308,7 +308,7 @@ export default function Meals() {
       setGeneratingPlan(true);
       const today = format(new Date(), 'yyyy-MM-dd');
       const cacheKey = `aiPlan:${today}:${planKey || 'default'}`;
-      const { data: prefData } = await supabase
+      const { data: prefData } = await (supabase as any)
         .from('user_preferences')
         .select('value')
         .eq('user_id', user.id)
@@ -324,7 +324,7 @@ export default function Meals() {
       }
       
       const session = (await supabase.auth.getSession()).data.session;
-      const apiKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
         body: { date: today },
         headers: {
@@ -336,7 +336,7 @@ export default function Meals() {
       setAiPlan(data?.mealPlan || null);
       setLastUpdated(new Date().toISOString());
       const toCache = { mealPlan: data?.mealPlan || null, updatedAt: new Date().toISOString() };
-      await supabase
+      await (supabase as any)
         .from('user_preferences')
         .upsert({
           user_id: user.id,

@@ -28,6 +28,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Persist Google Fit connection status/token when available
+        try {
+          const s: any = session || {};
+          const providerToken = s?.provider_token || s?.provider_access_token;
+          if (providerToken) {
+            // Store locally for quick reuse between reloads
+            localStorage.setItem('google_fit_connected', 'true');
+            localStorage.setItem('google_fit_provider_token', providerToken);
+            // Also mirror to Supabase so other clients/devices can infer connection
+            if (s?.user?.id) {
+              (supabase as any)
+                .from('user_preferences')
+                .upsert({
+                  user_id: s.user.id,
+                  key: 'googleFitStatus',
+                  value: { connected: true, updatedAt: new Date().toISOString() },
+                  updated_at: new Date().toISOString()
+                }, { onConflict: 'user_id,key' })
+                .then(() => {});
+            }
+          }
+        } catch {}
       }
     );
 
@@ -36,6 +59,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+
+    // Persist Google Fit status on initial load too
+    try {
+      const s: any = session || {};
+      const providerToken = s?.provider_token || s?.provider_access_token;
+      if (providerToken) {
+        localStorage.setItem('google_fit_connected', 'true');
+        localStorage.setItem('google_fit_provider_token', providerToken);
+        if (s?.user?.id) {
+          (supabase as any)
+            .from('user_preferences')
+            .upsert({
+              user_id: s.user.id,
+              key: 'googleFitStatus',
+              value: { connected: true, updatedAt: new Date().toISOString() },
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id,key' })
+            .then(() => {});
+        }
+      }
+    } catch {}
     });
 
     return () => subscription.unsubscribe();

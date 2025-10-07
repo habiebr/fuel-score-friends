@@ -51,8 +51,17 @@ export function useGoogleFit() {
   // Check authorization status
   const checkAuthStatus = useCallback(async () => {
     if (!isLoaded) return;
-    const token = await getGoogleAccessToken();
-    setIsAuthorized(!!token);
+    try {
+      const token = await getGoogleAccessToken();
+      if (token) { setIsAuthorized(true); return; }
+    } catch {}
+    try {
+      const persisted = localStorage.getItem('google_fit_connected') === 'true';
+      const storedToken = localStorage.getItem('google_fit_provider_token');
+      setIsAuthorized(!!(persisted || storedToken));
+    } catch {
+      setIsAuthorized(false);
+    }
   }, [isLoaded, getGoogleAccessToken]);
 
   useEffect(() => {

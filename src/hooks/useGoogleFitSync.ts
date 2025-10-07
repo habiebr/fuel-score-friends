@@ -25,7 +25,7 @@ export function useGoogleFitSync() {
     if (!user) return;
     const loadLastSync = async () => {
       try {
-        const { data } = await supabase
+        const { data } = await (supabase as any)
           .from('user_preferences')
           .select('value')
           .eq('user_id', user.id)
@@ -45,7 +45,7 @@ export function useGoogleFitSync() {
   // Save last sync time to Supabase
   useEffect(() => {
     if (user && lastSync) {
-      supabase
+      (supabase as any)
         .from('user_preferences')
         .upsert({
           user_id: user.id,
@@ -61,27 +61,42 @@ export function useGoogleFitSync() {
     }
   }, [user, lastSync]);
 
-  // Check connection status on mount and token refresh
+  // Check connection status on mount and token refresh, with resilient fallbacks
   useEffect(() => {
+    let cancelled = false;
     const checkConnection = async () => {
       try {
+        // Prefer live token
         const token = await getGoogleAccessToken();
-        setIsConnected(!!token);
-      } catch {
-        setIsConnected(false);
-      }
+        if (!cancelled && token) {
+          setIsConnected(true);
+          return;
+        }
+      } catch {}
+
+      try {
+        // Fallback to persisted local storage flag/token
+        const persisted = localStorage.getItem('google_fit_connected') === 'true';
+        const storedToken = localStorage.getItem('google_fit_provider_token');
+        if (!cancelled && (persisted || storedToken)) {
+          setIsConnected(true);
+          return;
+        }
+      } catch {}
+
+      if (!cancelled) setIsConnected(false);
     };
     checkConnection();
+    return () => { cancelled = true; };
   }, [getGoogleAccessToken]);
 
-  // Auto-sync every 15 minutes if connected
+  // Auto-sync every 15 minutes if connected (foreground) and register SW periodic sync
   useEffect(() => {
     if (!user || !isConnected) return;
 
-    // Initial sync if needed - check Supabase data instead of localStorage
     const checkAndSync = async () => {
       try {
-        const { data } = await supabase
+        const { data } = await (supabase as any)
           .from('google_fit_data')
           .select('last_synced_at')
           .eq('user_id', user.id)
@@ -101,10 +116,26 @@ export function useGoogleFitSync() {
 
     checkAndSync();
 
-    // Set up 15-minute interval
-    const interval = setInterval(() => {
-      syncGoogleFit();
-    }, 15 * 60 * 1000);
+    // Foreground interval (15 minutes)
+    const interval = setInterval(() => { syncGoogleFit(); }, 15 * 60 * 1000);
+
+    // Register periodic background sync via Service Worker when available
+    (async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          // Try to register periodic sync (may require origin trial/permissions)
+          // @ts-ignore
+          if ('periodicSync' in reg) {
+            // @ts-ignore
+            await reg.periodicSync.register('health-periodic-sync', { minInterval: 15 * 60 * 1000 });
+          } else {
+            // Fallback: message SW to run sync when app is active
+            reg.active?.postMessage({ type: 'TRIGGER_HEALTH_SYNC' });
+          }
+        }
+      } catch {}
+    })();
 
     return () => clearInterval(interval);
   }, [user, isConnected]);
@@ -189,37 +220,26 @@ export function useGoogleFitSync() {
         return await res.json();
       };
 
-      // Fetch all data types in parallel
-      const [stepsData, caloriesData, activeMinutesData, distanceData, heartRateData] = await Promise.all([
-        aggregate('com.google.step_count.delta'),
-        aggregate('com.google.calories.expended'),
-        aggregate('com.google.active_minutes'),
-        aggregate('com.google.distance.delta'),
-        aggregate('com.google.heart_rate.bpm').catch(() => null) // Optional
-      ]);
-
-      // Extract values from responses
-      const steps = stepsData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-      const caloriesBurned = caloriesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-      const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-      const distanceMeters = distanceData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-      const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
-
-      // Fetch activity sessions (runs, bike rides, etc.)
-      const sessionsRes = await fetch(
-        `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startOfDay.toISOString()}&endTime=${endOfDay.toISOString()}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          }
-        }
-      );
-
-      let sessions: any[] = [];
-      if (sessionsRes.ok) {
-        const sessionsData = await sessionsRes.json();
-        sessions = sessionsData.session || [];
+      // Server-side sync via Edge Function
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Missing auth session');
       }
+      const authHeader = { Authorization: `Bearer ${session.access_token}` };
+      const resp = await (supabase as any).functions.invoke('sync-google-fit', {
+        headers: { 'x-google-token': accessToken, ...authHeader },
+        body: {}
+      });
+      const { data, error: fnError } = resp;
+      if (fnError) throw fnError;
+
+      const steps = data?.steps || 0;
+      const caloriesBurned = Math.round(data?.caloriesBurned || 0);
+      const activeMinutes = data?.activeMinutes || 0;
+      const distanceMeters = data?.distanceMeters || 0;
+      const heartRateAvg = data?.heartRateAvg;
+
+      const sessions: any[] = [];
 
       const googleFitData: GoogleFitData = {
         steps,
@@ -230,26 +250,33 @@ export function useGoogleFitSync() {
         sessions
       };
 
-      // Save to database using upsert (insert or update)
-      const { error } = await (supabase as any)
-        .from('google_fit_data')
-        .upsert({
-          user_id: user.id,
-          date: today.toISOString().split('T')[0],
-          steps,
-          calories_burned: caloriesBurned,
-          active_minutes: activeMinutes,
-          distance_meters: distanceMeters,
-          heart_rate_avg: heartRateAvg,
-          sessions,
-          last_synced_at: new Date().toISOString(),
-          sync_source: 'google_fit'
-        }, {
-          onConflict: 'user_id,date'
-        });
+      // Database writes are handled by the Edge Function
 
-      if (error) {
-        throw error;
+      // Upsert normalized per-session records
+      try {
+        if (Array.isArray(sessions) && sessions.length > 0) {
+          const mapped = sessions.map((s: any) => ({
+            user_id: user.id,
+            session_id: String(s.id || `${s.startTimeMillis}-${s.endTimeMillis}`),
+            start_time: s.startTimeMillis ? new Date(Number(s.startTimeMillis)).toISOString() : new Date().toISOString(),
+            end_time: s.endTimeMillis ? new Date(Number(s.endTimeMillis)).toISOString() : new Date().toISOString(),
+            activity_type: s.activityType || s.activityTypeId || s.activity || null,
+            name: s.name || null,
+            description: s.description || null,
+            source: 'google_fit',
+            raw: s
+          }));
+
+          const batchSize = 50;
+          for (let i = 0; i < mapped.length; i += batchSize) {
+            const chunk = mapped.slice(i, i + batchSize);
+            await (supabase as any)
+              .from('google_fit_sessions')
+              .upsert(chunk, { onConflict: 'user_id,session_id' });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to upsert google_fit_sessions:', e);
       }
 
       const now = new Date();

@@ -25,6 +25,19 @@ if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
         (event as any).ports[0].postMessage({ accessToken: undefined });
       }
     }
+    if (event.data && (event as any).data.type === 'REQUEST_SUPABASE_ANON' && (event as any).ports && (event as any).ports[0]) {
+      try {
+        let anonKey: string | undefined = undefined;
+        if ((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY) {
+          anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string;
+        } else if ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) {
+          anonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY as string;
+        }
+        (event as any).ports[0].postMessage({ anonKey });
+      } catch {
+        (event as any).ports[0].postMessage({ anonKey: undefined });
+      }
+    }
   });
 }
 
