@@ -8,9 +8,12 @@ interface CalorieRingProps {
   exercise: number;
   remaining: number;
   className?: string;
+  title?: string;
+  variant?: 'full' | 'compact';
+  showCenterValue?: boolean;
 }
 
-export function CalorieRing({ baseGoal, consumed, exercise, remaining, className = '' }: CalorieRingProps) {
+export function CalorieRing({ baseGoal, consumed, exercise, remaining, className = '', title = 'Daily Calories', variant = 'full', showCenterValue = true }: CalorieRingProps) {
   const adjustedGoal = baseGoal + exercise;
   const consumedPercent = Math.min((consumed / adjustedGoal) * 100, 100);
   const exercisePercent = (exercise / adjustedGoal) * 100;
@@ -31,15 +34,17 @@ export function CalorieRing({ baseGoal, consumed, exercise, remaining, className
   const StatusIcon = status.icon;
 
   return (
-    <Card className={`${className} bg-gradient-to-br from-orange-50 to-white dark:from-gray-900 dark:to-gray-800 border-orange-200 dark:border-gray-700`}>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Daily Calories</h3>
-          <div className={`flex items-center gap-1 ${status.color}`}>
-            <StatusIcon className="w-4 h-4" />
-            <span className="text-xs font-medium">{status.message}</span>
+    <Card className={`${className} ${variant==='full' ? 'bg-gradient-to-br from-orange-50 to-white dark:from-gray-900 dark:to-gray-800 border-orange-200 dark:border-gray-700' : 'bg-transparent border-0 shadow-none'}`}>
+      <CardContent className={variant==='full' ? 'p-6' : 'p-0'}>
+        {variant === 'full' && (
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+            <div className={`flex items-center gap-1 ${status.color}`}>
+              <StatusIcon className="w-4 h-4" />
+              <span className="text-xs font-medium">{status.message}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex flex-col items-center justify-center">
           {/* SVG Donut Chart */}
@@ -88,42 +93,48 @@ export function CalorieRing({ baseGoal, consumed, exercise, remaining, className
             </svg>
 
             {/* Center text */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-4xl font-bold text-gray-900 dark:text-gray-100">
-                {Math.round(remaining)}
+            {showCenterValue && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="text-4xl font-bold text-gray-900 dark:text-gray-100">
+                  {Math.round(remaining)}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  Remaining
+                </div>
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Remaining
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-3 gap-4 mt-6 w-full">
-            <div className="text-center">
-              <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Goal</div>
-              <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{Math.round(baseGoal)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xs text-orange-500 dark:text-orange-400 uppercase mb-1">Food</div>
-              <div className="text-lg font-semibold text-orange-600 dark:text-orange-400">{Math.round(consumed)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xs text-blue-500 dark:text-blue-400 uppercase mb-1">Exercise</div>
-              <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">+{Math.round(exercise)}</div>
-            </div>
-          </div>
+          {variant === 'full' && (
+            <>
+              {/* Stats Grid */}
+              <div className="grid grid-cols-3 gap-4 mt-6 w-full">
+                <div className="text-center">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Goal</div>
+                  <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{Math.round(baseGoal)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs text-orange-500 dark:text-orange-400 uppercase mb-1">Food</div>
+                  <div className="text-lg font-semibold text-orange-600 dark:text-orange-400">{Math.round(consumed)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xs text-blue-500 dark:text-blue-400 uppercase mb-1">Exercise</div>
+                  <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">+{Math.round(exercise)}</div>
+                </div>
+              </div>
 
-          {/* Formula visualization */}
-          <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-            <span className="font-medium">{Math.round(baseGoal)}</span>
-            <span className="mx-1">-</span>
-            <span className="font-medium text-orange-600 dark:text-orange-400">{Math.round(consumed)}</span>
-            <span className="mx-1">+</span>
-            <span className="font-medium text-blue-600 dark:text-blue-400">{Math.round(exercise)}</span>
-            <span className="mx-1">=</span>
-            <span className="font-semibold">{Math.round(remaining)}</span>
-          </div>
+              {/* Formula visualization */}
+              <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                <span className="font-medium">{Math.round(baseGoal)}</span>
+                <span className="mx-1">-</span>
+                <span className="font-medium text-orange-600 dark:text-orange-400">{Math.round(consumed)}</span>
+                <span className="mx-1">+</span>
+                <span className="font-medium text-blue-600 dark:text-blue-400">{Math.round(exercise)}</span>
+                <span className="mx-1">=</span>
+                <span className="font-semibold">{Math.round(remaining)}</span>
+              </div>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -79,6 +79,9 @@ export function TodayNutritionCard({
               consumed={calories.current}
               exercise={0}
               remaining={Math.max(0, calories.target - calories.current)}
+              title="Calories"
+              variant="compact"
+              showCenterValue={false}
             />
             <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
               <span>Calories</span>
