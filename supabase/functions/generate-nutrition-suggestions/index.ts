@@ -9,15 +9,24 @@ import {
 } from "../_shared/nutrition-unified.ts";
 
 function buildCorsHeaders(req: Request) {
-  const origin = req.headers.get("Origin") || "*";
-  return {
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, supabase-client, x-xsrf-token, x-groq-key, groq-api-key",
+  const originHeader = req.headers.get("Origin");
+  const allowOrigin =
+    originHeader && originHeader !== "null" ? originHeader : "*";
+
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers":
+      "authorization, apikey, content-type, x-client-info, supabase-client, x-xsrf-token, x-groq-key, groq-api-key",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Max-Age": "86400",
-    "Access-Control-Allow-Credentials": "true",
     "Vary": "Origin",
-  } as Record<string, string>;
+  };
+
+  if (allowOrigin !== "*") {
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+
+  return headers;
 }
 
 function getGroqKey(): string | undefined {
@@ -212,5 +221,4 @@ Return ONLY strict JSON with keys breakfast, lunch, dinner${dayTarget.meals.find
     });
   }
 });
-
 

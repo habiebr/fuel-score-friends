@@ -23,3 +23,6 @@ verify_jwt = true
 
 [functions.refresh-meal-plan]
 verify_jwt = false
+
+[functions.generate-nutrition-suggestions]
+verify_jwt = false

@@ -251,17 +251,6 @@ export default function Training() {
                             <h3 className="text-lg font-semibold">{DAYS[idx]}</h3>
                             <p className="text-xs text-muted-foreground">{format(d, 'EEEE, MMM dd')}</p>
                           </div>
-                          <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground">
-                            <span className="rounded-full border border-border/40 bg-background/70 px-3 py-1">
-                              {primarySummary}
-                            </span>
-                            <span className="rounded-full border border-border/40 bg-background/70 px-3 py-1">
-                              {totalCalories} kcal
-                            </span>
-                            <span className="rounded-full border border-border/40 bg-background/70 px-3 py-1 capitalize">
-                              {intensitySummary}
-                            </span>
-                          </div>
                         </div>
 
                         <div className="space-y-3">

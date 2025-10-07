@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { refreshWeeklyAggregates } from '@/lib/weekly-google-fit';
 
 interface GoogleFitData {
   steps: number;
@@ -298,6 +299,13 @@ export function useGoogleFitSync() {
         setLastSync(now);
         setSyncStatus('success');
         setIsConnected(true);
+
+        // Refresh weekly aggregates after successful sync
+        try {
+          await refreshWeeklyAggregates(user.id);
+        } catch (aggregateError) {
+          console.warn('Failed to refresh weekly aggregates:', aggregateError);
+        }
 
         toast({
           title: "Google Fit synced",

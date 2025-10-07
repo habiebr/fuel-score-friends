@@ -6,7 +6,7 @@ import { ScoreCard } from '@/components/ScoreCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils, Settings, Activity } from 'lucide-react';
+import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils, Settings } from 'lucide-react';
 import AppHeader from '@/components/AppHeader';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
@@ -22,6 +22,7 @@ import { format, differenceInDays, differenceInHours, differenceInMinutes, diffe
 import { RecoverySuggestion } from '@/components/RecoverySuggestion';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 import { calculateBMR } from '@/lib/nutrition-engine';
+import { getWeeklyGoogleFitData, getWeeklyMileageTarget } from '@/lib/weekly-google-fit';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 
 interface MealSuggestion {
@@ -83,16 +84,17 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const { user, session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { getTodayData } = useGoogleFitSync();
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [weeklyScore, setWeeklyScore] = useState(0);
   const [todayScore, setTodayScore] = useState(0);
   const [todayBreakdown, setTodayBreakdown] = useState<{ nutrition: number; training: number; bonuses?: number; penalties?: number }>({ nutrition: 0, training: 0 });
-  const { getTodayData: getGoogleFitData, syncGoogleFit, isSyncing: isGoogleFitSyncing, lastSync, connectGoogleFit } = useGoogleFitSync();
   // Removed manual generate plan action from dashboard
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
   const [newActivity, setNewActivity] = useState<null | { planned?: string; actual?: string; sessionId: string }>(null);
+  const [weeklyGoogleFitData, setWeeklyGoogleFitData] = useState<{ current: number; target: number }>({ current: 0, target: 30 });
 
   // Function to determine current meal based on time and Google Fit activity patterns
   const getCurrentMealType = () => {
@@ -318,16 +320,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     }
   }, [user]);
 
-  // Periodic sync: check every 5 minutes; if older than 15 minutes, sync
-  useEffect(() => {
-    if (!user) return;
-    const interval = setInterval(() => {
-      if (!lastSync || (Date.now() - new Date(lastSync).getTime()) > (15 * 60 * 1000)) {
-        syncGoogleFit();
-      }
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [user, lastSync, syncGoogleFit]);
 
   // Realtime: refresh when profile or meal plans change
   useEffect(() => {
@@ -371,7 +363,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         .maybeSingle();
 
       // Fetch Google Fit data for today
-      const googleFitData = await getGoogleFitData();
+      const googleFitData = await getTodayData();
       
       // Transform Google Fit data to match expected format
       const exerciseData = {
@@ -508,6 +500,22 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       } catch (e) {
         setWeeklyScore(0);
       }
+
+      // Load weekly Google Fit data
+      try {
+        const [weeklyData, target] = await Promise.all([
+          getWeeklyGoogleFitData(user.id),
+          getWeeklyMileageTarget(user.id)
+        ]);
+
+        setWeeklyGoogleFitData({
+          current: weeklyData.totalDistanceKm,
+          target: target
+        });
+      } catch (e) {
+        console.error('Error loading weekly Google Fit data:', e);
+        // Keep default values
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
@@ -603,21 +611,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           <div className="flex items-center justify-between">
             <AppHeader />
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="gap-2"
-                  onClick={() => syncGoogleFit()}
-                  disabled={isGoogleFitSyncing}
-                >
-                  <Activity className="w-4 h-4" />
-                  {isGoogleFitSyncing ? 'Syncing...' : 'Sync Fit'}
-                </Button>
-                {lastSync && (
-                  <span className="text-xs text-muted-foreground">Last sync {new Date(lastSync).toLocaleTimeString()}</span>
-                )}
-              </div>
               <Button variant="outline" size="sm" className="gap-2">
                 <Settings className="w-4 h-4" />
                 Customize
@@ -701,8 +694,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         {/* 5. Weekly Miles */}
         <div className="mb-4">
           <WeeklyMilesCard
-            current={28.5}
-            target={35}
+            current={weeklyGoogleFitData.current}
+            target={weeklyGoogleFitData.target}
           />
         </div>
 
