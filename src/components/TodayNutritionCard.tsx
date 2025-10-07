@@ -27,7 +27,7 @@ export function TodayNutritionCard({
   fat,
   showEducation = false
 }: TodayNutritionCardProps) {
-  const [openTip, setOpenTip] = useState<null | 'Protein' | 'Carbs' | 'Fat'>(null);
+  const [openTip, setOpenTip] = useState<null | 'Calories' | 'Protein' | 'Carbs' | 'Fat'>(null);
   
   const caloriePercentage = Math.round((calories.current / calories.target) * 100);
 
@@ -71,16 +71,6 @@ export function TodayNutritionCard({
       <CardContent className="p-4">
         <h3 className="font-semibold text-lg mb-4">Today's Nutrition</h3>
 
-        {/* Calories (Circular Ring) */}
-        <div className="mb-6">
-          <CalorieRing
-            baseGoal={calories.target}
-            consumed={calories.current}
-            exercise={0}
-            remaining={Math.max(0, calories.target - calories.current)}
-          />
-        </div>
-
         {/* Horizontal Rings: Calories + Macros */}
         <div className="grid grid-cols-4 gap-4">
           <div className="flex flex-col items-center">
@@ -90,7 +80,18 @@ export function TodayNutritionCard({
               exercise={0}
               remaining={Math.max(0, calories.target - calories.current)}
             />
-            <div className="mt-2 text-xs text-muted-foreground">Calories</div>
+            <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+              <span>Calories</span>
+              <button aria-label="Calories info" onClick={() => setOpenTip(openTip === 'Calories' ? null : 'Calories')}>
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {openTip === 'Calories' && (
+              <div className="mt-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 shadow-sm">
+                <div><strong>{calories.current}</strong> / {calories.target} kcal</div>
+                <div className="text-muted-foreground">Remaining: {Math.max(0, calories.target - calories.current)} kcal</div>
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-center">
             <CalorieRing
@@ -99,7 +100,18 @@ export function TodayNutritionCard({
               exercise={0}
               remaining={Math.max(0, protein.target - protein.current)}
             />
-            <div className="mt-2 text-xs text-muted-foreground">Protein</div>
+            <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+              <span>Protein</span>
+              <button aria-label="Protein info" onClick={() => setOpenTip(openTip === 'Protein' ? null : 'Protein')}>
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {openTip === 'Protein' && (
+              <div className="mt-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 shadow-sm">
+                <div><strong>{protein.current}g</strong> / {protein.target}g</div>
+                <div className="text-muted-foreground">Remaining: {Math.max(0, protein.target - protein.current)}g</div>
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-center">
             <CalorieRing
@@ -108,7 +120,18 @@ export function TodayNutritionCard({
               exercise={0}
               remaining={Math.max(0, carbs.target - carbs.current)}
             />
-            <div className="mt-2 text-xs text-muted-foreground">Carbs</div>
+            <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+              <span>Carbs</span>
+              <button aria-label="Carbs info" onClick={() => setOpenTip(openTip === 'Carbs' ? null : 'Carbs')}>
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {openTip === 'Carbs' && (
+              <div className="mt-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 shadow-sm">
+                <div><strong>{carbs.current}g</strong> / {carbs.target}g</div>
+                <div className="text-muted-foreground">Remaining: {Math.max(0, carbs.target - carbs.current)}g</div>
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-center">
             <CalorieRing
@@ -117,7 +140,18 @@ export function TodayNutritionCard({
               exercise={0}
               remaining={Math.max(0, fat.target - fat.current)}
             />
-            <div className="mt-2 text-xs text-muted-foreground">Fat</div>
+            <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+              <span>Fat</span>
+              <button aria-label="Fat info" onClick={() => setOpenTip(openTip === 'Fat' ? null : 'Fat')}>
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {openTip === 'Fat' && (
+              <div className="mt-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 shadow-sm">
+                <div><strong>{fat.current}g</strong> / {fat.target}g</div>
+                <div className="text-muted-foreground">Remaining: {Math.max(0, fat.target - fat.current)}g</div>
+              </div>
+            )}
           </div>
         </div>
 
