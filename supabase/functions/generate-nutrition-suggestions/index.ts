@@ -8,13 +8,17 @@ import {
   generateGoalCentricDayTarget,
 } from "../_shared/nutrition-unified.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-  "Access-Control-Max-Age": "86400",
-  "Vary": "Origin",
-};
+function buildCorsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") || "*";
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, supabase-client, x-xsrf-token",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    "Access-Control-Allow-Credentials": "true",
+    "Vary": "Origin",
+  } as Record<string, string>;
+}
 
 function getGroqKey(): string | undefined {
   // GROQ_API_KEY should be set in function secrets
@@ -27,8 +31,9 @@ function getGroqKey(): string | undefined {
 }
 
 serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
