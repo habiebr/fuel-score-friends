@@ -12,6 +12,7 @@ import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
 import { WeeklyScoreCard } from '@/components/WeeklyScoreCard';
+import { getTodayScore, getWeeklyScore } from '@/services/score.service';
 import { TodayMealScoreCard } from '@/components/TodayMealScoreCard';
 import { TodayNutritionCard } from '@/components/TodayNutritionCard';
 import { WeeklyMilesCard } from '@/components/WeeklyMilesCard';
@@ -620,12 +621,12 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
         )}
 
-        {/* 1. Weekly Score (moved to top) */}
+        {/* 1. Weekly Score (from scoring engine) */}
         <div className="mb-3">
           <WeeklyScoreCard
-            weeklyScore={82}
-            macroBalance={72}
-            mealTiming={70}
+            weeklyScore={weeklyScore}
+            macroBalance={Math.round(todayBreakdown.nutrition)}
+            mealTiming={Math.max(0, Math.min(100, 100 - Math.abs(50 - todayBreakdown.nutrition)))}
           />
         </div>
 

@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { dailyScore } from '@/science/dailyScore';
-import { format } from 'date-fns';
+import { addDays, format, startOfWeek } from 'date-fns';
 
 // Maps domain → scoring context using existing tables:
 // - profiles → Profile
@@ -13,6 +13,14 @@ export async function getTodayScore(userId: string): Promise<{
   breakdown: { nutrition: number; training: number; bonuses: number; penalties: number };
 }> {
   const today = format(new Date(), 'yyyy-MM-dd');
+  return getDailyScoreForDate(userId, today);
+}
+
+export async function getDailyScoreForDate(userId: string, dateISO: string): Promise<{
+  score: number;
+  breakdown: { nutrition: number; training: number; bonuses: number; penalties: number };
+}> {
+  const today = dateISO;
 
   // Profile
   const { data: profile } = await (supabase as any)
@@ -129,6 +137,20 @@ export async function getTodayScore(userId: string): Promise<{
   const bonuses = 0;
   const penalties = 0;
   return { score, breakdown: { nutrition, training, bonuses, penalties } };
+}
+
+export async function getWeeklyScore(userId: string, endDateISO?: string): Promise<number> {
+  const anyDate = endDateISO ? new Date(endDateISO) : new Date();
+  const weekStart = startOfWeek(anyDate, { weekStartsOn: 1 }); // Monday
+  const dates: string[] = Array.from({ length: 7 }, (_, i) => format(addDays(weekStart, i), 'yyyy-MM-dd'));
+  const scores: number[] = [];
+  for (const d of dates) {
+    const { score } = await getDailyScoreForDate(userId, d);
+    scores.push(score);
+  }
+  if (scores.length === 0) return 0;
+  const avg = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length);
+  return avg;
 }
 
 
