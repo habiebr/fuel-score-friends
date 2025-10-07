@@ -308,7 +308,7 @@ export default function Meals() {
     try {
       setGeneratingPlan(true);
       const today = format(new Date(), 'yyyy-MM-dd');
-      const cacheKey = `aiPlan:${today}:${planKey || 'default'}`;
+      const cacheKey = `nutritionSuggestions:${today}:${planKey || 'default'}`;
       const { data: prefData } = await (supabase as any)
         .from('user_preferences')
         .select('value')
@@ -316,17 +316,17 @@ export default function Meals() {
         .eq('key', cacheKey)
         .maybeSingle();
 
-      if (prefData?.value?.mealPlan) {
-        setAiPlan(prefData.value.mealPlan);
+      if (prefData?.value?.meals) {
+        setAiPlan(prefData.value.meals);
         setLastUpdated(prefData.value.updatedAt || new Date().toISOString());
-        setRecommendedRecipes(extractRecipesFromAiPlan(prefData.value.mealPlan).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
+        setRecommendedRecipes(extractRecipesFromAiPlan(prefData.value.meals).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
         setGeneratingPlan(false);
         return;
       }
       
       const session = (await supabase.auth.getSession()).data.session;
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
+      const { data, error } = await supabase.functions.invoke('generate-nutrition-suggestions', {
         body: { date: today },
         headers: {
           ...(apiKey ? { apikey: apiKey } : {}),
@@ -334,9 +334,9 @@ export default function Meals() {
         }
       });
       if (error) throw error;
-      setAiPlan(data?.mealPlan || null);
+      setAiPlan(data?.meals || null);
       setLastUpdated(new Date().toISOString());
-      const toCache = { mealPlan: data?.mealPlan || null, updatedAt: new Date().toISOString() };
+      const toCache = { meals: data?.meals || null, updatedAt: new Date().toISOString() };
       await (supabase as any)
         .from('user_preferences')
         .upsert({
@@ -347,8 +347,8 @@ export default function Meals() {
         }, {
           onConflict: 'user_id,key'
         });
-      setRecommendedRecipes(extractRecipesFromAiPlan(data?.mealPlan || null).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
-      toast({ title: 'AI Meal Plan ready', description: 'Personalized Indonesian meal plan generated.' });
+      setRecommendedRecipes(extractRecipesFromAiPlan(data?.meals || null).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
+      toast({ title: 'Nutrition suggestions ready', description: 'Personalized suggestions generated for today.' });
     } catch (e: any) {
       toast({ title: 'AI generation failed', description: e?.message || 'Please try again', variant: 'destructive' });
     } finally {

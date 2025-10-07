@@ -38,7 +38,7 @@ export function BottomNav({ onAddMeal }: BottomNavProps) {
 
           {/* Training */}
           <NavLink
-            to="/goals"
+            to="/training"
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                 isActive ? 'text-primary' : 'text-muted-foreground'

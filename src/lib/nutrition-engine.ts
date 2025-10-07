@@ -14,6 +14,8 @@
 export type Sex = 'male' | 'female';
 export type TrainingLoad = 'rest' | 'easy' | 'moderate' | 'long' | 'quality';
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type GoalType = '5k' | '10k' | 'half_marathon' | 'full_marathon' | 'ultra' | 'weight_loss' | 'gain_muscle' | 'general';
+export type RacePhase = 'off' | 'base' | 'build' | 'peak' | 'taper' | 'race';
 
 export interface UserProfile {
   weightKg: number;
@@ -197,6 +199,219 @@ export function generateDayTarget(
     postCHO_g,
     postProtein_g,
   };
+}
+
+/**
+ * Helper: Aggregate multiple activities in a day into one Session.
+ * - Chooses the highest load as the session type
+ * - Sums durations; if any high intensity, mark intensity as high
+ */
+export function aggregateActivitiesToSession(
+  dateISO: string,
+  activities: Array<{
+    activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
+    duration_minutes?: number | null;
+    distance_km?: number | null;
+    intensity?: 'low' | 'moderate' | 'high' | null;
+  }>
+): Session {
+  if (!activities || activities.length === 0) {
+    return { date: dateISO, type: 'rest', durationMin: 0, intensity: 'low' };
+  }
+
+  // Determine load priority
+  const loadPriority: TrainingLoad[] = ['rest', 'easy', 'moderate', 'long', 'quality'];
+
+  const classifyActivityToLoad = (a: any): TrainingLoad => {
+    if (a.activity_type === 'run') {
+      if (typeof a.distance_km === 'number' && a.distance_km >= 15) return 'long';
+      if ((a.intensity || 'moderate') === 'high') return 'quality';
+      if (typeof a.duration_minutes === 'number' && a.duration_minutes >= 60) return 'moderate';
+      return 'easy';
+    }
+    if (a.activity_type === 'cardio') {
+      if ((a.intensity || 'moderate') === 'high' || (a.duration_minutes || 0) >= 60) return 'moderate';
+      return 'easy';
+    }
+    if (a.activity_type === 'strength') {
+      return 'easy';
+    }
+    return 'rest';
+  };
+
+  let maxLoad: TrainingLoad = 'rest';
+  let totalDuration = 0;
+  let highIntensity = false;
+  for (const a of activities) {
+    const load = classifyActivityToLoad(a);
+    if (loadPriority.indexOf(load) > loadPriority.indexOf(maxLoad)) {
+      maxLoad = load;
+    }
+    totalDuration += Math.max(0, a.duration_minutes || 0);
+    if (a.intensity === 'high') highIntensity = true;
+  }
+
+  return {
+    date: dateISO,
+    type: maxLoad,
+    durationMin: totalDuration,
+    intensity: highIntensity ? 'high' : 'moderate',
+  };
+}
+
+/**
+ * Adjust DayTarget based on high-level goal type
+ * - Marathon/ultra: prioritize carbs slightly higher (+5% kcal to CHO, from fat)
+ * - Weight loss: reduce kcal by 10% and increase protein (+10%), reduce fat
+ * - Gain muscle: increase protein (+15%) with small kcal surplus (+5%)
+ */
+export function adjustTargetForGoal(target: DayTarget, profile: UserProfile, goal: GoalType | undefined): DayTarget {
+  if (!goal || goal === 'general') return target;
+
+  let kcal = target.kcal;
+  let cho = target.cho_g;
+  let protein = target.protein_g;
+  let fat = target.fat_g;
+
+  const applyRedistribute = (fromFatKcal: number, toChoKcal: number, extraProtein_g: number = 0) => {
+    const toCho_g = Math.round(toChoKcal / 4);
+    const fromFat_g = Math.round(fromFatKcal / 9);
+    cho += toCho_g;
+    fat = Math.max(0, fat - fromFat_g);
+    protein += extraProtein_g;
+  };
+
+  if (goal === 'full_marathon' || goal === 'half_marathon' || goal === 'ultra' || goal === '10k' || goal === '5k') {
+    // Shift ~5% kcal from fat to carbs
+    const shiftKcal = Math.round(kcal * 0.05);
+    applyRedistribute(shiftKcal, shiftKcal, 0);
+  } else if (goal === 'weight_loss') {
+    // 10% deficit, +10% protein grams
+    kcal = Math.round(kcal * 0.9);
+    protein = Math.round(protein * 1.1);
+    // Recompute fat to fit new kcal maintaining CHO
+    const choKcal = cho * 4;
+    const proteinKcal = protein * 4;
+    const fatKcal = Math.max(Math.round(kcal * 0.2), kcal - choKcal - proteinKcal);
+    fat = Math.max(0, Math.round(fatKcal / 9));
+  } else if (goal === 'gain_muscle') {
+    // 5% surplus, +15% protein grams
+    kcal = Math.round(kcal * 1.05);
+    protein = Math.round(protein * 1.15);
+    const choKcal = cho * 4;
+    const proteinKcal = protein * 4;
+    const fatKcal = Math.max(Math.round(kcal * 0.2), kcal - choKcal - proteinKcal);
+    fat = Math.max(0, Math.round(fatKcal / 9));
+  }
+
+  return {
+    ...target,
+    kcal,
+    cho_g: cho,
+    protein_g: protein,
+    fat_g: fat,
+  };
+}
+
+/**
+ * Generate DayTarget from multiple activities and a goal type
+ */
+export function generateDayTargetFromActivities(
+  profile: UserProfile,
+  dateISO: string,
+  activities: Array<{
+    activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
+    duration_minutes?: number | null;
+    distance_km?: number | null;
+    intensity?: 'low' | 'moderate' | 'high' | null;
+  }>,
+  goal?: GoalType
+): DayTarget {
+  const session = aggregateActivitiesToSession(dateISO, activities);
+  const base = generateDayTarget(profile, session);
+  return adjustTargetForGoal(base, profile, goal);
+}
+
+/**
+ * Determine race phase from date and target race date.
+ * - race: same day
+ * - taper: <= 7 days before race
+ * - peak: 8-21 days before race
+ * - build: 22-56 days before race (3-8 weeks)
+ * - base: > 56 days
+ * - off: past race date
+ */
+export function determineRacePhase(dateISO: string, raceDateISO?: string | null): RacePhase {
+  if (!raceDateISO) return 'base';
+  const today = new Date(dateISO + 'T00:00:00');
+  const raceDate = new Date(raceDateISO + 'T00:00:00');
+  const diffDays = Math.floor((raceDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return 'off';
+  if (diffDays === 0) return 'race';
+  if (diffDays <= 7) return 'taper';
+  if (diffDays <= 21) return 'peak';
+  if (diffDays <= 56) return 'build';
+  return 'base';
+}
+
+/**
+ * Adjust target for race phase (periodization)
+ * - base/build: small kcal surplus on long/quality days
+ * - peak: ensure higher CHO (shift from fat), maintain kcal
+ * - taper: reduce kcal ~10% except day-before where CHO up
+ * - race: bump pre/during/post fueling guidance; kcal steady
+ */
+export function adjustTargetForRacePhase(target: DayTarget, phase: RacePhase): DayTarget {
+  let t = { ...target };
+  const isHighLoad = target.load === 'long' || target.load === 'quality';
+  if (phase === 'build' && isHighLoad) {
+    t.kcal = Math.round(t.kcal * 1.05);
+  }
+  if (phase === 'peak') {
+    const shiftKcal = Math.round(t.kcal * 0.05);
+    const toCho_g = Math.round(shiftKcal / 4);
+    const fromFat_g = Math.round(shiftKcal / 9);
+    t.cho_g += toCho_g;
+    t.fat_g = Math.max(0, t.fat_g - fromFat_g);
+  }
+  if (phase === 'taper') {
+    // Default: small deficit; but if high-load day, keep kcal
+    if (!isHighLoad) {
+      t.kcal = Math.round(t.kcal * 0.9);
+      const choKcal = t.cho_g * 4;
+      const proteinKcal = t.protein_g * 4;
+      const fatKcal = Math.max(Math.round(t.kcal * 0.2), t.kcal - choKcal - proteinKcal);
+      t.fat_g = Math.max(1, Math.round(fatKcal / 9));
+    }
+  }
+  if (phase === 'race') {
+    // Emphasize fueling windows; macros stay similar
+    t.preFuelingCHO_g = Math.max(t.preFuelingCHO_g || 0, Math.round(1.5 * (t.cho_g / (t.kcal / 4)) * 60));
+    t.duringCHOgPerHour = Math.max(t.duringCHOgPerHour || 0, 60);
+    t.postCHO_g = Math.max(t.postCHO_g || 0, Math.round(1.2 * (t.cho_g / (t.kcal / 4)) * 60));
+  }
+  return t;
+}
+
+/**
+ * Goal-centric generator: focuses on race goal and periodization.
+ * Provide goal type and target race date for phase-aware adjustments.
+ */
+export function generateGoalCentricTarget(
+  profile: UserProfile,
+  dateISO: string,
+  activities: Array<{
+    activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
+    duration_minutes?: number | null;
+    distance_km?: number | null;
+    intensity?: 'low' | 'moderate' | 'high' | null;
+  }>,
+  goal?: GoalType,
+  targetRaceDateISO?: string | null
+): DayTarget {
+  const base = generateDayTargetFromActivities(profile, dateISO, activities, goal);
+  const phase = determineRacePhase(dateISO, targetRaceDateISO);
+  return adjustTargetForRacePhase(base, phase);
 }
 
 /**

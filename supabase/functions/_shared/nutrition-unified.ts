@@ -7,6 +7,8 @@ export interface UserProfile {
 
 export type TrainingLoad = 'rest' | 'easy' | 'moderate' | 'long' | 'quality';
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type GoalType = '5k' | '10k' | 'half_marathon' | 'full_marathon' | 'ultra' | 'weight_loss' | 'gain_muscle' | 'general';
+export type RacePhase = 'off' | 'base' | 'build' | 'peak' | 'taper' | 'race';
 
 export interface DayTarget {
   date: string;
@@ -97,6 +99,129 @@ export function getMealRatios(load: TrainingLoad): Record<MealType, number> {
 }
 
 /**
+ * Determine race phase given current date and target race date.
+ */
+export function determineRacePhase(dateISO: string, raceDateISO?: string | null): RacePhase {
+  if (!raceDateISO) return 'base';
+  const today = new Date(dateISO + 'T00:00:00');
+  const race = new Date(raceDateISO + 'T00:00:00');
+  const diff = Math.floor((race.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff < 0) return 'off';
+  if (diff === 0) return 'race';
+  if (diff <= 7) return 'taper';
+  if (diff <= 21) return 'peak';
+  if (diff <= 56) return 'build';
+  return 'base';
+}
+
+/**
+ * Aggregate multiple activities to an overall TrainingLoad for the day.
+ */
+export function aggregateActivitiesToLoad(activities: Array<{ activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other'; duration_minutes?: number | null; distance_km?: number | null; intensity?: 'low' | 'moderate' | 'high' | null; }>): TrainingLoad {
+  if (!activities || activities.length === 0) return 'rest';
+  const priority: TrainingLoad[] = ['rest', 'easy', 'moderate', 'long', 'quality'];
+  const classify = (a: any): TrainingLoad => {
+    if (a.activity_type === 'run') {
+      if (typeof a.distance_km === 'number' && a.distance_km >= 15) return 'long';
+      if ((a.intensity || 'moderate') === 'high') return 'quality';
+      if (typeof a.duration_minutes === 'number' && a.duration_minutes >= 60) return 'moderate';
+      return 'easy';
+    }
+    if (a.activity_type === 'cardio') {
+      if ((a.intensity || 'moderate') === 'high' || (a.duration_minutes || 0) >= 60) return 'moderate';
+      return 'easy';
+    }
+    if (a.activity_type === 'strength') return 'easy';
+    return 'rest';
+  };
+  let max: TrainingLoad = 'rest';
+  for (const a of activities) {
+    const load = classify(a);
+    if (priority.indexOf(load) > priority.indexOf(max)) max = load;
+  }
+  return max;
+}
+
+/**
+ * Apply small macro/kcal adjustments for goal type.
+ */
+export function adjustDayTargetForGoal(target: DayTarget, goal?: GoalType): DayTarget {
+  if (!goal || goal === 'general') return target;
+  const t = JSON.parse(JSON.stringify(target)) as DayTarget;
+  if (goal === 'full_marathon' || goal === 'half_marathon' || goal === 'ultra' || goal === '10k' || goal === '5k') {
+    // Shift ~5% kcal from fat to carbs
+    const shiftKcal = Math.round(t.kcal * 0.05);
+    const toCho_g = Math.round(shiftKcal / 4);
+    const fromFat_g = Math.round(shiftKcal / 9);
+    t.grams.cho += toCho_g;
+    t.grams.fat = Math.max(0, t.grams.fat - fromFat_g);
+  } else if (goal === 'weight_loss') {
+    t.kcal = Math.round(t.kcal * 0.9);
+    t.grams.protein = Math.round(t.grams.protein * 1.1);
+    const choKcal = t.grams.cho * 4;
+    const proteinKcal = t.grams.protein * 4;
+    const fatKcal = Math.max(Math.round(t.kcal * 0.2), t.kcal - choKcal - proteinKcal);
+    t.grams.fat = Math.max(0, Math.round(fatKcal / 9));
+  } else if (goal === 'gain_muscle') {
+    t.kcal = Math.round(t.kcal * 1.05);
+    t.grams.protein = Math.round(t.grams.protein * 1.15);
+    const choKcal = t.grams.cho * 4;
+    const proteinKcal = t.grams.protein * 4;
+    const fatKcal = Math.max(Math.round(t.kcal * 0.2), t.kcal - choKcal - proteinKcal);
+    t.grams.fat = Math.max(0, Math.round(fatKcal / 9));
+  }
+  return t;
+}
+
+/**
+ * Apply periodization adjustments by race phase.
+ */
+export function adjustDayTargetForPhase(target: DayTarget, phase: RacePhase): DayTarget {
+  const t = JSON.parse(JSON.stringify(target)) as DayTarget;
+  const isHigh = t.load === 'long' || t.load === 'quality';
+  if (phase === 'build' && isHigh) {
+    t.kcal = Math.round(t.kcal * 1.05);
+  }
+  if (phase === 'peak') {
+    const shiftKcal = Math.round(t.kcal * 0.05);
+    const toCho_g = Math.round(shiftKcal / 4);
+    const fromFat_g = Math.round(shiftKcal / 9);
+    t.grams.cho += toCho_g;
+    t.grams.fat = Math.max(0, t.grams.fat - fromFat_g);
+  }
+  if (phase === 'taper' && !isHigh) {
+    t.kcal = Math.round(t.kcal * 0.9);
+    const choKcal = t.grams.cho * 4;
+    const proteinKcal = t.grams.protein * 4;
+    const fatKcal = Math.max(Math.round(t.kcal * 0.2), t.kcal - choKcal - proteinKcal);
+    t.grams.fat = Math.max(1, Math.round(fatKcal / 9));
+  }
+  if (phase === 'race') {
+    t.fueling.pre = { hoursBefore: 3, cho_g: Math.max(t.fueling.pre?.cho_g || 0, Math.round(1.5 * t.grams.protein)) };
+    t.fueling.duringCHOgPerHour = Math.max(t.fueling.duringCHOgPerHour || 0, 60);
+    t.fueling.post = { minutesAfter: 45, cho_g: Math.max(t.fueling.post?.cho_g || 0, Math.round(1.2 * t.grams.protein)), protein_g: Math.max(t.fueling.post?.protein_g || 0, Math.round(0.3 * (t.grams.protein))) };
+  }
+  return t;
+}
+
+/**
+ * Goal-centric day target generator used by server functions.
+ */
+export function generateGoalCentricDayTarget(
+  profile: UserProfile,
+  dateISO: string,
+  activities: Array<{ activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other'; duration_minutes?: number | null; distance_km?: number | null; intensity?: 'low' | 'moderate' | 'high' | null; }>,
+  goal?: GoalType,
+  targetRaceDateISO?: string | null
+): DayTarget {
+  const load = aggregateActivitiesToLoad(activities);
+  const base = calculateDayTarget(profile, load, dateISO);
+  const goalAdjusted = adjustDayTargetForGoal(base, goal);
+  const phase = determineRacePhase(dateISO, targetRaceDateISO);
+  return adjustDayTargetForPhase(goalAdjusted, phase);
+}
+
+/**
  * Step 5: Calculate fueling windows based on load
  * Exact values from science table
  */
@@ -112,13 +237,14 @@ export function calculateFuelingWindows(profile: UserProfile, load: TrainingLoad
     quality: { cho: [1, 3], hours: [3, 4] }
   };
 
-  // During-workout CHO from science table
+  // During-workout CHO per science: only if > 75 minutes.
+  // Without explicit duration on the server, we conservatively enable only for 'long' days (>90min).
   const duringRanges: Record<TrainingLoad, [number, number] | null> = {
     rest: null,
-    easy: null, // optional in table
-    moderate: [30, 45],
-    long: [45, 75], // up to 90 for very long sessions
-    quality: [45, 60]
+    easy: null,
+    moderate: null,
+    long: [45, 75], // could be up to 90 g/h for very long sessions
+    quality: null
   };
 
   // Post-workout recovery from science table
