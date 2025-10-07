@@ -548,7 +548,7 @@ export default function Goals() {
                 {/* Controls */}
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
-                    Week of {format(datesOfWeek[0], 'MM/dd')} - {format(datesOfWeek[6], 'MM/dd')}
+                    Weekly pattern (Mon–Sun)
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>Prev</Button>
@@ -562,7 +562,7 @@ export default function Goals() {
                     const list = activitiesByDate[key] || [];
                     return (
                       <div key={key} className="p-3 border rounded-lg">
-                        <div className="text-sm font-semibold mb-2">{DAYS[idx]} ({format(d, 'MM/dd')})</div>
+                        <div className="text-sm font-semibold mb-2">{DAYS[idx]}</div>
                         <div className="space-y-2">
                           {list.length === 0 && (
                             <div className="text-xs text-muted-foreground">No activities</div>
