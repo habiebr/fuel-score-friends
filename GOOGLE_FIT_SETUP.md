@@ -90,6 +90,9 @@ This guide will help you set up Google Fit API integration for your PWA.
    # Google Fit API Configuration
    VITE_GOOGLE_CLIENT_ID=your-client-id-here
    VITE_GOOGLE_API_KEY=your-api-key-here
+   # Optional: Needed for token refresh Edge Function
+   GOOGLE_FIT_CLIENT_ID=your-client-id-here
+   GOOGLE_FIT_CLIENT_SECRET=your-client-secret-if-required
    ```
 
 3. **Update for production**

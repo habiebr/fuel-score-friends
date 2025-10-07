@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -10,16 +10,91 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
 
   signInWithGoogle: () => Promise<{ error: any }>;
-  getGoogleAccessToken: () => Promise<string | null>;
+  getGoogleAccessToken: (options?: { forceRefresh?: boolean }) => Promise<string | null>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const GOOGLE_TOKEN_KEY = "google_fit_provider_token";
+const GOOGLE_REFRESH_KEY = "google_fit_provider_refresh_token";
+const GOOGLE_TOKEN_EXPIRY_KEY = "google_fit_provider_token_expires_at";
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+const DEFAULT_ACCESS_TOKEN_TTL = 50 * 60 * 1000; // 50 minutes buffer
+
+type ProviderSession = Session & {
+  provider_token?: string;
+  provider_access_token?: string;
+  provider_refresh_token?: string;
+  provider_token_expires_at?: number;
+  provider_token_expires_in?: number;
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const persistTokensToStorage = useCallback((token?: string | null, refreshToken?: string | null, expiresAt?: number | null) => {
+    try {
+      if (token) {
+        localStorage.setItem(GOOGLE_TOKEN_KEY, token);
+        localStorage.setItem("google_fit_connected", "true");
+      }
+      if (refreshToken) {
+        localStorage.setItem(GOOGLE_REFRESH_KEY, refreshToken);
+      }
+      if (expiresAt) {
+        localStorage.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(expiresAt));
+      } else if (token && !localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY)) {
+        localStorage.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(Date.now() + DEFAULT_ACCESS_TOKEN_TTL));
+      }
+    } catch (error) {
+      console.warn("Failed to persist Google Fit tokens", error);
+    }
+  }, []);
+
+  const persistGoogleTokens = useCallback((sessionLike?: ProviderSession | null) => {
+    if (!sessionLike) return;
+    try {
+      const providerToken = sessionLike.provider_token || sessionLike.provider_access_token || null;
+      const providerRefreshToken =
+        sessionLike.provider_refresh_token ||
+        ((sessionLike.user as any)?.user_metadata?.provider_refresh_token ?? null);
+      let expiresAt: number | null = null;
+
+      if (typeof sessionLike.provider_token_expires_at === "number") {
+        // Supabase returns seconds; convert to ms
+        expiresAt = sessionLike.provider_token_expires_at * 1000;
+      } else if (typeof sessionLike.provider_token_expires_in === "number") {
+        expiresAt = Date.now() + sessionLike.provider_token_expires_in * 1000;
+      }
+
+      persistTokensToStorage(providerToken, providerRefreshToken, expiresAt);
+
+      if (sessionLike.user?.id) {
+        const connected = Boolean(providerToken || providerRefreshToken);
+        const payload = {
+          user_id: sessionLike.user.id,
+          key: "googleFitStatus",
+          value: {
+            connected,
+            updatedAt: new Date().toISOString(),
+            expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+          },
+          updated_at: new Date().toISOString(),
+        };
+        (supabase as any)
+          .from("user_preferences")
+          .upsert(payload, { onConflict: "user_id,key" })
+          .then(() => {})
+          .catch(() => {});
+      }
+    } catch (error) {
+      console.warn("Failed to persist Google Fit session tokens", error);
+    }
+  }, [persistTokensToStorage]);
 
   useEffect(() => {
     // Set up auth state listener
@@ -29,28 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Persist Google Fit connection status/token when available
-        try {
-          const s: any = session || {};
-          const providerToken = s?.provider_token || s?.provider_access_token;
-          if (providerToken) {
-            // Store locally for quick reuse between reloads
-            localStorage.setItem('google_fit_connected', 'true');
-            localStorage.setItem('google_fit_provider_token', providerToken);
-            // Also mirror to Supabase so other clients/devices can infer connection
-            if (s?.user?.id) {
-              (supabase as any)
-                .from('user_preferences')
-                .upsert({
-                  user_id: s.user.id,
-                  key: 'googleFitStatus',
-                  value: { connected: true, updatedAt: new Date().toISOString() },
-                  updated_at: new Date().toISOString()
-                }, { onConflict: 'user_id,key' })
-                .then(() => {});
-            }
-          }
-        } catch {}
+        persistGoogleTokens(session as ProviderSession);
       }
     );
 
@@ -59,31 +113,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-
-    // Persist Google Fit status on initial load too
-    try {
-      const s: any = session || {};
-      const providerToken = s?.provider_token || s?.provider_access_token;
-      if (providerToken) {
-        localStorage.setItem('google_fit_connected', 'true');
-        localStorage.setItem('google_fit_provider_token', providerToken);
-        if (s?.user?.id) {
-          (supabase as any)
-            .from('user_preferences')
-            .upsert({
-              user_id: s.user.id,
-              key: 'googleFitStatus',
-              value: { connected: true, updatedAt: new Date().toISOString() },
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id,key' })
-            .then(() => {});
-        }
-      }
-    } catch {}
+      persistGoogleTokens(session as ProviderSession);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [persistGoogleTokens]);
 
   const signUp = async (email: string, password: string) => {
     const redirectUrl = `${window.location.origin}/`;
@@ -105,6 +139,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     return { error };
   };
+
+  const refreshGoogleAccessToken = useCallback(async (): Promise<string | null> => {
+    try {
+      const refreshToken = localStorage.getItem(GOOGLE_REFRESH_KEY);
+      if (!refreshToken) return null;
+
+      const { data, error } = await (supabase as any).functions.invoke('refresh-google-fit-token', {
+        method: 'POST',
+        body: { refreshToken },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Unable to refresh Google token');
+      }
+
+      const accessToken = data?.access_token as string | undefined;
+      const newRefreshToken = (data?.refresh_token as string | undefined) || null;
+      const expiresIn = typeof data?.expires_in === 'number' ? data.expires_in : 3600;
+
+      if (accessToken) {
+        const expiresAt = Date.now() + Math.max(0, expiresIn - 60) * 1000;
+        persistTokensToStorage(accessToken, newRefreshToken || undefined, expiresAt);
+        return accessToken;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Failed to refresh Google Fit token', error);
+      return null;
+    }
+  }, [persistTokensToStorage]);
 
   const signInWithGoogle = async () => {
     const redirectUrl = `${window.location.origin}/`;
@@ -129,17 +194,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const getGoogleAccessToken = async () => {
-    const { data } = await supabase.auth.getSession();
-    // Supabase exposes the provider token on OAuth sessions
-    // @ts-ignore provider_token is present for OAuth providers
-    const s = (data?.session as any) || {};
-    // Try both common fields
-    return s.provider_token || s.provider_access_token || null;
+  const getGoogleAccessToken = async (options?: { forceRefresh?: boolean }) => {
+    const forceRefresh = options?.forceRefresh ?? false;
+    let providerToken: string | null = null;
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const sessionLike = data?.session as ProviderSession | null;
+      if (sessionLike) {
+        persistGoogleTokens(sessionLike);
+        providerToken = sessionLike.provider_token || sessionLike.provider_access_token || null;
+      }
+    } catch (error) {
+      console.warn('Failed to obtain session for Google token', error);
+    }
+
+    let expiresAt: number | null = null;
+    try {
+      const expiresAtStr = localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
+      expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
+    } catch {}
+
+    const storedToken = providerToken || localStorage.getItem(GOOGLE_TOKEN_KEY);
+    const shouldRefresh =
+      forceRefresh ||
+      !storedToken ||
+      (expiresAt !== null && Number.isFinite(expiresAt) && Date.now() > expiresAt - TOKEN_REFRESH_BUFFER_MS);
+
+    if (!shouldRefresh && storedToken) {
+      return storedToken;
+    }
+
+    const refreshedToken = await refreshGoogleAccessToken();
+    if (refreshedToken) {
+      return refreshedToken;
+    }
+
+    return storedToken || null;
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    try {
+      localStorage.removeItem(GOOGLE_TOKEN_KEY);
+      localStorage.removeItem(GOOGLE_REFRESH_KEY);
+      localStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
+      localStorage.removeItem('google_fit_connected');
+    } catch {}
   };
 
   return (

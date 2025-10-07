@@ -178,153 +178,171 @@ export function useGoogleFitSync() {
 
     setIsSyncing(true);
     setSyncStatus('pending');
-    
+
+    const performSync = async (accessToken: string, attempt: number): Promise<GoogleFitData | null> => {
+      try {
+        const today = new Date();
+        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+        const aggregate = async (dataTypeName: string) => {
+          const res = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              aggregateBy: [{ dataTypeName }],
+              bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
+              startTimeMillis: startOfDay.getTime(),
+              endTimeMillis: endOfDay.getTime()
+            })
+          });
+
+          if (res.status === 401) {
+            const err: any = new Error('Google Fit token expired');
+            err.status = 401;
+            throw err;
+          }
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`Google Fit API error: ${res.status} - ${errorText}`);
+          }
+
+          return await res.json();
+        };
+
+        const [stepsData, caloriesData, activeMinutesData, distanceData, heartRateData] = await Promise.all([
+          aggregate('com.google.step_count.delta'),
+          aggregate('com.google.calories.expended'),
+          aggregate('com.google.active_minutes'),
+          aggregate('com.google.distance.delta'),
+          aggregate('com.google.heart_rate.bpm').catch(() => null)
+        ]);
+
+        const steps = stepsData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
+        const caloriesBurned = caloriesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
+        const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
+        const distanceMeters = distanceData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
+        const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
+
+        const sessionsRes = await fetch(
+          `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startOfDay.toISOString()}&endTime=${endOfDay.toISOString()}`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+        let sessions: any[] = [];
+        if (sessionsRes.status === 401) {
+          const err: any = new Error('Google Fit token expired');
+          err.status = 401;
+          throw err;
+        }
+        if (sessionsRes.ok) {
+          const sessionsData = await sessionsRes.json();
+          sessions = sessionsData.session || [];
+        }
+
+        const googleFitData: GoogleFitData = {
+          steps,
+          caloriesBurned,
+          activeMinutes,
+          distanceMeters,
+          heartRateAvg,
+          sessions
+        };
+
+        const { error: upsertErr } = await (supabase as any)
+          .from('google_fit_data')
+          .upsert({
+            user_id: user.id,
+            date: today.toISOString().split('T')[0],
+            steps,
+            calories_burned: caloriesBurned,
+            active_minutes: activeMinutes,
+            distance_meters: distanceMeters,
+            heart_rate_avg: heartRateAvg,
+            sessions,
+            last_synced_at: new Date().toISOString(),
+            sync_source: 'google_fit'
+          }, { onConflict: 'user_id,date' });
+        if (upsertErr) throw upsertErr;
+
+        try {
+          if (Array.isArray(sessions) && sessions.length > 0) {
+            const mapped = sessions.map((s: any) => ({
+              user_id: user.id,
+              session_id: String(s.id || `${s.startTimeMillis}-${s.endTimeMillis}`),
+              start_time: s.startTimeMillis ? new Date(Number(s.startTimeMillis)).toISOString() : new Date().toISOString(),
+              end_time: s.endTimeMillis ? new Date(Number(s.endTimeMillis)).toISOString() : new Date().toISOString(),
+              activity_type: s.activityType || s.activityTypeId || s.activity || null,
+              name: s.name || null,
+              description: s.description || null,
+              source: 'google_fit',
+              raw: s
+            }));
+
+            const batchSize = 50;
+            for (let i = 0; i < mapped.length; i += batchSize) {
+              const chunk = mapped.slice(i, i + batchSize);
+              await (supabase as any)
+                .from('google_fit_sessions')
+                .upsert(chunk, { onConflict: 'user_id,session_id' });
+            }
+          }
+        } catch (e) {
+          console.error('Failed to upsert google_fit_sessions:', e);
+        }
+
+        const now = new Date();
+        setLastSync(now);
+        setSyncStatus('success');
+        setIsConnected(true);
+
+        toast({
+          title: "Google Fit synced",
+          description: `${steps} steps, ${Math.round(caloriesBurned)} calories burned`,
+        });
+
+        return googleFitData;
+      } catch (error: any) {
+        if (attempt === 0 && (error?.status === 401 || `${error?.message || ''}`.includes('401'))) {
+          const refreshed = await getGoogleAccessToken({ forceRefresh: true });
+          if (refreshed && refreshed !== accessToken) {
+            return performSync(refreshed, attempt + 1);
+          }
+        }
+        throw error;
+      }
+    };
+
     try {
-      const accessToken = await getGoogleAccessToken();
-      if (!accessToken) {
+      const initialToken = await getGoogleAccessToken();
+      if (!initialToken) {
         toast({
           title: 'Google Fit not connected',
           description: 'Please connect Google Fit to sync your activity.',
         });
-        setIsSyncing(false);
         setIsConnected(false);
         setSyncStatus('error');
         return null;
       }
 
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-
-      // Helper function to aggregate Google Fit data
-      const aggregate = async (dataTypeName: string) => {
-        const res = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            aggregateBy: [{ dataTypeName }],
-            bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
-            startTimeMillis: startOfDay.getTime(),
-            endTimeMillis: endOfDay.getTime()
-          })
-        });
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(`Google Fit API error: ${res.status} - ${errorText}`);
-        }
-
-        return await res.json();
-      };
-
-      // Client-side aggregation
-      const [stepsData, caloriesData, activeMinutesData, distanceData, heartRateData] = await Promise.all([
-        aggregate('com.google.step_count.delta'),
-        aggregate('com.google.calories.expended'),
-        aggregate('com.google.active_minutes'),
-        aggregate('com.google.distance.delta'),
-        aggregate('com.google.heart_rate.bpm').catch(() => null)
-      ]);
-
-      const steps = stepsData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-      const caloriesBurned = caloriesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-      const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-      const distanceMeters = distanceData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-      const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
-
-      // Sessions
-      const sessionsRes = await fetch(
-        `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startOfDay.toISOString()}&endTime=${endOfDay.toISOString()}`,
-        { headers: { 'Authorization': `Bearer ${accessToken}` } }
-      );
-      let sessions: any[] = [];
-      if (sessionsRes.ok) {
-        const sessionsData = await sessionsRes.json();
-        sessions = sessionsData.session || [];
-      }
-
-      const googleFitData: GoogleFitData = {
-        steps,
-        caloriesBurned,
-        activeMinutes,
-        distanceMeters,
-        heartRateAvg,
-        sessions
-      };
-
-      // Save aggregates to database
-      const { error: upsertErr } = await (supabase as any)
-        .from('google_fit_data')
-        .upsert({
-          user_id: user.id,
-          date: today.toISOString().split('T')[0],
-          steps,
-          calories_burned: caloriesBurned,
-          active_minutes: activeMinutes,
-          distance_meters: distanceMeters,
-          heart_rate_avg: heartRateAvg,
-          sessions,
-          last_synced_at: new Date().toISOString(),
-          sync_source: 'google_fit'
-        }, { onConflict: 'user_id,date' });
-      if (upsertErr) throw upsertErr;
-
-      // Upsert normalized per-session records
-      try {
-        if (Array.isArray(sessions) && sessions.length > 0) {
-          const mapped = sessions.map((s: any) => ({
-            user_id: user.id,
-            session_id: String(s.id || `${s.startTimeMillis}-${s.endTimeMillis}`),
-            start_time: s.startTimeMillis ? new Date(Number(s.startTimeMillis)).toISOString() : new Date().toISOString(),
-            end_time: s.endTimeMillis ? new Date(Number(s.endTimeMillis)).toISOString() : new Date().toISOString(),
-            activity_type: s.activityType || s.activityTypeId || s.activity || null,
-            name: s.name || null,
-            description: s.description || null,
-            source: 'google_fit',
-            raw: s
-          }));
-
-          const batchSize = 50;
-          for (let i = 0; i < mapped.length; i += batchSize) {
-            const chunk = mapped.slice(i, i + batchSize);
-            await (supabase as any)
-              .from('google_fit_sessions')
-              .upsert(chunk, { onConflict: 'user_id,session_id' });
-          }
-        }
-      } catch (e) {
-        console.error('Failed to upsert google_fit_sessions:', e);
-      }
-
-      const now = new Date();
-      setLastSync(now);
-      setSyncStatus('success');
-      setIsConnected(true);
-      
-      toast({
-        title: "Google Fit synced",
-        description: `${steps} steps, ${Math.round(caloriesBurned)} calories burned`,
-      });
-
-      return googleFitData;
-
+      return await performSync(initialToken, 0);
     } catch (error: any) {
       console.error('Google Fit sync failed:', error);
-      
+
       toast({
         title: "Sync failed",
-        description: error.message || "Could not sync Google Fit data",
+        description: error?.message || "Could not sync Google Fit data",
         variant: "destructive",
       });
-      
+
       setSyncStatus('error');
-      if (error.message?.includes('401')) {
+      if (error?.status === 401 || error?.message?.includes('401')) {
         setIsConnected(false);
       }
-      
+
       return null;
     } finally {
       setIsSyncing(false);
