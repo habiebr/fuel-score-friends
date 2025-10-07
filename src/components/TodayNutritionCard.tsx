@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Info, ChevronDown, ChevronUp } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Info } from 'lucide-react';
 
 interface MacroData {
   current: number;
@@ -27,7 +26,6 @@ export function TodayNutritionCard({
   fat,
   showEducation = false
 }: TodayNutritionCardProps) {
-  const [showProteinInfo, setShowProteinInfo] = useState(false);
   const [openTip, setOpenTip] = useState<null | 'Protein' | 'Carbs' | 'Fat'>(null);
   
   const caloriePercentage = Math.round((calories.current / calories.target) * 100);
@@ -129,39 +127,7 @@ export function TodayNutritionCard({
           <MacroBar macro={fat} label="Fat" />
         </div>
 
-        {/* Protein Education Section */}
-        {showEducation && (
-          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <Button
-              variant="ghost"
-              className="w-full flex items-center justify-between p-0 h-auto hover:bg-transparent"
-              onClick={() => setShowProteinInfo(!showProteinInfo)}
-            >
-              <span className="font-semibold text-base">Why protein matters for runners:</span>
-              {showProteinInfo ? (
-                <ChevronUp className="w-5 h-5" />
-              ) : (
-                <ChevronDown className="w-5 h-5" />
-              )}
-            </Button>
-
-            {showProteinInfo && (
-              <div className="mt-4 space-y-3 text-sm">
-                <ul className="space-y-2 list-disc list-inside text-gray-700 dark:text-gray-300">
-                  <li>Repairs muscle damage from training</li>
-                  <li>Supports recovery between sessions</li>
-                  <li>Helps maintain lean muscle mass</li>
-                  <li>Provides satiety and stable energy</li>
-                </ul>
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mt-3">
-                  <div className="font-semibold text-blue-900 dark:text-blue-300">
-                    Target: 1.2-1.6g per kg body weight
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Education section removed: Info available via (i) buttons above */}
       </CardContent>
     </Card>
   );
