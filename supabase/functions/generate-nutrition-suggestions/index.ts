@@ -12,7 +12,7 @@ function buildCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "*";
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, supabase-client, x-xsrf-token",
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, supabase-client, x-xsrf-token, x-groq-key, groq-api-key",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Max-Age": "86400",
     "Access-Control-Allow-Credentials": "true",
@@ -135,7 +135,9 @@ For each option, include:
 Return ONLY strict JSON with keys breakfast, lunch, dinner${dayTarget.meals.find(m=>m.meal==='snack')? ', snack':''}.`;
 
     let suggestions: any = {};
-    const GROQ_API_KEY = getGroqKey();
+    // Prefer header-provided key for flexibility; fallback to function secret
+    const headerKey = req.headers.get("x-groq-key") || req.headers.get("groq-api-key") || undefined;
+    const GROQ_API_KEY = headerKey || getGroqKey();
     if (GROQ_API_KEY) {
       const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",

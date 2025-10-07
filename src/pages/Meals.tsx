@@ -339,7 +339,8 @@ export default function Meals() {
         body: { date: today },
         headers: {
           ...(apiKey ? { apikey: apiKey } : {}),
-          Authorization: `Bearer ${session.access_token}`
+          Authorization: `Bearer ${session.access_token}`,
+          ...(import.meta as any).env?.VITE_GROQ_API_KEY ? { 'x-groq-key': (import.meta as any).env?.VITE_GROQ_API_KEY } : {}
         }
       });
       if (res.error) throw res.error;
