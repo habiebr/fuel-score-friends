@@ -33,6 +33,7 @@ import {
   calculateBMR,
   getActivityFactor
 } from '@/lib/nutrition-engine';
+import { getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 
 interface FoodLog {
   id: string;
@@ -171,29 +172,32 @@ export default function Meals() {
       // Load user's nutrition targets from profile
       const { data: profile } = await (supabase as any)
         .from('profiles')
-        .select('weight_kg, height_cm, age, sex')
+        .select('weight_kg, height_cm, age, sex, activity_level')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (profile) {
-        // Calculate BMR using Mifflin-St Jeor equation
-        const { weight_kg, height_cm, age, sex } = profile;
-        let bmr = 0;
-        if (sex === 'male') {
-          bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) + 5;
-        } else {
-          bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) - 161;
-        }
+        // Calculate BMR using the same method as Dashboard
+        const bmr = calculateBMR({
+          age: profile.age || 30,
+          sex: profile.sex || 'male',
+          weightKg: profile.weight_kg || 70,
+          heightCm: profile.height_cm || 170
+        });
         
-        // Activity multiplier for runners (moderate-high)
-        const tdee = Math.round(bmr * 1.6);
+        // Use the same activity multiplier logic as Dashboard
+        const activityMultiplier = profile?.activity_level 
+          ? getActivityMultiplier(profile.activity_level)
+          : 1.5;
         
-        // Macro targets for runners (40% carbs, 30% protein, 30% fat)
+        const calorieTarget = Math.round(bmr * activityMultiplier);
+        const macroTargets = deriveMacrosFromCalories(calorieTarget);
+        
         setTargets({
-          calories: tdee,
-          protein: Math.round((tdee * 0.30) / 4), // 4 cal/g
-          carbs: Math.round((tdee * 0.40) / 4),
-          fat: Math.round((tdee * 0.30) / 9) // 9 cal/g
+          calories: calorieTarget,
+          protein: macroTargets.protein,
+          carbs: macroTargets.carbs,
+          fat: macroTargets.fat
         });
       }
     } catch (error) {

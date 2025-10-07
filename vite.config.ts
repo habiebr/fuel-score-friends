@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       minify: false,
       workbox: {
+        mode: 'development',
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         additionalManifestEntries: [
           { url: '/sw-health-sync.js', revision: '1' }
