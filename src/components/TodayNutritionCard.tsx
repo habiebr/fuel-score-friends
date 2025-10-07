@@ -91,8 +91,13 @@ export function TodayNutritionCard({
             </div>
             {openTip === 'Calories' && (
               <div className="mt-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 shadow-sm">
-                <div><strong>{calories.current}</strong> / {calories.target} kcal</div>
-                <div className="text-muted-foreground">Remaining: {Math.max(0, calories.target - calories.current)} kcal</div>
+                <div className="font-semibold mb-1">How we calculate calories</div>
+                <div className="mb-1">
+                  Goal − Food + Exercise = Remaining
+                </div>
+                <div>
+                  {calories.target} − {calories.current} + 0 = <strong>{Math.max(0, calories.target - calories.current)}</strong> kcal
+                </div>
               </div>
             )}
           </div>
@@ -111,8 +116,12 @@ export function TodayNutritionCard({
             </div>
             {openTip === 'Protein' && (
               <div className="mt-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 shadow-sm">
-                <div><strong>{protein.current}g</strong> / {protein.target}g</div>
-                <div className="text-muted-foreground">Remaining: {Math.max(0, protein.target - protein.current)}g</div>
+                <div className="font-semibold mb-1">How we calculate protein</div>
+                <div className="mb-1">Target − Consumed = Remaining</div>
+                <div>
+                  {protein.target}g − {protein.current}g = <strong>{Math.max(0, protein.target - protein.current)}g</strong>
+                </div>
+                <div className="mt-1 text-muted-foreground">Intake: {Math.round((protein.current / Math.max(1, protein.target)) * 100)}%</div>
               </div>
             )}
           </div>
@@ -131,8 +140,12 @@ export function TodayNutritionCard({
             </div>
             {openTip === 'Carbs' && (
               <div className="mt-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 shadow-sm">
-                <div><strong>{carbs.current}g</strong> / {carbs.target}g</div>
-                <div className="text-muted-foreground">Remaining: {Math.max(0, carbs.target - carbs.current)}g</div>
+                <div className="font-semibold mb-1">How we calculate carbs</div>
+                <div className="mb-1">Target − Consumed = Remaining</div>
+                <div>
+                  {carbs.target}g − {carbs.current}g = <strong>{Math.max(0, carbs.target - carbs.current)}g</strong>
+                </div>
+                <div className="mt-1 text-muted-foreground">Intake: {Math.round((carbs.current / Math.max(1, carbs.target)) * 100)}%</div>
               </div>
             )}
           </div>
@@ -151,8 +164,12 @@ export function TodayNutritionCard({
             </div>
             {openTip === 'Fat' && (
               <div className="mt-2 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 shadow-sm">
-                <div><strong>{fat.current}g</strong> / {fat.target}g</div>
-                <div className="text-muted-foreground">Remaining: {Math.max(0, fat.target - fat.current)}g</div>
+                <div className="font-semibold mb-1">How we calculate fat</div>
+                <div className="mb-1">Target − Consumed = Remaining</div>
+                <div>
+                  {fat.target}g − {fat.current}g = <strong>{Math.max(0, fat.target - fat.current)}g</strong>
+                </div>
+                <div className="mt-1 text-muted-foreground">Intake: {Math.round((fat.current / Math.max(1, fat.target)) * 100)}%</div>
               </div>
             )}
           </div>
