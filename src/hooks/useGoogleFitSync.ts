@@ -220,26 +220,31 @@ export function useGoogleFitSync() {
         return await res.json();
       };
 
-      // Server-side sync via Edge Function
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('Missing auth session');
+      // Client-side aggregation
+      const [stepsData, caloriesData, activeMinutesData, distanceData, heartRateData] = await Promise.all([
+        aggregate('com.google.step_count.delta'),
+        aggregate('com.google.calories.expended'),
+        aggregate('com.google.active_minutes'),
+        aggregate('com.google.distance.delta'),
+        aggregate('com.google.heart_rate.bpm').catch(() => null)
+      ]);
+
+      const steps = stepsData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
+      const caloriesBurned = caloriesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
+      const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
+      const distanceMeters = distanceData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
+      const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
+
+      // Sessions
+      const sessionsRes = await fetch(
+        `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startOfDay.toISOString()}&endTime=${endOfDay.toISOString()}`,
+        { headers: { 'Authorization': `Bearer ${accessToken}` } }
+      );
+      let sessions: any[] = [];
+      if (sessionsRes.ok) {
+        const sessionsData = await sessionsRes.json();
+        sessions = sessionsData.session || [];
       }
-      const authHeader = { Authorization: `Bearer ${session.access_token}` };
-      const resp = await (supabase as any).functions.invoke('sync-google-fit', {
-        headers: { 'x-google-token': accessToken, ...authHeader },
-        body: {}
-      });
-      const { data, error: fnError } = resp;
-      if (fnError) throw fnError;
-
-      const steps = data?.steps || 0;
-      const caloriesBurned = Math.round(data?.caloriesBurned || 0);
-      const activeMinutes = data?.activeMinutes || 0;
-      const distanceMeters = data?.distanceMeters || 0;
-      const heartRateAvg = data?.heartRateAvg;
-
-      const sessions: any[] = [];
 
       const googleFitData: GoogleFitData = {
         steps,
@@ -250,7 +255,22 @@ export function useGoogleFitSync() {
         sessions
       };
 
-      // Database writes are handled by the Edge Function
+      // Save aggregates to database
+      const { error: upsertErr } = await (supabase as any)
+        .from('google_fit_data')
+        .upsert({
+          user_id: user.id,
+          date: today.toISOString().split('T')[0],
+          steps,
+          calories_burned: caloriesBurned,
+          active_minutes: activeMinutes,
+          distance_meters: distanceMeters,
+          heart_rate_avg: heartRateAvg,
+          sessions,
+          last_synced_at: new Date().toISOString(),
+          sync_source: 'google_fit'
+        }, { onConflict: 'user_id,date' });
+      if (upsertErr) throw upsertErr;
 
       // Upsert normalized per-session records
       try {

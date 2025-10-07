@@ -11,7 +11,8 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
 // Use only anon/public key for frontend auth
-const SUPABASE_ANON_KEY = ((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string;
+// Prefer anon key for Realtime stability; fall back to publishable if anon not set
+const SUPABASE_ANON_KEY = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY) as string;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +22,9 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  // Slightly lower event rate to reduce disconnects; rely on anon key above
+  realtime: { params: { eventsPerSecond: 2 } }
 });
 
 // Expose globally for any legacy callers that expect window.supabase
