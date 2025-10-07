@@ -1,78 +1,86 @@
-import { Home, User, Utensils, Users, Activity } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { Home, User, Utensils, Users, Activity } from "lucide-react";
+import { NavLink } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
 interface BottomNavProps {
   onAddMeal?: () => void;
 }
 
-export function BottomNav({ onAddMeal }: BottomNavProps) {
+const baseLinkStyles =
+  "flex flex-col items-center gap-1 px-4 py-2 rounded-2xl text-xs font-medium transition-all duration-200";
+const activeLinkStyles =
+  "text-primary bg-primary/10 shadow-[0_12px_28px_rgba(49,255,176,0.25)]";
+const inactiveLinkStyles =
+  "text-muted-foreground hover:text-foreground hover:bg-muted/30";
+
+export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 safe-area-inset-bottom">
-      <div className="max-w-none mx-auto px-2">
-        <div className="flex items-center justify-around h-16">
-          {/* Home */}
+    <nav className="fixed bottom-0 left-0 right-0 z-50 safe-area-inset-bottom pb-4">
+      <div className="max-w-none mx-auto px-4">
+        <div className="flex items-center justify-around rounded-3xl border border-border/60 bg-background/70 backdrop-blur-2xl shadow-[0_-18px_45px_rgba(5,10,20,0.65)] py-3">
           <NavLink
             to="/"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
-                isActive ? 'text-primary' : 'text-muted-foreground'
-              }`
+              cn(
+                baseLinkStyles,
+                isActive ? activeLinkStyles : inactiveLinkStyles,
+              )
             }
           >
             <Home className="h-5 w-5" />
-            <span className="text-xs font-medium">Home</span>
+            <span>Home</span>
           </NavLink>
 
-          {/* Food */}
           <NavLink
             to="/meals"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
-                isActive ? 'text-primary' : 'text-muted-foreground'
-              }`
+              cn(
+                baseLinkStyles,
+                isActive ? activeLinkStyles : inactiveLinkStyles,
+              )
             }
           >
             <Utensils className="h-5 w-5" />
-            <span className="text-xs font-medium">Food</span>
+            <span>Food</span>
           </NavLink>
 
-          {/* Training */}
           <NavLink
             to="/training-calendar"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
-                isActive ? 'text-primary' : 'text-muted-foreground'
-              }`
+              cn(
+                baseLinkStyles,
+                isActive ? activeLinkStyles : inactiveLinkStyles,
+              )
             }
           >
             <Activity className="h-5 w-5" />
-            <span className="text-xs font-medium">Training</span>
+            <span>Training</span>
           </NavLink>
 
-          {/* Community */}
           <NavLink
             to="/community"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
-                isActive ? 'text-primary' : 'text-muted-foreground'
-              }`
+              cn(
+                baseLinkStyles,
+                isActive ? activeLinkStyles : inactiveLinkStyles,
+              )
             }
           >
             <Users className="h-5 w-5" />
-            <span className="text-xs font-medium">Community</span>
+            <span>Community</span>
           </NavLink>
 
-          {/* Profile */}
           <NavLink
             to="/profile"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
-                isActive ? 'text-primary' : 'text-muted-foreground'
-              }`
+              cn(
+                baseLinkStyles,
+                isActive ? activeLinkStyles : inactiveLinkStyles,
+              )
             }
           >
             <User className="h-5 w-5" />
-            <span className="text-xs font-medium">Profile</span>
+            <span>Profile</span>
           </NavLink>
         </div>
       </div>

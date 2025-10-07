@@ -19,7 +19,7 @@ export function ActionFAB({ onLogMeal, onUploadActivity }: ActionFABProps) {
         setIsOpen(false);
         if (onUploadActivity) onUploadActivity();
       },
-      color: 'from-red-500 to-red-600'
+      color: 'from-info to-sky-500'
     },
     {
       icon: Utensils,
@@ -28,7 +28,7 @@ export function ActionFAB({ onLogMeal, onUploadActivity }: ActionFABProps) {
         setIsOpen(false);
         if (onLogMeal) onLogMeal();
       },
-      color: 'from-green-500 to-green-600'
+      color: 'from-primary to-emerald-500'
     },
     {
       icon: Bell,
@@ -37,7 +37,7 @@ export function ActionFAB({ onLogMeal, onUploadActivity }: ActionFABProps) {
         setIsOpen(false);
         navigate('/profile');
       },
-      color: 'from-blue-500 to-blue-600'
+      color: 'from-secondary to-blue-500'
     },
     {
       icon: TrendingUp,
@@ -46,7 +46,7 @@ export function ActionFAB({ onLogMeal, onUploadActivity }: ActionFABProps) {
         setIsOpen(false);
         navigate('/goals');
       },
-      color: 'from-purple-500 to-purple-600'
+      color: 'from-purple-500 to-indigo-500'
     }
   ];
 
@@ -55,7 +55,7 @@ export function ActionFAB({ onLogMeal, onUploadActivity }: ActionFABProps) {
       {/* Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/20 z-40 animate-in fade-in duration-200"
+          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -73,14 +73,14 @@ export function ActionFAB({ onLogMeal, onUploadActivity }: ActionFABProps) {
                   className="flex items-center gap-3 animate-in slide-in-from-right duration-200"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <div className="bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-lg">
-                    <span className="text-sm font-medium whitespace-nowrap">
+                  <div className="rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-sm shadow-card">
+                    <span className="font-medium whitespace-nowrap text-foreground">
                       {action.label}
                     </span>
                   </div>
                   <button
                     onClick={action.onClick}
-                    className={`w-14 h-14 bg-gradient-to-br ${action.color} text-white rounded-full shadow-xl active:scale-95 transition-transform flex items-center justify-center`}
+                    className={`flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br ${action.color} text-primary-foreground shadow-[0_20px_45px_rgba(49,255,176,0.35)] transition-transform active:scale-95`}
                   >
                     <Icon className="w-6 h-6" />
                   </button>
@@ -93,7 +93,7 @@ export function ActionFAB({ onLogMeal, onUploadActivity }: ActionFABProps) {
         {/* Main FAB Button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-500 text-white rounded-full shadow-2xl active:scale-95 transition-all duration-300 flex items-center justify-center relative touch-manipulation ${
+          className={`relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-sky-500 text-primary-foreground shadow-[0_24px_55px_rgba(49,255,176,0.4)] transition-all duration-300 touch-manipulation active:scale-95 ${
             isOpen ? 'rotate-45' : ''
           }`}
           aria-label={isOpen ? 'Close menu' : 'Open actions menu'}
@@ -104,7 +104,7 @@ export function ActionFAB({ onLogMeal, onUploadActivity }: ActionFABProps) {
             <>
               <Plus className="w-8 h-8" />
               {/* Pulse animation ring */}
-              <span className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 animate-ping opacity-20"></span>
+              <span className="absolute inset-0 rounded-full bg-gradient-to-br from-primary to-sky-500 opacity-20 animate-ping"></span>
             </>
           )}
         </button>

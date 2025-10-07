@@ -2,6 +2,12 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+const rootElement = document.documentElement;
+if (!rootElement.classList.contains("dark")) {
+  rootElement.classList.add("dark");
+}
+rootElement.setAttribute("data-theme", "dark");
+
 // Provide auth header to the service worker upon request
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', async (event: MessageEvent) => {

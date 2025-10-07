@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
+      minify: false,
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         additionalManifestEntries: [
@@ -61,8 +62,8 @@ export default defineConfig(({ mode }) => ({
         name: 'Nutrisync - AI-Powered Nutrition Tracking',
         short_name: 'Nutrisync',
         description: 'AI-powered nutrition tracking and meal planning for athletes',
-        theme_color: '#1e40af',
-        background_color: '#0a0f1e',
+        theme_color: '#07101f',
+        background_color: '#04070c',
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',

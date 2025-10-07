@@ -55,7 +55,7 @@ export function PWAInstallPrompt() {
           onClick={installPWA}
           variant="secondary"
           size="sm"
-          className="bg-white text-blue-600 hover:bg-blue-50"
+          className="bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
         >
           Install
         </Button>

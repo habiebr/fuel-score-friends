@@ -11,30 +11,30 @@ export function WeeklyMilesCard({ current, target }: WeeklyMilesCardProps) {
   const percentage = Math.round((current / target) * 100);
 
   return (
-    <Card className="bg-white dark:bg-gray-800">
+    <Card>
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            <h3 className="font-semibold text-base">Weekly Miles</h3>
+            <Activity className="w-5 h-5 text-muted-foreground" />
+            <h3 className="font-semibold text-base text-foreground">Weekly Miles</h3>
           </div>
-          <Badge variant="secondary" className="bg-gray-100 dark:bg-gray-700">
+          <Badge variant="secondary" className="border border-border/40 bg-muted/40 text-foreground">
             {percentage}%
           </Badge>
         </div>
 
         <div className="flex items-end gap-3">
-          <div className="text-4xl font-bold text-orange-600 dark:text-orange-400">
+          <div className="text-4xl font-bold text-primary">
             {current.toFixed(1)}
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400 pb-2">
+          <div className="pb-2 text-sm text-muted-foreground">
             of {target} miles
           </div>
         </div>
 
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-3">
+        <div className="mt-3 h-2.5 w-full rounded-full bg-muted/60">
           <div
-            className="bg-black dark:bg-white h-2.5 rounded-full transition-all duration-500"
+            className="h-2.5 rounded-full bg-primary transition-all duration-500"
             style={{ width: `${Math.min(percentage, 100)}%` }}
           />
         </div>
@@ -42,4 +42,3 @@ export function WeeklyMilesCard({ current, target }: WeeklyMilesCardProps) {
     </Card>
   );
 }
-
