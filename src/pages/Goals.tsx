@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,26 +7,25 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ArrowLeft, Play, Pause } from 'lucide-react';
+import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { addDays, format, startOfWeek } from 'date-fns';
+
+type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
+type Intensity = 'low' | 'moderate' | 'high';
 
 interface TrainingActivity {
   id?: string;
-  date: string;
-  activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
-  start_time?: string;
-  duration_minutes: number;
-  distance_km?: number;
-  intensity: 'low' | 'moderate' | 'high';
+  date: string; // yyyy-MM-dd
+  activity_type: ActivityType;
+  start_time?: string | null; // HH:mm
+  duration_minutes: number; // for non-run
+  distance_km?: number | null; // for run
+  intensity: Intensity;
   estimated_calories: number;
-  notes?: string;
-}
-
-interface DayPlan {
-  day: string;
-  activities: TrainingActivity[];
+  notes?: string | null;
 }
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -45,13 +44,10 @@ export default function Goals() {
   const [targetDate, setTargetDate] = useState('');
   const [fitnessLevel, setFitnessLevel] = useState('');
   
-  // Step 2: Training Plan
-  const [weekPlan, setWeekPlan] = useState<DayPlan[]>(
-    DAYS.map((day) => ({
-      day,
-      activities: []
-    }))
-  );
+  // Step 2: Training Plan (read from training_activities)
+  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const datesOfWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const [activitiesByDate, setActivitiesByDate] = useState<Record<string, TrainingActivity[]>>({});
   
   // UI state
   const [uploading, setUploading] = useState(false);
@@ -106,16 +102,40 @@ export default function Goals() {
           setFitnessLevel(data.fitness_level);
         }
         
-        // Load Step 2 data (training plan)
-        if (data.activity_level && typeof data.activity_level === 'string' && data.activity_level.startsWith('[')) {
-          try {
-            const parsedPlan = JSON.parse(data.activity_level);
-            if (Array.isArray(parsedPlan)) {
-              setWeekPlan(parsedPlan);
-            }
-          } catch (e) {
-            console.log('Could not parse training plan, using default');
-          }
+        // Load Step 2 data from training_activities for current week
+        try {
+          const start = format(weekStart, 'yyyy-MM-dd');
+          const end = format(addDays(weekStart, 6), 'yyyy-MM-dd');
+          const { data: acts, error: actErr } = await (supabase as any)
+            .from('training_activities')
+            .select('*')
+            .eq('user_id', user.id)
+            .gte('date', start)
+            .lte('date', end)
+            .order('date', { ascending: true });
+          if (actErr) throw actErr;
+          const grouped: Record<string, TrainingActivity[]> = {};
+          for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = [];
+          (acts || []).forEach((row: any) => {
+            const key = row.date;
+            const act: TrainingActivity = {
+              id: row.id,
+              date: row.date,
+              activity_type: row.activity_type,
+              start_time: row.start_time,
+              duration_minutes: row.duration_minutes,
+              distance_km: row.distance_km,
+              intensity: row.intensity,
+              estimated_calories: row.estimated_calories,
+              notes: row.notes,
+            };
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(act);
+          });
+          setActivitiesByDate(grouped);
+        } catch (e) {
+          console.error('Failed to load training activities for summary', e);
+          setActivitiesByDate({});
         }
       }
     } catch (error) {
@@ -125,53 +145,12 @@ export default function Goals() {
     }
   };
 
-  const calculateCalories = (activity: TrainingActivity): number => {
-    const caloriesPerMinute: { [key: string]: number } = {
-      rest: 0,
-      run: 10,
-      strength: 6,
-      cardio: 8,
-      other: 7,
-    };
-
-    const intensityMultiplier = {
-      low: 0.8,
-      moderate: 1.0,
-      high: 1.2
-    };
-
-    // For running, prefer distance-based rough estimate if distance is provided (≈ 60 kcal/km baseline)
-    if (activity.activity_type === 'run' && typeof activity.distance_km === 'number' && activity.distance_km > 0) {
-      return Math.round(60 * activity.distance_km * intensityMultiplier[activity.intensity]);
-    }
-
-    return Math.round(
-      (caloriesPerMinute[activity.activity_type] || 0) * 
-      activity.duration_minutes * 
-      intensityMultiplier[activity.intensity]
-    );
-  };
-
-  const updateDayPlan = (index: number, field: keyof DayPlan, value: any) => {
-    setWeekPlan((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      
-      // Ensure distanceKm is numeric when editing
-      if (field === 'distanceKm') {
-        updated[index].distanceKm = value === '' ? undefined : Number(value);
-      }
-      
-      if (field === 'activity' || field === 'duration' || field === 'distanceKm') {
-        const activity = field === 'activity' ? value : updated[index].activity;
-        const duration = field === 'duration' ? Number(value) : updated[index].duration;
-        const distanceKm = field === 'distanceKm' ? (value === '' ? undefined : Number(value)) : updated[index].distanceKm;
-        updated[index].estimatedCalories = calculateCalories(activity, duration, distanceKm);
-      }
-      
-      return updated;
-    });
-  };
+  const weeklyCalories = useMemo(() => {
+    return datesOfWeek.reduce((sum, d) => {
+      const key = format(d, 'yyyy-MM-dd');
+      return sum + (activitiesByDate[key] || []).reduce((s, a) => s + a.estimated_calories, 0);
+    }, 0);
+  }, [activitiesByDate, datesOfWeek]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -265,49 +244,8 @@ export default function Goals() {
 
       if (profileError) throw profileError;
 
-      // 2. Delete existing training activities for the next 7 days
+      // 2. Regenerate meal plans for the next 7 weeks using whatever plan exists in training_activities
       const startDate = new Date().toISOString().split('T')[0];
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 7);
-      const endDateStr = endDate.toISOString().split('T')[0];
-
-      const { error: deleteError } = await supabase
-        .from('training_activities')
-        .delete()
-        .eq('user_id', user.id)
-        .gte('date', startDate)
-        .lte('date', endDateStr);
-
-      if (deleteError) throw deleteError;
-
-      // 3. Insert new training activities
-      const activities = weekPlan.flatMap((day, index) => {
-        const date = new Date();
-        date.setDate(date.getDate() + index);
-        const dateStr = date.toISOString().split('T')[0];
-
-        return day.activities.map(activity => ({
-          user_id: user.id,
-          date: dateStr,
-          activity_type: activity.activity_type,
-          start_time: activity.start_time,
-          duration_minutes: activity.duration_minutes,
-          distance_km: activity.distance_km,
-          intensity: activity.intensity,
-          estimated_calories: activity.estimated_calories,
-          notes: activity.notes
-        }));
-      });
-
-      if (activities.length > 0) {
-        const { error: insertError } = await supabase
-          .from('training_activities')
-          .insert(activities);
-
-        if (insertError) throw insertError;
-      }
-
-      // 4. Regenerate meal plans
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       await supabase.functions.invoke('generate-meal-plan-range', {
         body: { startDate, weeks: 7 },
@@ -343,9 +281,7 @@ export default function Goals() {
     return (raceGoal && (customGoalName.trim().length > 0) && targetDate && fitnessLevel);
   };
 
-  const isStep2Complete = () => {
-    return weekPlan.some(day => day.activity !== 'rest' && day.duration > 0);
-  };
+  const isStep2Complete = () => true;
 
   if (loading) {
     return (
@@ -498,7 +434,7 @@ export default function Goals() {
             </Card>
           )}
 
-          {/* Step 2: Training Plan */}
+          {/* Step 2: Training Plan (uses training_activities) */}
           {currentStep === 2 && (
             <Card className="shadow-card mb-6">
               <CardHeader>
@@ -507,180 +443,61 @@ export default function Goals() {
                   Step 2: Create Your Weekly Training Plan
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Plan your weekly training schedule. Set rest days and workout activities.
+                  Plan your weekly schedule. Edit in the dedicated planner and see a summary below.
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Controls */}
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    Week of {format(datesOfWeek[0], 'MM/dd')} - {format(datesOfWeek[6], 'MM/dd')}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>Prev</Button>
+                    <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>Next</Button>
+                    <Button onClick={() => navigate('/training')}>Edit Training Plan</Button>
+                  </div>
+                </div>
+
                 {/* Weekly Summary */}
                 <div className="grid grid-cols-2 gap-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
                   <div>
                     <div className="text-2xl font-bold text-primary">
-                      {weekPlan.reduce((sum, day) => sum + day.activities.length, 0)}
+                      {datesOfWeek.reduce((sum, d) => sum + (activitiesByDate[format(d, 'yyyy-MM-dd')]?.length || 0), 0)}
                     </div>
                     <div className="text-sm text-muted-foreground">Total Activities</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-primary">
-                      {weekPlan.reduce((sum, day) => 
-                        sum + day.activities.reduce((daySum, activity) => 
-                          daySum + activity.estimated_calories, 0), 0)}
-                    </div>
+                    <div className="text-2xl font-bold text-primary">{weeklyCalories}</div>
                     <div className="text-sm text-muted-foreground">Weekly Calories</div>
                   </div>
                 </div>
 
-                {/* Day Plans */}
-                <div className="space-y-4">
-                  {weekPlan.map((dayPlan, dayIndex) => (
-                    <div
-                      key={dayPlan.day}
-                      className="p-4 border rounded-lg hover:border-primary/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        {dayPlan.activities.length === 0 ? (
-                          <Pause className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Play className="h-4 w-4 text-primary" />
-                        )}
-                        <div className="font-semibold text-sm flex-1">{dayPlan.day}</div>
-                        {dayPlan.activities.length > 0 && (
-                          <div className="text-xs text-primary font-medium">
-                            ~{dayPlan.activities.reduce((sum, activity) => sum + activity.estimated_calories, 0)} cal
-                          </div>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const date = new Date();
-                            date.setDate(date.getDate() + dayIndex);
-                            addActivity(dayIndex, {
-                              date: date.toISOString().split('T')[0],
-                              activity_type: 'run',
-                              duration_minutes: 30,
-                              intensity: 'moderate',
-                              estimated_calories: 300
-                            });
-                          }}
-                          className="h-8 px-2"
-                        >
-                          + Add Activity
-                        </Button>
-                      </div>
-
-                      {dayPlan.activities.map((activity, activityIndex) => (
-                        <div key={activityIndex} className="mb-4 last:mb-0 p-3 bg-muted/50 rounded-lg">
-                          <div className="grid grid-cols-2 gap-3 mb-3">
-                            <div className="space-y-1">
-                              <Label className="text-xs">Activity</Label>
-                              <Select
-                                value={activity.activity_type}
-                                onValueChange={(value: any) => updateActivity(dayIndex, activityIndex, {
-                                  activity_type: value,
-                                  duration_minutes: activity.duration_minutes,
-                                  distance_km: undefined,
-                                  estimated_calories: calculateCalories({
-                                    ...activity,
-                                    activity_type: value,
-                                    distance_km: undefined
-                                  })
-                                })}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="run">Running</SelectItem>
-                                  <SelectItem value="strength">Strength Training</SelectItem>
-                                  <SelectItem value="cardio">Cardio</SelectItem>
-                                  <SelectItem value="other">Other Exercise</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="space-y-1">
-                              <Label className="text-xs">Intensity</Label>
-                              <Select
-                                value={activity.intensity}
-                                onValueChange={(value: any) => updateActivity(dayIndex, activityIndex, {
-                                  ...activity,
-                                  intensity: value,
-                                  estimated_calories: calculateCalories({
-                                    ...activity,
-                                    intensity: value
-                                  })
-                                })}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="low">Low</SelectItem>
-                                  <SelectItem value="moderate">Moderate</SelectItem>
-                                  <SelectItem value="high">High</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            {activity.activity_type !== 'run' && (
-                              <div className="space-y-1">
-                                <Label className="text-xs">Duration (minutes)</Label>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="300"
-                                  value={activity.duration_minutes || ''}
-                                  onChange={(e) => updateActivity(dayIndex, activityIndex, {
-                                    ...activity,
-                                    duration_minutes: parseInt(e.target.value) || 0,
-                                    estimated_calories: calculateCalories({
-                                      ...activity,
-                                      duration_minutes: parseInt(e.target.value) || 0
-                                    })
-                                  })}
-                                  placeholder="0"
-                                  className="h-9"
-                                />
+                {/* Day summaries */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {datesOfWeek.map((d, idx) => {
+                    const key = format(d, 'yyyy-MM-dd');
+                    const list = activitiesByDate[key] || [];
+                    return (
+                      <div key={key} className="p-3 border rounded-lg">
+                        <div className="text-sm font-semibold mb-2">{DAYS[idx]} ({format(d, 'MM/dd')})</div>
+                        <div className="space-y-2">
+                          {list.length === 0 && (
+                            <div className="text-xs text-muted-foreground">No activities</div>
+                          )}
+                          {list.map((a, i) => (
+                            <div key={i} className="p-2 rounded bg-muted/50">
+                              <div className="flex items-center justify-between text-xs">
+                                <div className="font-medium capitalize">{a.activity_type}</div>
+                                <div className="text-muted-foreground">{a.activity_type === 'run' ? (a.distance_km ? `${a.distance_km} km` : `${a.duration_minutes} min`) : `${a.duration_minutes} min`} · {a.intensity}</div>
+                                <div className="font-semibold">{a.estimated_calories} kcal</div>
                               </div>
-                            )}
-                            {activity.activity_type === 'run' && (
-                              <div className="space-y-1">
-                                <Label className="text-xs">Distance (km)</Label>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.1"
-                                  value={typeof activity.distance_km === 'number' ? activity.distance_km : ''}
-                                  onChange={(e) => updateActivity(dayIndex, activityIndex, {
-                                    ...activity,
-                                    distance_km: parseFloat(e.target.value) || undefined,
-                                    estimated_calories: calculateCalories({
-                                      ...activity,
-                                      distance_km: parseFloat(e.target.value) || undefined
-                                    })
-                                  })}
-                                  placeholder="0.0"
-                                  className="h-9"
-                                />
-                              </div>
-                            )}
-                            <div className="flex items-end">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeActivity(dayIndex, activityIndex)}
-                                className="h-9 px-2 text-destructive hover:text-destructive"
-                              >
-                                Remove
-                              </Button>
                             </div>
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Step Navigation */}
