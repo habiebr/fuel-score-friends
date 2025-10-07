@@ -682,17 +682,17 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             protein={{
               current: data?.macros?.protein?.consumed || 0,
               target: data?.macros?.protein?.target || 120,
-              color: 'text-blue-600 dark:text-blue-400'
+              color: '#3F8CFF'
             }}
             carbs={{
               current: data?.macros?.carbs?.consumed || 0,
               target: data?.macros?.carbs?.target || 330,
-              color: 'text-green-600 dark:text-green-400'
+              color: '#39D98A'
             }}
             fat={{
               current: data?.macros?.fat?.consumed || 0,
               target: data?.macros?.fat?.target || 67,
-              color: 'text-orange-600 dark:text-orange-400'
+              color: '#FFC15E'
             }}
             showEducation={true}
           />
