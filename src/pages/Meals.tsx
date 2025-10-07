@@ -335,30 +335,15 @@ export default function Meals() {
         throw new Error('Missing authorization header');
       }
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-      let data: any = null;
-      try {
-        const res = await supabase.functions.invoke('generate-nutrition-suggestions', {
-          body: { date: today },
-          headers: {
-            ...(apiKey ? { apikey: apiKey } : {}),
-            Authorization: `Bearer ${session.access_token}`
-          }
-        });
-        if (res.error) throw res.error;
-        data = res.data;
-      } catch (primaryErr: any) {
-        console.warn('Primary suggestions function failed, falling back:', primaryErr?.message || primaryErr);
-        // Fallback to engine-based function that does not require external AI
-        const fallback = await supabase.functions.invoke('daily-meal-generation', {
-          body: { date: today },
-          headers: {
-            ...(apiKey ? { apikey: apiKey } : {}),
-            Authorization: `Bearer ${session.access_token}`
-          }
-        });
-        if (fallback.error) throw fallback.error;
-        data = fallback.data;
-      }
+      const res = await supabase.functions.invoke('generate-nutrition-suggestions', {
+        body: { date: today },
+        headers: {
+          ...(apiKey ? { apikey: apiKey } : {}),
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+      if (res.error) throw res.error;
+      const data = res.data;
       setAiPlan(data?.meals || null);
       setLastUpdated(new Date().toISOString());
       const toCache = { meals: data?.meals || null, updatedAt: new Date().toISOString() };
