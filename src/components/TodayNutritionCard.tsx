@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { CalorieRing } from '@/components/CalorieRing';
 import { Info } from 'lucide-react';
 
 interface MacroData {
@@ -106,18 +107,14 @@ export function TodayNutritionCard({
       <CardContent className="p-4">
         <h3 className="font-semibold text-lg mb-4">Today's Nutrition</h3>
 
-        {/* Calories */}
-        <div className="text-center mb-6">
-          <div className="text-5xl font-bold mb-2">{calories.current}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-            of {calories.target} kcal
-          </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-            <div
-              className="bg-black dark:bg-white h-3 rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(caloriePercentage, 100)}%` }}
-            />
-          </div>
+        {/* Calories (Circular Ring) */}
+        <div className="mb-6">
+          <CalorieRing
+            baseGoal={calories.target}
+            consumed={calories.current}
+            exercise={0}
+            remaining={Math.max(0, calories.target - calories.current)}
+          />
         </div>
 
         {/* Macros Grid */}
