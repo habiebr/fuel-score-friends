@@ -182,6 +182,11 @@ export function useGoogleFitSync() {
 
     const performSync = async (accessToken: string, attempt: number): Promise<GoogleFitData | null> => {
       try {
+        // Validate token before making API calls
+        if (!accessToken) {
+          throw new Error('No access token available');
+        }
+
         const today = new Date();
         const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
@@ -360,10 +365,18 @@ export function useGoogleFitSync() {
 
         return googleFitData;
       } catch (error: any) {
-        if (attempt === 0 && (error?.status === 401 || `${error?.message || ''}`.includes('401'))) {
+        console.error(`Google Fit API call failed (attempt ${attempt + 1}):`, error);
+        
+        // Handle token expiration with retry
+        if (attempt === 0 && (error?.status === 401 || `${error?.message || ''}`.includes('401') || error?.message?.includes('invalid_token'))) {
+          console.log('Token appears to be expired, attempting refresh...');
           const refreshed = await getGoogleAccessToken({ forceRefresh: true });
           if (refreshed && refreshed !== accessToken) {
+            console.log('Token refreshed successfully, retrying sync...');
             return performSync(refreshed, attempt + 1);
+          } else {
+            console.error('Failed to refresh token');
+            throw new Error('Unable to refresh Google Fit token');
           }
         }
         throw error;
@@ -386,15 +399,26 @@ export function useGoogleFitSync() {
     } catch (error: any) {
       console.error('Google Fit sync failed:', error);
 
+      const errorMessage = error?.message || "Could not sync Google Fit data";
+      
       toast({
         title: "Sync failed",
-        description: error?.message || "Could not sync Google Fit data",
+        description: errorMessage,
         variant: "destructive",
       });
 
       setSyncStatus('error');
-      if (error?.status === 401 || error?.message?.includes('401')) {
+      
+      // Handle different types of errors
+      if (error?.status === 401 || error?.message?.includes('401') || error?.message?.includes('invalid_token')) {
+        console.log('Setting Google Fit as disconnected due to authentication error');
         setIsConnected(false);
+        // Clear stored tokens on auth failure
+        try {
+          localStorage.removeItem('google_fit_provider_token');
+          localStorage.removeItem('google_fit_provider_refresh_token');
+          localStorage.removeItem('google_fit_provider_token_expires_at');
+        } catch {}
       }
 
       return null;

@@ -18,6 +18,7 @@ serve(async (req) => {
   try {
     const { refreshToken } = await req.json().catch(() => ({}));
     if (!refreshToken) {
+      console.error("No refresh token provided");
       return new Response(JSON.stringify({ error: "refreshToken is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -27,6 +28,15 @@ serve(async (req) => {
     const clientId = getEnv("GOOGLE_FIT_CLIENT_ID");
     const clientSecret = getEnv("GOOGLE_FIT_CLIENT_SECRET", false);
 
+    if (!clientId) {
+      console.error("GOOGLE_FIT_CLIENT_ID not configured");
+      return new Response(JSON.stringify({ error: "Google Fit client ID not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("Refreshing Google Fit token...");
     const body = new URLSearchParams({
       client_id: clientId,
       refresh_token: refreshToken,
@@ -45,17 +55,20 @@ serve(async (req) => {
     const data = await res.json();
     if (!res.ok) {
       const errorMessage = data?.error_description || data?.error || "Failed to refresh token";
+      console.error("Google token refresh failed:", errorMessage, data);
       return new Response(JSON.stringify({ error: errorMessage }), {
         status: res.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    console.log("Google Fit token refreshed successfully");
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    console.error("Error in refresh-google-fit-token function:", error);
     return new Response(JSON.stringify({ error: error?.message || String(error) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
