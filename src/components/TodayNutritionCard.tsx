@@ -247,7 +247,7 @@ function GlowRing({
             style={{ filter: `drop-shadow(0 0 18px ${glow})` }}
           />
         </svg>
-        <div className="relative z-10 flex flex-col items-center justify-center rounded-full bg-background/80 px-6 py-4 text-center backdrop-blur">
+        <div className="relative z-10 flex flex-col items-center justify-center px-6 py-4 text-center">
           <div className="text-3xl font-semibold leading-none md:text-4xl">{label}</div>
           {centerSubLabel && (
             <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{centerSubLabel}</div>
