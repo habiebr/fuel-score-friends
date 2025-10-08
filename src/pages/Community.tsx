@@ -232,19 +232,14 @@ export default function Community() {
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
-          {/* Header */}
-          <div className="mb-2">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
-                <ActivityIcon className="w-6 h-6 text-white dark:text-black" />
-              </div>
-              <AppHeader />
-            </div>
+          {/* Logo Header */}
+          <div className="mb-6">
+            <AppHeader />
           </div>
+
           <PageHeading
             title="Community"
             description="Compete with fellow runners and celebrate weekly wins."
-            className="mt-3"
           />
 
           {/* Content */}

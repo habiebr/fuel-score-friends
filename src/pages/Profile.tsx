@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { PageHeading } from '@/components/PageHeading';
+import AppHeader from '@/components/AppHeader';
 
 export default function Profile() {
   const { user, signOut } = useAuth();
@@ -175,6 +176,11 @@ export default function Profile() {
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
+          {/* Logo Header */}
+          <div className="mb-6">
+            <AppHeader />
+          </div>
+
           {/* Premium Header */}
           <PageHeading
             title="Profile"

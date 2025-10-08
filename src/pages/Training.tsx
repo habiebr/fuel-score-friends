@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
+import AppHeader from '@/components/AppHeader';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -200,7 +201,12 @@ export default function Training() {
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-none mx-auto p-4 space-y-4">
+        <div className="max-w-none mx-auto p-4">
+          {/* Logo Header */}
+          <div className="mb-6">
+            <AppHeader />
+          </div>
+
           <PageHeading
             title="Weekly Training"
             description="Plan multiple activities per day."
