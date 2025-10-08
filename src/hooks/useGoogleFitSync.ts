@@ -122,6 +122,12 @@ export function useGoogleFitSync() {
     // Foreground interval (15 minutes)
     const interval = setInterval(() => { syncGoogleFit(); }, 15 * 60 * 1000);
 
+    // Also trigger sync on resume/online for PWA usage
+    const onFocus = () => { syncGoogleFit(); };
+    const onOnline = () => { syncGoogleFit(); };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
+
     // Register periodic background sync via Service Worker when available
     (async () => {
       try {
@@ -140,7 +146,7 @@ export function useGoogleFitSync() {
       } catch {}
     })();
 
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); window.removeEventListener('focus', onFocus); window.removeEventListener('online', onOnline); };
   }, [user, isConnected]);
 
   const connectGoogleFit = useCallback(async () => {

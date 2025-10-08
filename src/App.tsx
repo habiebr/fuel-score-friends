@@ -9,6 +9,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import Index from "./pages/Index";
 import ProfileNew from "./pages/ProfileNew";
 import { Dashboard2 } from "./components/Dashboard2";
+import { Dashboard3 } from "./components/Dashboard3";
 import ProfileInformation from "./pages/ProfileInformation";
 import FoodPreferences from "./pages/FoodPreferences";
 import NotificationsSettings from "./pages/NotificationsSettings";
@@ -88,6 +89,7 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/dashboard2" element={<Dashboard2 />} />
+                  <Route path="/dashboard3" element={<Dashboard3 />} />
                   <Route path="/profile" element={<ProfileNew />} />
                   <Route path="/profile/information" element={<ProfileInformation />} />
                   <Route path="/profile/food-preferences" element={<FoodPreferences />} />

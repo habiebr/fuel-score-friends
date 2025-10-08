@@ -3,7 +3,14 @@ import { Button } from "@/components/ui/button";
 
 export default function Offline() {
   const handleRetry = () => {
-    window.location.reload();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(() => {
+        // Ping the app shell route to warm caches without full reload
+        fetch('/').finally(() => {});
+      });
+    }
+    // Let the router or user navigate back; avoid hard reload
+    history.back();
   };
 
   return (

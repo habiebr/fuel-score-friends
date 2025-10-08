@@ -141,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [persistGoogleTokens]);
 
   const signUp = async (email: string, password: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = (import.meta as any).env?.VITE_SUPABASE_REDIRECT_URL || `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
       email,
@@ -253,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [persistTokensToStorage, user?.id]);
 
   const signInWithGoogle = async () => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = (import.meta as any).env?.VITE_SUPABASE_REDIRECT_URL || `${window.location.origin}/`;
     const scopes = [
       'https://www.googleapis.com/auth/fitness.activity.read',
       'https://www.googleapis.com/auth/fitness.body.read',
@@ -422,6 +422,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const interval = setInterval(backgroundRefresh, BACKGROUND_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
+  }, [user, refreshGoogleAccessToken]);
+
+  // PWA-friendly: refresh token when app returns to foreground or regains connectivity
+  useEffect(() => {
+    if (!user) return;
+
+    const maybeRefreshOnVisibility = async () => {
+      try {
+        if (document.visibilityState !== 'visible') return;
+        const expiresAtStr = localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
+        const expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
+        if (!expiresAt) {
+          await refreshGoogleAccessToken();
+          return;
+        }
+        const timeUntilExpiry = expiresAt - Date.now();
+        if (timeUntilExpiry <= TOKEN_EXPIRY_WARNING_MS) {
+          await refreshGoogleAccessToken();
+        }
+      } catch (e) {
+        console.warn('Visibility/online refresh failed', e);
+      }
+    };
+
+    const onVisibility = () => { maybeRefreshOnVisibility(); };
+    const onFocus = () => { maybeRefreshOnVisibility(); };
+    const onOnline = () => { maybeRefreshOnVisibility(); };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
+    };
   }, [user, refreshGoogleAccessToken]);
 
   return (

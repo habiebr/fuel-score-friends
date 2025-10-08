@@ -258,19 +258,7 @@ export default function ForceSyncDebug() {
                 {isForceSyncing ? 'Syncing...' : 'Sync Current User'}
               </Button>
 
-              <Button
-                onClick={forceSyncAllUsers}
-                disabled={isForceSyncing}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                {isForceSyncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Users className="h-4 w-4" />
-                )}
-                {isForceSyncing ? 'Syncing...' : 'Sync All Users'}
-              </Button>
+              {/* Removed global sync to enforce per-user only */}
             </div>
 
             {syncResult && (

@@ -89,15 +89,21 @@ serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     );
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
+    // Resolve user either from Authorization or from body.userId
+    let resolvedUserId: string | null = null;
+    const auth = await supabaseClient.auth.getUser();
+    if (!auth.error && auth.data.user) {
+      resolvedUserId = auth.data.user.id;
+    }
+    const parsedBody = await req.clone().json().catch(() => ({} as any));
+    const { accessToken, days = 30, userId } = parsedBody;
+    if (!resolvedUserId && userId) resolvedUserId = String(userId);
+    if (!resolvedUserId) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const { accessToken, days = 30 } = await req.json();
     if (!accessToken) {
       return new Response(JSON.stringify({ error: 'Access token required' }), {
         status: 400,
@@ -105,7 +111,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Syncing Google Fit data for user ${user.id} for last ${days} days`);
+    console.log(`Syncing Google Fit data for user ${resolvedUserId} for last ${days} days`);
 
     // Function to refresh Google Fit token
     const refreshGoogleFitToken = async () => {
@@ -113,7 +119,7 @@ serve(async (req) => {
         const { data: tokenData, error: tokenError } = await supabaseClient
           .from('google_tokens')
           .select('refresh_token')
-          .eq('user_id', user.id)
+          .eq('user_id', resolvedUserId)
           .eq('is_active', true)
           .single();
 
@@ -341,7 +347,7 @@ serve(async (req) => {
       }
       
       return {
-        user_id: user.id,
+        user_id: resolvedUserId,
         session_id: session.id,
         start_time: new Date(parseInt(session.startTimeMillis)).toISOString(),
         end_time: new Date(parseInt(session.endTimeMillis)).toISOString(),
@@ -371,7 +377,7 @@ serve(async (req) => {
     }
 
     // Now fetch detailed data for each day
-    const dailyData = [];
+    const dailyData: any[] = [];
     const currentDate = new Date(startDate);
 
     while (currentDate <= endDate) {
@@ -450,7 +456,7 @@ serve(async (req) => {
             });
 
             dailyData.push({
-              user_id: user.id,
+              user_id: resolvedUserId,
               date: currentDate.toISOString().split('T')[0],
               steps,
               calories_burned: Math.round(caloriesBurned * 100) / 100,
@@ -492,7 +498,7 @@ serve(async (req) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       await supabaseClient.functions.invoke('auto-update-training', {
-        body: { user_id: user.id, date: today },
+        body: { user_id: resolvedUserId, date: today },
         headers: {
           'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
         }

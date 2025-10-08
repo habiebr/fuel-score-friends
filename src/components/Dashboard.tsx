@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils, Settings } from 'lucide-react';
 import { Home } from 'lucide-react';
 import { PageHeading } from '@/components/PageHeading';
+import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
@@ -26,6 +27,30 @@ import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, compute
 import { calculateBMR } from '@/lib/nutrition-engine';
 import { getWeeklyGoogleFitData, getWeeklyMileageTarget } from '@/lib/weekly-google-fit';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
+
+// Per-user TTL cache for main dashboard
+const DASHBOARD_MAIN_CACHE_KEY = 'dashboard:main:v1';
+const DASHBOARD_MAIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function readMainDashboardCache(userId?: string) {
+  try {
+    const raw = localStorage.getItem(DASHBOARD_MAIN_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.userId !== userId) return null;
+    if (Date.now() - (parsed.ts || 0) > DASHBOARD_MAIN_CACHE_TTL_MS) return null;
+    return parsed.payload as {
+      data: DashboardData | null;
+      todayScore: number;
+      weeklyScore: number;
+      weeklyKm: { current: number; target: number };
+    };
+  } catch { return null; }
+}
+
+function writeMainDashboardCache(userId: string, payload: any) {
+  try { localStorage.setItem(DASHBOARD_MAIN_CACHE_KEY, JSON.stringify({ userId, ts: Date.now(), payload })); } catch {}
+}
 
 interface MealSuggestion {
   name: string;
@@ -97,6 +122,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
   const [newActivity, setNewActivity] = useState<null | { planned?: string; actual?: string; sessionId: string }>(null);
   const [weeklyGoogleFitData, setWeeklyGoogleFitData] = useState<{ current: number; target: number }>({ current: 0, target: 30 });
+  const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
 
   // Function to determine current meal based on time and Google Fit activity patterns
   const getCurrentMealType = () => {
@@ -318,6 +344,15 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
   useEffect(() => {
     if (user) {
+      // Fast initial paint from cache
+      const cached = readMainDashboardCache(user.id);
+      if (cached) {
+        setData(cached.data || null);
+        setTodayScore(cached.todayScore || 0);
+        setWeeklyScore(cached.weeklyScore || 0);
+        setWeeklyGoogleFitData(cached.weeklyKm || { current: 0, target: 30 });
+        setLoading(false);
+      }
       loadDashboardData();
     }
   }, [user]);
@@ -503,6 +538,42 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         }
       });
 
+      // Write partial cache early (without scores yet) to speed up subsequent loads
+      try {
+        if (user?.id) {
+          writeMainDashboardCache(user.id, {
+            data: {
+              dailyScore,
+              caloriesConsumed: consumedNutrition.calories,
+              proteinGrams: consumedNutrition.protein,
+              carbsGrams: consumedNutrition.carbs,
+              fatGrams: consumedNutrition.fat,
+              mealsLogged: foodLogs.length,
+              steps: exerciseData.steps,
+              caloriesBurned: exerciseData.calories_burned,
+              activeMinutes: exerciseData.active_minutes,
+              heartRateAvg: exerciseData.heart_rate_avg,
+              plannedCalories: plannedNutrition.calories,
+              plannedProtein: plannedNutrition.protein,
+              plannedCarbs: plannedNutrition.carbs,
+              plannedFat: plannedNutrition.fat,
+              breakfastScore: nutritionScore?.breakfast_score || null,
+              lunchScore: nutritionScore?.lunch_score || null,
+              dinnerScore: nutritionScore?.dinner_score || null,
+              calories: { consumed: consumedNutrition.calories, target: calorieTarget },
+              macros: {
+                protein: { consumed: consumedNutrition.protein, target: macroTargets.protein },
+                carbs: { consumed: consumedNutrition.carbs, target: macroTargets.carbs },
+                fat: { consumed: consumedNutrition.fat, target: macroTargets.fat },
+              },
+            },
+            todayScore: todayScore, // will be updated below when resolved
+            weeklyScore: weeklyScore,
+            weeklyKm: weeklyGoogleFitData,
+          });
+        }
+      } catch {}
+
       const [todayScoreOutcome, weeklyScoreOutcome] = await scoringPromise;
       if (todayScoreOutcome.status === 'fulfilled') {
         setTodayScore(todayScoreOutcome.value.score);
@@ -527,6 +598,25 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       } catch (e) {
         console.error('Error loading weekly Google Fit data:', e);
       }
+
+      // Finalize cache with computed scores and weekly KM
+      try {
+        if (user?.id) {
+          writeMainDashboardCache(user.id, {
+            data: {
+              ...(data as any),
+            },
+            todayScore: (todayScoreOutcome.status === 'fulfilled') ? todayScoreOutcome.value.score : 0,
+            weeklyScore: (weeklyScoreOutcome.status === 'fulfilled') ? (weeklyScoreOutcome.value as number) : 0,
+            weeklyKm: (await (async () => {
+              try {
+                const [weeklyData, target] = await weeklyGoogleFitPromise;
+                return { current: weeklyData.totalDistanceKm, target };
+              } catch { return { current: 0, target: 30 }; }
+            })()),
+          });
+        }
+      } catch {}
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
@@ -626,7 +716,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
               icon={Home}
             />
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/profile/notifications')}>
                 <Settings className="w-4 h-4" />
                 Customize
               </Button>
@@ -650,6 +740,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             onLogFull={() => setFoodTrackerOpen(true)}
           />
         )}
+
+        <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
 
         {/* 1. Today & Weekly Scores */}
         <div className="mb-4 grid grid-cols-2 gap-4">
@@ -743,150 +835,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           <TodayInsightsCard insights={insights} />
         </div>
 
-        {/* 4. Today's Nutrition Plan - Carousel */}
-        <Card className="shadow-card mb-6">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Target className="h-5 w-5 text-primary" />
-              Today's Nutrition Plan
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {mealPlans.length === 0 ? (
-              <>
-                <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    No meal plan found for today. Showing default runner-friendly suggestions.
-                  </p>
-                </div>
-                <div className="relative">
-                  <div className="overflow-hidden">
-                    <div className="flex transition-transform duration-300 ease-in-out" style={{ transform: `translateX(-${currentMealIndex * 100}%)` }}>
-                      {([
-                        { meal_type: 'breakfast', target: 400, suggestion: getIndonesianMealSuggestions('breakfast', 400) },
-                        { meal_type: 'lunch', target: 600, suggestion: getIndonesianMealSuggestions('lunch', 600) },
-                        { meal_type: 'dinner', target: 600, suggestion: getIndonesianMealSuggestions('dinner', 600) },
-                      ] as const).map((m) => (
-                        <div key={m.meal_type} className="w-full flex-shrink-0 px-2">
-                          <div className="p-4 bg-muted/20 rounded-lg border">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold capitalize">{m.meal_type}</div>
-                              <div className="text-xs text-muted-foreground">Target: {m.target} kcal</div>
-                            </div>
-                            <div className="space-y-2 text-sm">
-                              <div className="font-medium text-primary">{m.suggestion.name}</div>
-                              <div className="text-muted-foreground">{m.suggestion.description}</div>
-                              <div className="flex gap-4 text-muted-foreground">
-                                <span>🔥 {m.suggestion.calories} cal</span>
-                                <span>🥩 {m.suggestion.protein}g</span>
-                                <span>🍚 {m.suggestion.carbs}g</span>
-                                <span>🥑 {m.suggestion.fat}g</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex justify-center mt-4 space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentMealIndex(Math.max(0, currentMealIndex - 1))}
-                      disabled={currentMealIndex === 0}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <div className="flex space-x-1">
-                      {[0, 1, 2].map((index) => (
-                        <button
-                          key={index}
-                          className={`w-2 h-2 rounded-full transition-colors ${
-                            index === currentMealIndex ? 'bg-primary' : 'bg-muted-foreground/30'
-                          }`}
-                          onClick={() => setCurrentMealIndex(index)}
-                        />
-                      ))}
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentMealIndex(Math.min(2, currentMealIndex + 1))}
-                      disabled={currentMealIndex === 2}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="relative">
-                <div className="overflow-hidden">
-                  <div className="flex transition-transform duration-300 ease-in-out" style={{ transform: `translateX(-${currentMealIndex * 100}%)` }}>
-                    {(['breakfast','lunch','dinner'] as const).map((type) => {
-                      const plan = mealPlans.find(p => p.meal_type === type);
-                      if (!plan) return null;
-                      const first = Array.isArray(plan.meal_suggestions) && plan.meal_suggestions.length > 0 ? plan.meal_suggestions[0] : null;
-                      return (
-                        <div key={type} className="w-full flex-shrink-0 px-2">
-                          <div className="p-4 bg-muted/20 rounded-lg border">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="font-semibold capitalize">{type}</div>
-                              <div className="text-xs text-muted-foreground">Target: {plan.recommended_calories} kcal</div>
-                            </div>
-                            {first ? (
-                              <div className="space-y-2 text-sm">
-                                <div className="font-medium text-primary">{first.name}</div>
-                                <div className="text-muted-foreground">{first.description}</div>
-                                <div className="flex gap-4 text-muted-foreground">
-                                  <span>🔥 {first.calories} cal</span>
-                                  <span>🥩 {first.protein}g</span>
-                                  <span>🍚 {first.carbs}g</span>
-                                  <span>🥑 {first.fat}g</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-sm text-muted-foreground">No suggestion available.</div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="flex justify-center mt-4 space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentMealIndex(Math.max(0, currentMealIndex - 1))}
-                    disabled={currentMealIndex === 0}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <div className="flex space-x-1">
-                    {[0, 1, 2].map((index) => (
-                      <button
-                        key={index}
-                        className={`w-2 h-2 rounded-full transition-colors ${
-                          index === currentMealIndex ? 'bg-primary' : 'bg-muted-foreground/30'
-                        }`}
-                        onClick={() => setCurrentMealIndex(index)}
-                      />
-                    ))}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentMealIndex(Math.min(2, currentMealIndex + 1))}
-                    disabled={currentMealIndex === 2}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Today's Nutrition Plan removed */}
 
 
       </div>

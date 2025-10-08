@@ -328,8 +328,42 @@ export default function Goals() {
     setExpandedEditor({ date: dateStr, index });
   };
 
+  const upsertActivity = async (dateStr: string, index: number) => {
+    if (!user) return;
+    const act = (activitiesByDate[dateStr] || [])[index];
+    if (!act) return;
+    try {
+      const payload: any = {
+        user_id: user.id,
+        date: dateStr,
+        activity_type: act.activity_type,
+        start_time: act.start_time,
+        duration_minutes: act.duration_minutes,
+        distance_km: act.distance_km,
+        intensity: act.intensity,
+        estimated_calories: act.estimated_calories,
+        notes: act.notes,
+      };
+      if (act.id) payload.id = act.id;
+      const { data, error } = await (supabase as any).from('training_activities').upsert(payload).select().single();
+      if (error) throw error;
+      // update local state with id if newly created
+      setActivitiesByDate((prev) => {
+        const next = { ...prev };
+        const list = [...(next[dateStr] || [])];
+        list[index] = { ...act, id: data.id } as any;
+        next[dateStr] = list;
+        return next;
+      });
+    } catch (e) {
+      console.error('Auto-save failed', e);
+    }
+  };
+
   const handleCloseEditor = () => {
-    console.log('Closing editor');
+    if (expandedEditor) {
+      upsertActivity(expandedEditor.date, expandedEditor.index);
+    }
     setExpandedEditor(null);
   };
 
@@ -756,7 +790,7 @@ export default function Goals() {
                                           <SelectTrigger className="h-9 text-sm relative z-10">
                                             <SelectValue />
                                           </SelectTrigger>
-                                          <SelectContent className="z-50">
+                                          <SelectContent className="z-50 w-[var(--radix-select-trigger-width)] min-w-0">
                                             <SelectItem value="run">Run</SelectItem>
                                             <SelectItem value="long_run">Long Run</SelectItem>
                                             <SelectItem value="interval">Interval Session</SelectItem>
@@ -775,7 +809,7 @@ export default function Goals() {
                                           <SelectTrigger className="h-9 text-sm relative z-10">
                                             <SelectValue />
                                           </SelectTrigger>
-                                          <SelectContent className="z-50">
+                                          <SelectContent className="z-50 w-[var(--radix-select-trigger-width)] min-w-0">
                                             <SelectItem value="low">Low</SelectItem>
                                             <SelectItem value="moderate">Moderate</SelectItem>
                                             <SelectItem value="high">High</SelectItem>

@@ -143,6 +143,37 @@ export default function Training() {
     });
   };
 
+  const upsertActivity = async (dateStr: string, index: number) => {
+    if (!user) return;
+    const act = (activitiesByDate[dateStr] || [])[index];
+    if (!act) return;
+    try {
+      const payload: any = {
+        user_id: user.id,
+        date: dateStr,
+        activity_type: act.activity_type,
+        start_time: act.start_time,
+        duration_minutes: act.duration_minutes,
+        distance_km: act.distance_km,
+        intensity: act.intensity,
+        estimated_calories: act.estimated_calories,
+        notes: act.notes,
+      };
+      if (act.id) payload.id = act.id;
+      const { data, error } = await (supabase as any).from('training_activities').upsert(payload).select().single();
+      if (error) throw error;
+      setActivitiesByDate((prev) => {
+        const next = { ...prev };
+        const list = [...(next[dateStr] || [])];
+        list[index] = { ...act, id: data.id } as any;
+        next[dateStr] = list;
+        return next;
+      });
+    } catch (e) {
+      console.error('Auto-save failed', e);
+    }
+  };
+
   const removeActivity = (dateStr: string, index: number) => {
     setActivitiesByDate((prev) => {
       const next = { ...prev };
@@ -446,7 +477,7 @@ export default function Training() {
                                       <span className="text-xs text-muted-foreground">
                                         Est. calories: <span className="font-semibold text-foreground">{a.estimated_calories}</span>
                                       </span>
-                                      <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => setExpandedEditor(null)}>
+                                      <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => { upsertActivity(key, i); setExpandedEditor(null); }}>
                                         Done
                                       </Button>
                                       <Button

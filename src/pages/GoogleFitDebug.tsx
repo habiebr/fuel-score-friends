@@ -184,38 +184,11 @@ export default function GoogleFitDebug() {
     setIsSyncing(true);
     try {
       console.log('Starting manual sync process...');
-      
-      // Force refresh the token first
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('No active session found');
       }
-
-      console.log('Session found, refreshing token...');
-
-      // Call the refresh token function first
-      const { data: refreshData, error: refreshError } = await supabase.functions.invoke('refresh-google-fit-token-v2', {
-        body: {
-          user_id: user.id,
-          force_refresh: true
-        },
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      if (refreshError) {
-        console.warn('Token refresh failed, proceeding with existing token:', refreshError);
-        toast({
-          title: "Token refresh warning",
-          description: "Could not refresh token, using existing one",
-          variant: "destructive",
-        });
-      } else {
-        console.log('Token refreshed successfully:', refreshData);
-      }
-
-      // Now sync with the refreshed token
+      // Use the currently saved token without forcing a refresh
       const accessToken = await getGoogleAccessToken();
       if (!accessToken) {
         throw new Error('No Google Fit access token available');
@@ -266,38 +239,11 @@ export default function GoogleFitDebug() {
     setIsSyncing(true);
     try {
       console.log('Starting comprehensive sync process...');
-      
-      // Force refresh the token first
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('No active session found');
       }
-
-      console.log('Session found, refreshing token...');
-
-      // Call the refresh token function first
-      const { data: refreshData, error: refreshError } = await supabase.functions.invoke('refresh-google-fit-token-v2', {
-        body: {
-          user_id: user.id,
-          force_refresh: true
-        },
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      if (refreshError) {
-        console.warn('Token refresh failed, proceeding with existing token:', refreshError);
-        toast({
-          title: "Token refresh warning",
-          description: "Could not refresh token, using existing one",
-          variant: "destructive",
-        });
-      } else {
-        console.log('Token refreshed successfully:', refreshData);
-      }
-
-      // Now sync with the refreshed token using comprehensive sync
+      // Use the currently saved token without forcing a refresh
       const accessToken = await getGoogleAccessToken();
       if (!accessToken) {
         throw new Error('No Google Fit access token available');

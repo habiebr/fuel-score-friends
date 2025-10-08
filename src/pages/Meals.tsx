@@ -37,6 +37,24 @@ import {
 } from '@/lib/nutrition-engine';
 import { getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 import { PageHeading } from '@/components/PageHeading';
+// Meals cache (localStorage TTL)
+const MEALS_CACHE_KEY = 'meals:diary-week:v1';
+const MEALS_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+function readMealsCache(userId?: string) {
+  try {
+    const raw = localStorage.getItem(MEALS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.userId !== userId) return null;
+    if (Date.now() - (parsed.ts || 0) > MEALS_CACHE_TTL_MS) return null;
+    return parsed.payload;
+  } catch { return null; }
+}
+
+function writeMealsCache(userId: string, payload: any) {
+  try { localStorage.setItem(MEALS_CACHE_KEY, JSON.stringify({ userId, ts: Date.now(), payload })); } catch {}
+}
 
 interface FoodLog {
   id: string;
@@ -99,6 +117,17 @@ export default function Meals() {
 
   useEffect(() => {
     if (user) {
+      // fast paint from cache
+      const cached = readMealsCache(user.id);
+      if (cached) {
+        setTodayLogs(cached.todayLogs || []);
+        setTodayTotals(cached.todayTotals || { calories: 0, protein: 0, carbs: 0, fat: 0 });
+        setWeekLogs(cached.weekLogs || {});
+        setWeekTotals(cached.weekTotals || {});
+        setWeekDays(cached.weekDays || []);
+        setTargets(cached.targets || { calories: 2400, protein: 120, carbs: 330, fat: 67 });
+        setLoading(false);
+      }
       loadDiaryData();
       loadUserPreferences();
     }
@@ -205,6 +234,25 @@ export default function Meals() {
           fat: macroTargets.fat
         });
       }
+
+      // persist to cache for fast reloads
+      try {
+        if (user?.id) {
+          writeMealsCache(user.id, {
+            todayLogs: logs || [],
+            todayTotals: totals,
+            weekLogs: grouped,
+            weekTotals: totalsByDay,
+            weekDays: days,
+            targets: profile ? {
+              calories: calorieTarget,
+              protein: macroTargets.protein,
+              carbs: macroTargets.carbs,
+              fat: macroTargets.fat
+            } : undefined
+          });
+        }
+      } catch {}
     } catch (error) {
       console.error('Error loading diary data:', error);
     } finally {

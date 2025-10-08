@@ -8,7 +8,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 // WearablePerformanceGraph removed - using Google Fit data now
 import { BodyMetricsForm } from '@/components/BodyMetricsForm';
-import { LogOut, User, Target, Activity as ActivityIcon, Download, TrendingUp, Flame, Heart, Zap, Upload } from 'lucide-react';
+import { LogOut, User, Target, Activity as ActivityIcon, Download, TrendingUp, Flame, Heart, Zap, Upload, Bell } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -17,7 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { PageHeading } from '@/components/PageHeading';
-import { User } from 'lucide-react';
+import { User as UserIcon } from 'lucide-react';
+import { usePWA } from '@/hooks/usePWA';
 
 export default function Profile() {
   const { user, signOut } = useAuth();
@@ -32,6 +33,7 @@ export default function Profile() {
   const { toast } = useToast();
   const [refreshMode, setRefreshMode] = useState<string>('daily_6am');
   const [timezone, setTimezone] = useState<string>('UTC');
+  const { canInstall, isInstalled, installPWA, enablePushNotifications } = usePWA() as any;
 
   const handleSignOut = async () => {
     try {
@@ -155,20 +157,26 @@ export default function Profile() {
   };
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === 'accepted') {
-      toast({
-        title: "App installed!",
-        description: "You can now use Nutrisync from your home screen.",
-      });
-      setIsInstallable(false);
-    }
-
-    setDeferredPrompt(null);
+    try {
+      if (canInstall) {
+        await installPWA();
+        toast({ title: 'App installed!', description: 'NutriSync added to your home screen.' });
+      } else if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          toast({ title: 'App installed!', description: 'NutriSync added to your home screen.' });
+        }
+        setDeferredPrompt(null);
+      } else {
+        // iOS Safari does not support beforeinstallprompt; guide the user
+        toast({
+          title: 'Install on iPhone',
+          description: 'Tap the Share button, then “Add to Home Screen”.',
+        });
+      }
+      await enablePushNotifications();
+    } catch (_) {}
   };
 
   return (
@@ -179,18 +187,33 @@ export default function Profile() {
           <PageHeading
             title="Profile"
             description={user?.email || 'Manage your NutriSync account.'}
-            icon={User}
+            icon={UserIcon}
             actions={
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleSignOut}
-                disabled={isLoggingOut}
-                className="hover:bg-destructive/10 hover:text-destructive"
-                title="Sign out"
-              >
-                <LogOut className={`h-5 w-5 ${isLoggingOut ? 'animate-spin' : ''}`} />
-              </Button>
+              <div className="flex items-center gap-2">
+                {!isInstalled && (
+                  <Button variant="ghost" size="icon" onClick={handleInstallClick} title="Install App">
+                    <Download className="h-5 w-5" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={async () => { try { await enablePushNotifications(); toast({ title: 'Notifications enabled' }); } catch {} }}
+                  title="Enable Notifications"
+                >
+                  <Bell className="h-5 w-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleSignOut}
+                  disabled={isLoggingOut}
+                  className="hover:bg-destructive/10 hover:text-destructive"
+                  title="Sign out"
+                >
+                  <LogOut className={`h-5 w-5 ${isLoggingOut ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
             }
             className="mb-6"
           />
@@ -199,7 +222,7 @@ export default function Profile() {
           <div className="grid grid-cols-3 gap-3 mb-6">
             <Card className="premium-card bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
               <CardContent className="p-6 text-center">
-                <User className="h-6 w-6 mx-auto mb-2 text-primary" />
+                <UserIcon className="h-6 w-6 mx-auto mb-2 text-primary" />
                 <div className="text-2xl font-bold text-foreground">0</div>
                 <div className="text-xs text-muted-foreground">Days</div>
               </CardContent>
@@ -233,7 +256,7 @@ export default function Profile() {
                   onClick={() => navigate('/dashboard2')}
                   className="bg-green-500 hover:bg-green-600 text-white"
                 >
-                  <Activity className="h-4 w-4 mr-2" />
+                  <ActivityIcon className="h-4 w-4 mr-2" />
                   Try Dashboard2
                 </Button>
               </div>

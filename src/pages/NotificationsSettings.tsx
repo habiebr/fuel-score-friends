@@ -9,11 +9,13 @@ import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { PageHeading } from '@/components/PageHeading';
+import { usePWA } from '@/hooks/usePWA';
 
 export default function NotificationsSettings() {
   const navigate = useNavigate();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
+  const { enablePushNotifications } = usePWA();
 
   const [notifications, setNotifications] = useState({
     mealReminders: true,
@@ -96,6 +98,13 @@ export default function NotificationsSettings() {
                 </p>
 
                 <div className="space-y-4">
+                  <div className="flex items-center justify-between py-3">
+                    <div className="flex-1 min-w-0 mr-4">
+                      <h4 className="font-semibold text-base">Enable Push Notifications</h4>
+                      <p className="text-sm text-muted-foreground mt-0.5">Allow NutriSync to send alerts to your device</p>
+                    </div>
+                    <Button variant="outline" onClick={enablePushNotifications}>Enable</Button>
+                  </div>
                   {notificationItems.map((item) => (
                     <div key={item.key} className="flex items-center justify-between py-3">
                       <div className="flex-1 min-w-0 mr-4">

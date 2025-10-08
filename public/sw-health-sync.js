@@ -70,32 +70,31 @@ self.addEventListener('message', (event) => {
   } catch {}
 });
 
-// Push notifications for health milestones
+// Push notifications handler (generic)
 self.addEventListener('push', (event) => {
-  if (event.data) {
-    const data = event.data.json();
-    
-    if (data.type === 'health_milestone') {
-      event.waitUntil(
-        self.registration.showNotification(data.title, {
-          body: data.message,
-          icon: '/pwa-192x192.png',
-          badge: '/pwa-192x192.png',
-          tag: 'health-milestone',
-          requireInteraction: true,
-          actions: [
-            {
-              action: 'view',
-              title: 'View Progress'
-            },
-            {
-              action: 'dismiss',
-              title: 'Dismiss'
-            }
-          ]
-        })
-      );
-    }
+  try {
+    const payload = event.data ? event.data.json() : {};
+    const title = payload.title || 'NutriSync';
+    const body = payload.body || payload.message || 'You have a new notification';
+    const tag = payload.tag || 'nutrisync';
+    const data = payload.data || {};
+    const actions = payload.actions || [
+      { action: 'view', title: 'Open' }
+    ];
+
+    event.waitUntil(
+      self.registration.showNotification(title, {
+        body,
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        tag,
+        data,
+        actions,
+        requireInteraction: !!payload.requireInteraction
+      })
+    );
+  } catch (e) {
+    // no-op
   }
 });
 
@@ -372,6 +371,37 @@ async function cleanupOldCaches() {
       }
     })
   );
+}
+
+// Stale-while-revalidate for Edge Function dashboard3-data
+self.addEventListener('fetch', (event) => {
+  try {
+    const url = new URL(event.request.url);
+    if (url.pathname.includes('/functions/v1/dashboard3-data')) {
+      event.respondWith(staleWhileRevalidate(event.request, CACHE_STRATEGIES.api.cacheName, 5 * 60 * 1000));
+    } else if (url.pathname.includes('/rest/v1/food_logs') && event.request.method === 'GET') {
+      event.respondWith(staleWhileRevalidate(event.request, CACHE_STRATEGIES.api.cacheName, 2 * 60 * 1000));
+    }
+  } catch (_) {}
+});
+
+async function staleWhileRevalidate(request, cacheName, maxAgeMs) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  const fetchPromise = fetch(request)
+    .then(async (networkResponse) => {
+      if (networkResponse && networkResponse.ok) {
+        try { await cache.put(request, networkResponse.clone()); } catch (_) {}
+      }
+      return networkResponse;
+    })
+    .catch(() => cached);
+
+  if (cached) {
+    // Optionally validate age via custom header Date; here we just return it immediately
+    return cached;
+  }
+  return fetchPromise;
 }
 
 // Health milestone detection
