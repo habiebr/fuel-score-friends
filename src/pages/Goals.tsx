@@ -15,6 +15,7 @@ import { addDays, format, startOfWeek } from 'date-fns';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
+type UiActivityType = 'run' | 'long_run' | 'interval' | 'strength' | 'rest';
 
 interface TrainingActivity {
   id?: string;
@@ -29,6 +30,77 @@ interface TrainingActivity {
 }
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const getUiActivityLabel = (type: UiActivityType) => {
+  switch (type) {
+    case 'long_run':
+      return 'Long Run';
+    case 'interval':
+      return 'Interval Session';
+    case 'strength':
+      return 'Strength Training';
+    case 'rest':
+      return 'Rest Day';
+    default:
+      return 'Run';
+  }
+};
+
+const formatIntensity = (intensity?: Intensity) => {
+  if (!intensity) return '';
+  return intensity.charAt(0).toUpperCase() + intensity.slice(1);
+};
+
+const deriveUiActivityType = (activity: TrainingActivity): UiActivityType => {
+  if (activity.activity_type === 'rest') return 'rest';
+  if (activity.activity_type === 'strength') return 'strength';
+  if (activity.activity_type === 'run') {
+    if ((activity.distance_km ?? 0) >= 15) return 'long_run';
+    if (activity.intensity === 'high') return 'interval';
+    return 'run';
+  }
+  return 'run';
+};
+
+const applyUiActivityType = (uiType: UiActivityType, activity: TrainingActivity): TrainingActivity => {
+  const next = { ...activity };
+  switch (uiType) {
+    case 'rest':
+      next.activity_type = 'rest';
+      next.distance_km = null;
+      next.duration_minutes = 0;
+      next.intensity = 'low';
+      break;
+    case 'strength':
+      next.activity_type = 'strength';
+      next.distance_km = null;
+      next.duration_minutes = next.duration_minutes || 45;
+      if (next.intensity === 'low') next.intensity = 'moderate';
+      break;
+    case 'long_run':
+      next.activity_type = 'run';
+      next.distance_km = Math.max(15, next.distance_km ?? 16);
+      next.duration_minutes = Math.max(90, next.duration_minutes || 90);
+      if (next.intensity === 'high') next.intensity = 'moderate';
+      break;
+    case 'interval':
+      next.activity_type = 'run';
+      next.distance_km = Math.max(5, next.distance_km ?? 6);
+      next.duration_minutes = Math.max(45, next.duration_minutes || 45);
+      next.intensity = 'high';
+      break;
+    case 'run':
+    default:
+      next.activity_type = 'run';
+      next.distance_km = Math.max(4, next.distance_km ?? 5);
+      next.duration_minutes = Math.max(30, next.duration_minutes || 40);
+      if (next.intensity === 'high') next.intensity = 'moderate';
+      break;
+  }
+  if (uiType !== 'rest' && next.duration_minutes === 0) {
+    next.duration_minutes = 40;
+  }
+  return next;
+};
 
 export default function Goals() {
   const { user } = useAuth();
@@ -174,8 +246,8 @@ export default function Goals() {
       const base: TrainingActivity = {
         date: dateStr,
         activity_type: 'run',
-        duration_minutes: 30,
-        distance_km: null,
+        duration_minutes: 40,
+        distance_km: 5,
         intensity: 'moderate',
         start_time: null,
         estimated_calories: 300,
@@ -189,11 +261,20 @@ export default function Goals() {
     setExpandedEditor({ date: dateStr, index: idx });
   };
 
-  const updateActivity = (dateStr: string, index: number, patch: Partial<TrainingActivity>) => {
+  const updateActivity = (
+    dateStr: string,
+    index: number,
+    patch: Partial<TrainingActivity> | ((activity: TrainingActivity) => TrainingActivity)
+  ) => {
     setActivitiesByDate((prev) => {
       const next = { ...prev };
       const list = [...(next[dateStr] || [])];
-      const updated = { ...list[index], ...patch } as TrainingActivity;
+      const current = list[index];
+      if (!current) return next;
+      const updated =
+        typeof patch === 'function'
+          ? patch(current)
+          : ({ ...current, ...patch } as TrainingActivity);
       updated.estimated_calories = calculateCalories(updated);
       list[index] = updated;
       next[dateStr] = list;
@@ -553,48 +634,95 @@ export default function Goals() {
                   <div className="flex items-center gap-2"></div>
                 </div>
                 {/* Weekly Editor */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="space-y-4">
                   {datesOfWeek.map((d, idx) => {
                     const key = format(d, 'yyyy-MM-dd');
                     const list = activitiesByDate[key] || [];
                     return (
-                      <div key={key} className="p-3 border rounded-lg">
-                        <div className="text-sm font-semibold mb-2">{DAYS[idx]}</div>
-                        <div className="space-y-2">
+                      <div key={key} className="overflow-hidden rounded-lg border bg-muted/20">
+                        <div className="flex items-center justify-between border-b px-4 py-2">
+                          <div className="text-sm font-semibold">{DAYS[idx]}</div>
+                          <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
+                        </div>
+                        <div className="space-y-3 p-4">
                           {list.length === 0 && (
-                            <div className="text-xs text-muted-foreground">No activities</div>
+                            <div className="text-xs text-muted-foreground">No activities planned yet.</div>
                           )}
                           {list.map((a, i) => {
+                            const uiType = deriveUiActivityType(a);
                             const isExpanded = expandedEditor && expandedEditor.date === key && expandedEditor.index === i;
+                            const metrics =
+                              uiType === 'rest'
+                                ? 'Recovery focus'
+                                : [
+                                    a.activity_type === 'run' && a.distance_km ? `${a.distance_km} km` : null,
+                                    a.duration_minutes ? `${a.duration_minutes} min` : null,
+                                    a.intensity ? `${formatIntensity(a.intensity)}` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ');
                             return (
-                              <div key={i} className="p-2 rounded bg-muted/50">
+                              <div key={i} className="rounded-md bg-background/60 p-3 shadow-sm">
                                 {!isExpanded && (
-                                  <div className="flex items-center justify-between text-xs">
-                                    <div className="font-medium capitalize">{a.activity_type}</div>
-                                    <div className="text-muted-foreground">{a.activity_type === 'run' ? (a.distance_km ? `${a.distance_km} km` : `${a.duration_minutes} min`) : `${a.duration_minutes} min`} · {a.intensity}</div>
-                                    <div className="font-semibold">{a.estimated_calories} kcal</div>
-                                    <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setExpandedEditor({ date: key, index: i })}>Edit</Button>
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="font-semibold">{getUiActivityLabel(uiType)}</span>
+                                      <span className="text-muted-foreground">{metrics}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold">
+                                        {uiType === 'rest'
+                                          ? '0 kcal'
+                                          : a.estimated_calories
+                                          ? `${a.estimated_calories} kcal`
+                                          : '—'}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2"
+                                        onClick={() => setExpandedEditor({ date: key, index: i })}
+                                      >
+                                        Edit
+                                      </Button>
+                                    </div>
                                   </div>
                                 )}
                                 {isExpanded && (
-                                  <div className="mt-2">
-                                    <div className="grid grid-cols-2 gap-2 mb-2">
+                                  <div className="space-y-3">
+                                    <div className="grid gap-2 sm:grid-cols-2">
                                       <div className="space-y-1">
-                                        <Label className="text-xs">Type</Label>
-                                        <Select value={a.activity_type} onValueChange={(v: any) => updateActivity(key, i, { activity_type: v as ActivityType, distance_km: a.activity_type === 'run' ? a.distance_km : null })}>
-                                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                        <Label className="text-xs">Activity</Label>
+                                        <Select
+                                          value={uiType}
+                                          onValueChange={(v) =>
+                                            updateActivity(key, i, (current) =>
+                                              applyUiActivityType(v as UiActivityType, current)
+                                            )
+                                          }
+                                        >
+                                          <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue />
+                                          </SelectTrigger>
                                           <SelectContent>
-                                            <SelectItem value="run">Running</SelectItem>
-                                            <SelectItem value="strength">Strength</SelectItem>
-                                            <SelectItem value="cardio">Cardio</SelectItem>
-                                            <SelectItem value="other">Other</SelectItem>
+                                            <SelectItem value="run">Run</SelectItem>
+                                            <SelectItem value="long_run">Long Run</SelectItem>
+                                            <SelectItem value="interval">Interval Session</SelectItem>
+                                            <SelectItem value="strength">Strength Training</SelectItem>
+                                            <SelectItem value="rest">Rest Day</SelectItem>
                                           </SelectContent>
                                         </Select>
                                       </div>
                                       <div className="space-y-1">
                                         <Label className="text-xs">Intensity</Label>
-                                        <Select value={a.intensity} onValueChange={(v: any) => updateActivity(key, i, { intensity: v as Intensity })}>
-                                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                        <Select
+                                          value={a.intensity}
+                                          onValueChange={(v: Intensity) => updateActivity(key, i, { intensity: v })}
+                                          disabled={uiType === 'rest'}
+                                        >
+                                          <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue />
+                                          </SelectTrigger>
                                           <SelectContent>
                                             <SelectItem value="low">Low</SelectItem>
                                             <SelectItem value="moderate">Moderate</SelectItem>
@@ -603,21 +731,89 @@ export default function Goals() {
                                         </Select>
                                       </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      {a.activity_type === 'run' ? (
+                                    {uiType === 'rest' ? (
+                                      <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+                                        No metrics needed for a rest day. Use this time for recovery, mobility, or gentle
+                                        stretching.
+                                      </div>
+                                    ) : (
+                                      <div className="grid gap-2 sm:grid-cols-2">
                                         <div className="space-y-1">
-                                          <Label className="text-xs">Distance (km)</Label>
-                                          <Input className="h-8" type="number" step="0.1" value={typeof a.distance_km === 'number' ? a.distance_km : ''} onChange={(e) => updateActivity(key, i, { distance_km: e.target.value === '' ? null : parseFloat(e.target.value) })} />
+                                          <Label className="text-xs">
+                                            {a.activity_type === 'run' ? 'Distance (km)' : 'Duration (min)'}
+                                          </Label>
+                                          {a.activity_type === 'run' ? (
+                                            <Input
+                                              className="h-9 text-sm"
+                                              type="number"
+                                              step="0.1"
+                                              value={typeof a.distance_km === 'number' ? a.distance_km : ''}
+                                              onChange={(e) =>
+                                                updateActivity(key, i, {
+                                                  distance_km: e.target.value === '' ? null : parseFloat(e.target.value),
+                                                })
+                                              }
+                                            />
+                                          ) : (
+                                            <Input
+                                              className="h-9 text-sm"
+                                              type="number"
+                                              value={a.duration_minutes}
+                                              onChange={(e) =>
+                                                updateActivity(key, i, {
+                                                  duration_minutes: parseInt(e.target.value) || 0,
+                                                })
+                                              }
+                                            />
+                                          )}
                                         </div>
-                                      ) : (
                                         <div className="space-y-1">
-                                          <Label className="text-xs">Duration (min)</Label>
-                                          <Input className="h-8" type="number" value={a.duration_minutes} onChange={(e) => updateActivity(key, i, { duration_minutes: parseInt(e.target.value) || 0 })} />
+                                          <Label className="text-xs">
+                                            {a.activity_type === 'run' ? 'Duration (min)' : 'Notes'}
+                                          </Label>
+                                          {a.activity_type === 'run' ? (
+                                            <Input
+                                              className="h-9 text-sm"
+                                              type="number"
+                                              value={a.duration_minutes}
+                                              onChange={(e) =>
+                                                updateActivity(key, i, {
+                                                  duration_minutes: parseInt(e.target.value) || 0,
+                                                })
+                                              }
+                                            />
+                                          ) : (
+                                            <Input
+                                              className="h-9 text-sm"
+                                              placeholder="Optional notes"
+                                              value={a.notes ?? ''}
+                                              onChange={(e) => updateActivity(key, i, { notes: e.target.value })}
+                                            />
+                                          )}
                                         </div>
-                                      )}
-                                      <div className="flex items-end gap-2">
-                                        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setExpandedEditor(null)}>Done</Button>
-                                        <Button variant="ghost" size="sm" className="h-8 px-2 text-destructive" onClick={() => removeActivity(key, i)}>Remove</Button>
+                                      </div>
+                                    )}
+                                    <div className="flex flex-wrap justify-between gap-2 pt-1">
+                                      <div className="text-xs text-muted-foreground">
+                                        Estimated energy cost: {a.estimated_calories} kcal
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 px-2"
+                                          onClick={() => setExpandedEditor(null)}
+                                        >
+                                          Done
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 px-2 text-destructive"
+                                          onClick={() => removeActivity(key, i)}
+                                        >
+                                          Remove
+                                        </Button>
                                       </div>
                                     </div>
                                   </div>
@@ -625,7 +821,6 @@ export default function Goals() {
                               </div>
                             );
                           })}
-                          <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
                         </div>
                       </div>
                     );

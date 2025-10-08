@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-import { getSupabaseAdmin } from "../_shared/env.ts";
+import { getServiceRoleKey, getSupabaseUrl } from "../_shared/env.ts";
 import {
   type UserProfile,
   type GoalType,
@@ -39,6 +39,34 @@ function getGroqKey(): string | undefined {
   }
 }
 
+const SUPABASE_URL = getSupabaseUrl();
+const SERVICE_KEY = getServiceRoleKey();
+
+async function supabaseRequest(
+  path: string,
+  init: RequestInit = {}
+) {
+  const url = `${SUPABASE_URL}/rest/v1${path}`;
+  const headers: Record<string, string> = {
+    apikey: SERVICE_KEY,
+    Authorization: `Bearer ${SERVICE_KEY}`,
+    Accept: "application/json",
+    ...(init.headers as Record<string, string> ?? {}),
+  };
+
+  const response = await fetch(url, {
+    ...init,
+    headers,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Supabase request failed (${response.status} ${response.statusText}): ${text}`);
+  }
+
+  return response;
+}
+
 serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req);
   if (req.method === "OPTIONS") {
@@ -71,18 +99,17 @@ serve(async (req) => {
     const { date } = await req.json().catch(() => ({ date: undefined }));
     const requestDate = date || new Date().toISOString().split("T")[0];
 
-    const supabaseAdmin = getSupabaseAdmin();
-
     // Load profile, goals, and race date
-    const { data: profileRow } = await supabaseAdmin
-      .from("profiles")
-      .select("user_id, weight, height, age, goal_type, fitness_level, target_date")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const profileRes = await supabaseRequest(
+      `/profiles?select=user_id,weight,weight_kg,height,height_cm,age,goal_type,fitness_level,target_date&user_id=eq.${userId}&limit=1`,
+      { method: "GET" }
+    );
+    const profileData = await profileRes.json() as any[];
+    const profileRow = Array.isArray(profileData) ? profileData[0] : null;
 
     const userProfile: UserProfile = {
-      weightKg: profileRow?.weight || 70,
-      heightCm: profileRow?.height || 170,
+      weightKg: profileRow?.weight_kg || profileRow?.weight || 70,
+      heightCm: profileRow?.height_cm || profileRow?.height || 170,
       age: profileRow?.age || 30,
       sex: "male",
     } as UserProfile;
@@ -91,11 +118,11 @@ serve(async (req) => {
     const raceDateISO = profileRow?.target_date || null;
 
     // Fetch activities for the day (multiple allowed)
-    const { data: activities } = await supabaseAdmin
-      .from("training_activities")
-      .select("activity_type, duration_minutes, distance_km, intensity")
-      .eq("user_id", userId)
-      .eq("date", requestDate);
+    const activityRes = await supabaseRequest(
+      `/training_activities?select=activity_type,duration_minutes,distance_km,intensity&user_id=eq.${userId}&date=eq.${requestDate}`,
+      { method: "GET" }
+    );
+    const activities = await activityRes.json();
 
     // Compute goal-centric DayTarget using science engine
     const dayTarget = generateGoalCentricDayTarget(
@@ -200,14 +227,22 @@ Return ONLY strict JSON with keys breakfast, lunch, dinner${dayTarget.meals.find
 
     // Cache into user_preferences for the day
     const cacheKey = `nutritionSuggestions:${requestDate}:default`;
-    await supabaseAdmin
-      .from('user_preferences')
-      .upsert({
-        user_id: userId,
-        key: cacheKey,
-        value: { meals: baseOut, updatedAt: new Date().toISOString() },
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,key' });
+    await supabaseRequest(
+      `/user_preferences?on_conflict=user_id,key`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify([{
+          user_id: userId,
+          key: cacheKey,
+          value: { meals: baseOut, updatedAt: new Date().toISOString() },
+          updated_at: new Date().toISOString(),
+        }]),
+      }
+    );
 
     return new Response(
       JSON.stringify({ success: true, date: requestDate, load: dayTarget.load, kcal: dayTarget.kcal, targets: dayTarget.grams, fueling: dayTarget.fueling, meals: baseOut }),
@@ -221,4 +256,3 @@ Return ONLY strict JSON with keys breakfast, lunch, dinner${dayTarget.meals.find
     });
   }
 });
-
