@@ -91,7 +91,7 @@ export default function ProfileNew() {
 
           {/* User Card */}
           <Card className="mb-4 shadow-card">
-            <CardContent className="p-4">
+            <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 bg-black dark:bg-white rounded-full flex items-center justify-center">
                   <UserIcon className="w-8 h-8 text-white dark:text-black" />
@@ -123,7 +123,7 @@ export default function ProfileNew() {
                   className="shadow-card active:scale-[0.98] transition-transform cursor-pointer"
                   onClick={() => navigate(item.path)}
                 >
-                  <CardContent className="p-4">
+                  <CardContent className="p-6">
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 ${item.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}>
                         <Icon className="w-6 h-6" />
@@ -144,7 +144,7 @@ export default function ProfileNew() {
           <h2 className="text-xl font-bold mb-3">Account</h2>
           <div className="space-y-3">
             <Card className="shadow-card">
-              <CardContent className="p-4">
+              <CardContent className="p-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
                     <Download className="w-5 h-5" />
@@ -156,7 +156,7 @@ export default function ProfileNew() {
             </Card>
 
             <Card className="shadow-card border-orange-200 dark:border-orange-800 cursor-pointer" onClick={handleLogout}>
-              <CardContent className="p-4">
+              <CardContent className="p-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
                     <LogOut className="w-5 h-5 text-orange-600 dark:text-orange-400" />
@@ -167,7 +167,7 @@ export default function ProfileNew() {
             </Card>
 
             <Card className="shadow-card border-red-200 dark:border-red-800">
-              <CardContent className="p-4">
+              <CardContent className="p-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
                     <X className="w-5 h-5 text-red-600 dark:text-red-400" />

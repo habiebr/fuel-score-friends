@@ -197,21 +197,21 @@ export default function Profile() {
           {/* Premium Stats Grid */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             <Card className="premium-card bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-6 text-center">
                 <User className="h-6 w-6 mx-auto mb-2 text-primary" />
                 <div className="text-2xl font-bold text-foreground">0</div>
                 <div className="text-xs text-muted-foreground">Days</div>
               </CardContent>
             </Card>
             <Card className="premium-card bg-gradient-to-br from-secondary/5 to-secondary/10 border-secondary/20">
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-6 text-center">
                 <Target className="h-6 w-6 mx-auto mb-2 text-secondary" />
                 <div className="text-2xl font-bold text-foreground">0</div>
                 <div className="text-xs text-muted-foreground">Score</div>
               </CardContent>
             </Card>
             <Card className="premium-card bg-gradient-to-br from-accent/5 to-accent/10 border-accent/20">
-              <CardContent className="p-4 text-center">
+              <CardContent className="p-6 text-center">
                 <Flame className="h-6 w-6 mx-auto mb-2 text-accent" />
                 <div className="text-2xl font-bold text-foreground">0</div>
                 <div className="text-xs text-muted-foreground">Meals</div>

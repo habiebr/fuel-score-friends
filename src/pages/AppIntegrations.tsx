@@ -97,7 +97,7 @@ export default function AppIntegrations() {
 
               {/* Google Fit */}
               <Card className="shadow-card">
-                <CardContent className="p-4">
+                <CardContent className="p-6">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
                       <Activity className="w-6 h-6" />
@@ -135,7 +135,7 @@ export default function AppIntegrations() {
               </p>
 
               <Card className="shadow-card">
-                <CardContent className="p-4">
+                <CardContent className="p-6">
                   <p className="text-sm text-muted-foreground leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
                     Your nutrition and training data is stored securely and never shared with third parties without your explicit consent. Connected apps only sync the data necessary for providing personalized recommendations.
                   </p>

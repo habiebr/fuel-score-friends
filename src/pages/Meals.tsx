@@ -660,7 +660,7 @@ export default function Meals() {
           {activeTab === 'week' && (
             <>
               <Card className="shadow-card">
-                <CardContent className="p-4">
+                <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-2">Weekly Food Diary</h3>
                   <div className="grid grid-cols-7 gap-2">
                     {weekDays.map((day) => (
@@ -748,7 +748,7 @@ export default function Meals() {
               <div className="space-y-4">
                 {aiPlan && (
                   <Card className="shadow-card">
-                    <CardContent className="p-4">
+                    <CardContent className="p-6">
                       <h3 className="font-semibold text-base mb-3">AI Meal Plan (Today)</h3>
                       {['breakfast','lunch','dinner','snack'].map((m) => aiPlan[m] ? (
                         <div key={m} className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
@@ -792,7 +792,7 @@ export default function Meals() {
                 )}
                 {recommendedRecipes.map(({ recipe, score, reasons, compatibility }) => (
                   <Card key={recipe.id} className="shadow-card">
-                    <CardContent className="p-4">
+                    <CardContent className="p-6">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <h3 className="font-semibold text-lg mb-1">{recipe.name}</h3>
