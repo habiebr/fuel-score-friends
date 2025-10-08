@@ -8,7 +8,6 @@ import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
 import { ChevronDown, ChevronUp, Activity, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { TrainingNutritionWidget } from '@/components/TrainingNutritionWidget';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
@@ -143,38 +142,7 @@ export default function TrainingCalendar() {
                     </div>
                   </CardHeader>
                 </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="pt-0">
-                      <TrainingNutritionWidget
-                      selectedDate={new Date()}
-                      activities={Object.values(activitiesByDate).flat()}
-                      tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
-                      onRefresh={() => {
-                        // re-fetch without forcing a full reload
-                        const start = format(weekStart, 'yyyy-MM-dd');
-                        const end = format(addDays(weekStart, 6), 'yyyy-MM-dd');
-                        (async () => {
-                          const { data } = await (supabase as any)
-                            .from('training_activities')
-                            .select('*')
-                            .eq('user_id', user!.id)
-                            .gte('date', start)
-                            .lte('date', end)
-                            .order('date', { ascending: true })
-                            .order('is_actual', { ascending: false });
-                          const grouped: Record<string, any[]> = {};
-                          for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = [];
-                          (data || []).forEach((row: any) => {
-                            const key = row.date;
-                            const act = row;
-                            if (act.is_actual) grouped[key] = [act]; else grouped[key].push(act);
-                          });
-                          setActivitiesByDate(grouped);
-                        })();
-                      }}
-                    />
-                  </CardContent>
-                </CollapsibleContent>
+                {/* TrainingNutritionWidget removed per request */}
               </Card>
             </Collapsible>
           </div>
