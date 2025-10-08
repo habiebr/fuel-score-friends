@@ -159,13 +159,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const envUrl = (import.meta as any).env?.VITE_SUPABASE_REDIRECT_URL as string | undefined;
     if (envUrl && envUrl.trim().length > 0) return envUrl;
     // Force cursor branch deployments to use Pages cursor alias
-    const isCursorHost = typeof window !== 'undefined' && window.location.hostname.includes('cursor.nutrisync.pages.dev');
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isCursorHost = host.includes('cursor.nutrisync.pages.dev');
+    const isProdNutrisync = host.endsWith('nutrisync.id') || host.includes('nutrisync.pages.dev') || host.includes('app.nutrisync.id');
+
     if (isCursorHost) {
       try {
         const back = localStorage.getItem('oauth_return_to');
         if (back) return `https://cursor.nutrisync.pages.dev${back}`;
       } catch {}
       return 'https://cursor.nutrisync.pages.dev/';
+    }
+    if (isProdNutrisync) {
+      try {
+        const back = typeof window !== 'undefined' ? localStorage.getItem('oauth_return_to') : null;
+        if (back) return `https://app.nutrisync.id${back}`;
+      } catch {}
+      return 'https://app.nutrisync.id/';
     }
     try {
       const back = typeof window !== 'undefined' ? localStorage.getItem('oauth_return_to') : null;

@@ -456,14 +456,21 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
       return null;
     })();
     const hasKm = isRun && typeof computedDistanceKm === 'number' && computedDistanceKm > 0;
-    const primaryValue = hasKm ? `${computedDistanceKm} km` : `${computedDuration} min`;
-    const primaryLabel = hasKm ? 'distance' : 'duration';
+    const hasDuration = typeof computedDuration === 'number' && computedDuration > 0;
     return (
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <span className="font-semibold text-foreground">{primaryValue}</span>
-          <span>{primaryLabel}</span>
-        </div>
+        {hasKm && (
+          <div className="flex items-center gap-1">
+            <span className="font-semibold text-foreground">{computedDistanceKm}</span>
+            <span>km</span>
+          </div>
+        )}
+        {hasDuration && (
+          <div className="flex items-center gap-1">
+            <span className="font-semibold text-foreground">{computedDuration}</span>
+            <span>min</span>
+          </div>
+        )}
         {typeof s.calories_burned === 'number' && (
           <div className="flex items-center gap-1">
             <span className="font-semibold text-foreground">{s.calories_burned}</span>
