@@ -32,6 +32,7 @@ import Offline from "./pages/Offline";
 import NotFound from "./pages/NotFound";
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 import { PWAUpdateNotification } from "@/components/PWAUpdateNotification";
+import OnboardingWizard from "./pages/OnboardingWizard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -110,6 +111,7 @@ function App() {
                   <Route path="/debug/google-fit" element={<GoogleFitDebug />} />
             <Route path="/debug/force-sync" element={<ForceSyncDebug />} />
                   <Route path="/offline" element={<Offline />} />
+                  <Route path="/onboarding" element={<OnboardingWizard />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
