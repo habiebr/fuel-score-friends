@@ -134,6 +134,13 @@ export default function Goals() {
     }
   }, [user]);
 
+  // Reload data when week changes
+  useEffect(() => {
+    if (user) {
+      loadExistingGoals();
+    }
+  }, [weekStart, user, datesOfWeek]);
+
   const formatGoalLabel = (value: string) => {
     if (!value) return '';
     return value
@@ -179,6 +186,7 @@ export default function Goals() {
         try {
           const start = format(weekStart, 'yyyy-MM-dd');
           const end = format(addDays(weekStart, 6), 'yyyy-MM-dd');
+          console.log('Loading training activities for week:', start, 'to', end);
           const { data: acts, error: actErr } = await (supabase as any)
             .from('training_activities')
             .select('*')
@@ -187,6 +195,7 @@ export default function Goals() {
             .lte('date', end)
             .order('date', { ascending: true });
           if (actErr) throw actErr;
+          console.log('Loaded activities:', acts);
           const grouped: Record<string, TrainingActivity[]> = {};
           for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = [];
           (acts || []).forEach((row: any) => {
@@ -202,9 +211,11 @@ export default function Goals() {
               estimated_calories: row.estimated_calories,
               notes: row.notes,
             };
+            // Always add to the grouped object, even if the key wasn't initialized
             if (!grouped[key]) grouped[key] = [];
             grouped[key].push(act);
           });
+          console.log('Grouped activities:', grouped);
           setActivitiesByDate(grouped);
         } catch (e) {
           console.error('Failed to load training activities for summary', e);
@@ -388,6 +399,7 @@ export default function Goals() {
       const endRepeat = targetDate ? new Date(targetDate) : addDays(weekStart, 6);
 
       // delete existing between start and race date
+      console.log('Deleting existing activities from', format(startDateObj, 'yyyy-MM-dd'), 'to', format(endRepeat, 'yyyy-MM-dd'));
       const { error: delErr } = await (supabase as any)
         .from('training_activities')
         .delete()
@@ -395,6 +407,7 @@ export default function Goals() {
         .gte('date', format(startDateObj, 'yyyy-MM-dd'))
         .lte('date', format(endRepeat, 'yyyy-MM-dd'));
       if (delErr) throw delErr;
+      console.log('Successfully deleted existing activities');
 
       const patternDates = datesOfWeek.map((d) => format(d, 'yyyy-MM-dd'));
       const rows: any[] = [];
@@ -419,8 +432,10 @@ export default function Goals() {
       }
 
       if (rows.length > 0) {
+        console.log('Inserting training activities:', rows.length, 'rows');
         const { error: insErr } = await (supabase as any).from('training_activities').insert(rows);
         if (insErr) throw insErr;
+        console.log('Successfully inserted training activities');
       }
 
       // 3. Regenerate meal plans for the next 7 weeks
