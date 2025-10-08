@@ -13,6 +13,7 @@ import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
 import { WeeklyScoreCard } from '@/components/WeeklyScoreCard';
 import { getTodayScore, getWeeklyScorePersisted } from '@/services/score.service';
+import { getTodayUnifiedScore } from '@/services/unified-score.service';
 import { TodayMealScoreCard } from '@/components/TodayMealScoreCard';
 import { TodayNutritionCard } from '@/components/TodayNutritionCard';
 import { WeeklyKilometersCard } from '@/components/WeeklyMilesCard';
@@ -357,7 +358,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       const today = format(new Date(), 'yyyy-MM-dd');
 
       const scoringPromise = Promise.allSettled([
-        getTodayScore(user.id),
+        getTodayUnifiedScore(user.id, 'runner-focused'),
         getWeeklyScorePersisted(user.id)
       ]);
 
@@ -422,7 +423,10 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
       const plannedNutrition = accumulatePlannedFromMealPlans(rawMealPlans);
       const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs);
-      const dailyScore = computeDailyScore(plannedNutrition, consumedNutrition, exerciseData.calories_burned);
+      
+      // Use unified scoring system for more accurate scoring
+      const unifiedScoreResult = await getTodayUnifiedScore(user.id, 'runner-focused');
+      const dailyScore = unifiedScoreResult.score;
 
       const bmr = profile ? calculateBMR({
         age: profile.age || 30,
