@@ -21,10 +21,10 @@ echo "✅ On cursor branch: $(git branch --show-current)"
 echo "🔨 Building PWA..."
 npm run build:pwa
 
-# Deploy to Cloudflare Pages with cursor branch
-echo "🌐 Deploying to Cloudflare Pages..."
-CLOUDFLARE_ACCOUNT_ID=5a73505af9ed48e44ce4caeaa0fdf73f npx wrangler pages deploy dist --project-name nutrisync --branch=cursor --commit-dirty=true
+# Deploy to Cloudflare Pages: beta project for cursor branch
+echo "🌐 Deploying to Cloudflare Pages (beta project)..."
+CLOUDFLARE_ACCOUNT_ID=5a73505af9ed48e44ce4caeaa0fdf73f npx wrangler pages deploy dist --project-name nutrisync-beta --branch=cursor --commit-dirty=true
 
 echo "✅ Deployment complete!"
-echo "🌍 Your PWA is live at: https://nutrisync.pages.dev"
+echo "🌍 Beta PWA is live at: https://nutrisync-beta.pages.dev (map to beta.nutrisync.id)"
 echo "🔗 Cursor branch URL: https://cursor.nutrisync.pages.dev"
