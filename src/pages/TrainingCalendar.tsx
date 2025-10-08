@@ -5,6 +5,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { addDays, format, startOfWeek } from 'date-fns';
+import { PageHeading } from '@/components/PageHeading';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -74,16 +75,20 @@ export default function TrainingCalendar() {
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">Training Calendar</h1>
-              <p className="text-sm text-muted-foreground">Weekly view of your training plan</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>Prev</Button>
-              <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>Next</Button>
-            </div>
-          </div>
+          <PageHeading
+            title="Training Calendar"
+            description="Weekly view of your training plan."
+            actions={
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+                  Prev
+                </Button>
+                <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+                  Next
+                </Button>
+              </div>
+            }
+          />
 
           <Card className="shadow-card">
             <CardHeader className="pb-4">

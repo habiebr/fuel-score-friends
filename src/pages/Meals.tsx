@@ -34,6 +34,7 @@ import {
   getActivityFactor
 } from '@/lib/nutrition-engine';
 import { getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
+import { PageHeading } from '@/components/PageHeading';
 
 interface FoodLog {
   id: string;
@@ -476,10 +477,11 @@ export default function Meals() {
         <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
           <AppHeader className="mb-4" />
 
-          <div>
-            <h2 className="text-2xl font-bold mb-1">Food & Nutrition</h2>
-            <p className="text-sm text-muted-foreground">Track, calculate, and discover your optimal nutrition</p>
-          </div>
+          <PageHeading
+            title="Food & Nutrition"
+            description="Track, calculate, and discover your optimal nutrition."
+            className="!mb-4"
+          />
 
           {/* Tab Navigation */}
           <div className="flex gap-2 mt-4 overflow-x-auto pb-1">

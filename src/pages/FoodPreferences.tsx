@@ -12,6 +12,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
+import { PageHeading } from '@/components/PageHeading';
 
 export default function FoodPreferences() {
   const { user } = useAuth();
@@ -167,8 +168,12 @@ export default function FoodPreferences() {
 
           {/* Content */}
           <div className="p-4">
-            <h2 className="text-xl font-bold text-foreground mb-4">Food Preferences</h2>
-            
+            <PageHeading
+              title="Food Preferences"
+              description="Tailor meal plans to your dietary needs and habits."
+              className="mb-4"
+            />
+
             {/* Info Box */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
               <p className="text-sm text-blue-900 dark:text-blue-100">
@@ -280,4 +285,3 @@ export default function FoodPreferences() {
     </>
   );
 }
-

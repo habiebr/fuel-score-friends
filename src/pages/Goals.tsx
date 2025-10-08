@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { addDays, format, startOfWeek } from 'date-fns';
+import { PageHeading } from '@/components/PageHeading';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -488,18 +489,15 @@ export default function Goals() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-              Set Your Goals & Training Plan
-            </h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
-              Define your running goal and create your weekly training schedule
+          <PageHeading
+            title="Set Your Goals & Training Plan"
+            description="Define your running goal and create your weekly training schedule."
+            className="mb-4"
+          />
+          <div className="mb-6 mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>Note:</strong> This creates your base weekly training pattern. A separate weekly generator will use this pattern with our calculator and science layer to create your full training plan leading up to your race date.
             </p>
-            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-700 dark:text-blue-300">
-                <strong>Note:</strong> This creates your base weekly training pattern. A separate weekly generator will use this pattern with our calculator and science layer to create your full training plan leading up to your race date.
-              </p>
-            </div>
           </div>
 
 

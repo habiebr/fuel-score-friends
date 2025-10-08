@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { format, addDays } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { PageHeading } from '@/components/PageHeading';
 
 type PlanRow = {
   id: string;
@@ -168,14 +169,17 @@ export default function MealPlans() {
     <div className="min-h-screen bg-gradient-background pb-20">
       <div className="max-w-none mx-auto p-4">
         {/* Header */}
-        <div className="mb-6">
-          <Button variant="ghost" onClick={() => navigate('/meals')} className="mb-4 -ml-2">
+        <div className="mb-2">
+          <Button variant="ghost" onClick={() => navigate('/meals')} className="-ml-2">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Meals
           </Button>
-          <h1 className="text-2xl font-bold text-foreground mb-2">7-Day Meal Plans</h1>
-          <p className="text-muted-foreground text-sm">Generated plans for the next 7 days</p>
         </div>
+        <PageHeading
+          title="7-Day Meal Plans"
+          description="Generated plans for the next 7 days"
+          className="mt-3"
+        />
 
         {/* Week navigation + Generate */}
         <div className="flex items-center justify-between mb-4">
@@ -260,5 +264,3 @@ export default function MealPlans() {
     </div>
   );
 }
-
-

@@ -7,6 +7,7 @@ import { ArrowLeft, Utensils, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { format, subDays } from 'date-fns';
+import { PageHeading } from '@/components/PageHeading';
 
 interface FoodLog {
   id: string;
@@ -114,14 +115,17 @@ export default function MealHistory() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-6">
-            <Button variant="ghost" onClick={() => navigate('/meals')} className="mb-4 -ml-2">
+          <div className="mb-2">
+            <Button variant="ghost" onClick={() => navigate('/meals')} className="-ml-2">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Meals
             </Button>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Meal History</h1>
-            <p className="text-muted-foreground text-sm">View your nutrition history over time</p>
           </div>
+          <PageHeading
+            title="Meal History"
+            description="Review logged meals and macro totals over time."
+            className="mt-3"
+          />
 
           {/* Week Navigation */}
           <div className="flex items-center justify-between mb-6">

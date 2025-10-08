@@ -16,6 +16,7 @@ import { format, subDays } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { PageHeading } from '@/components/PageHeading';
 
 export default function Profile() {
   const { user, signOut } = useAuth();
@@ -175,11 +176,10 @@ export default function Profile() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Premium Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-2">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-                Profile
-              </h1>
+          <PageHeading
+            title="Profile"
+            description={user?.email || 'Manage your NutriSync account.'}
+            actions={
               <Button
                 variant="ghost"
                 size="icon"
@@ -190,9 +190,9 @@ export default function Profile() {
               >
                 <LogOut className={`h-5 w-5 ${isLoggingOut ? 'animate-spin' : ''}`} />
               </Button>
-            </div>
-            <p className="text-muted-foreground">{user?.email}</p>
-          </div>
+            }
+            className="mb-6"
+          />
 
           {/* Premium Stats Grid */}
           <div className="grid grid-cols-3 gap-3 mb-6">

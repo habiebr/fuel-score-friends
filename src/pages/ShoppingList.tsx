@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar, CheckSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { addDays, format, parseISO } from 'date-fns';
+import { PageHeading } from '@/components/PageHeading';
 
 type PlanRow = {
   date: string;
@@ -95,16 +96,21 @@ export default function ShoppingList() {
   return (
     <div className="min-h-screen bg-gradient-background pb-20">
       <div className="max-w-none mx-auto p-4">
-        <div className="mb-6">
-          <Button variant="ghost" onClick={() => navigate(`/meal-plans?start=${format(startDate, 'yyyy-MM-dd')}`)} className="mb-4 -ml-2">
+        <div className="mb-2">
+          <Button
+            variant="ghost"
+            onClick={() => navigate(`/meal-plans?start=${format(startDate, 'yyyy-MM-dd')}`)}
+            className="-ml-2"
+          >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to 7-Day Plans
           </Button>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Shopping List</h1>
-          <p className="text-muted-foreground text-sm">
-            {format(startDate, 'MMM dd')} - {format(endDate, 'MMM dd')}
-          </p>
         </div>
+        <PageHeading
+          title="Shopping List"
+          description={`${format(startDate, 'MMM dd')} - ${format(endDate, 'MMM dd')}`}
+          className="mt-3"
+        />
 
         <Card className="shadow-card">
           <CardHeader>
@@ -134,5 +140,3 @@ export default function ShoppingList() {
     </div>
   );
 }
-
-

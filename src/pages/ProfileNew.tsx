@@ -10,6 +10,7 @@ import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Activity } from 'lucide-react';
+import { PageHeading } from '@/components/PageHeading';
 
 export default function ProfileNew() {
   const { user, signOut } = useAuth();
@@ -84,10 +85,11 @@ export default function ProfileNew() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-6 pt-2">
-            <h1 className="text-3xl font-bold text-foreground mb-1">Profile</h1>
-            <p className="text-muted-foreground text-sm">Manage your account and preferences</p>
-          </div>
+          <PageHeading
+            title="Profile"
+            description="Manage your account and preferences."
+            className="pt-2"
+          />
 
           {/* User Card */}
           <Card className="mb-4 shadow-card">
@@ -189,4 +191,3 @@ export default function ProfileNew() {
     </>
   );
 }
-

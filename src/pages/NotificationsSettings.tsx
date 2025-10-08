@@ -9,6 +9,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
+import { PageHeading } from '@/components/PageHeading';
 
 export default function NotificationsSettings() {
   const navigate = useNavigate();
@@ -78,7 +79,11 @@ export default function NotificationsSettings() {
 
           {/* Content */}
           <div className="p-4">
-            <h2 className="text-xl font-bold text-foreground mb-4">Notifications</h2>
+            <PageHeading
+              title="Notifications"
+              description="Choose how NutriSync keeps you on track."
+              className="mb-4"
+            />
 
             <Card className="shadow-card">
               <CardContent className="p-6">
@@ -117,4 +122,3 @@ export default function NotificationsSettings() {
     </>
   );
 }
-

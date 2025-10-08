@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleFitTokenRefresh } from '@/components/GoogleFitTokenRefresh';
 import { GoogleFitTokenDebug } from '@/components/GoogleFitTokenDebug';
+import { PageHeading } from '@/components/PageHeading';
 
 export default function AppIntegrations() {
   const navigate = useNavigate();
@@ -67,32 +68,34 @@ export default function AppIntegrations() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-6">
+          <div className="mb-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate('/profile')}
-              className="flex-shrink-0 mb-4"
+              className="-ml-2 flex-shrink-0"
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
-                <Activity className="w-6 h-6 text-white dark:text-black" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">App Integrations</h1>
-              </div>
+          </div>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-white dark:bg-white dark:text-black sm:h-12 sm:w-12">
+              <Activity className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
+            <PageHeading
+              title="App Integrations"
+              description="Manage your connected fitness apps and data sync."
+              className="!mb-0 flex-1"
+            />
           </div>
 
           {/* Content */}
           <div className="space-y-4">
             {/* App Integrations Section */}
             <div>
-              <h2 className="text-xl font-bold text-foreground mb-2">App Integrations</h2>
+              <h2 className="text-xl font-bold text-foreground mb-2">Connected Apps</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Connect with fitness apps to sync your training data
+                Choose which fitness platforms sync activity to NutriSync.
               </p>
 
               {/* Google Fit */}
@@ -164,4 +167,3 @@ export default function AppIntegrations() {
     </>
   );
 }
-

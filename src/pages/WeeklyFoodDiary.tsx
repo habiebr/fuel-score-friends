@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Calendar, Clock, Utensils } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PageHeading } from '@/components/PageHeading';
 
 interface FoodLog {
   id: string;
@@ -182,18 +183,15 @@ export default function WeeklyFoodDiary() {
   return (
     <div className="min-h-screen bg-gradient-background p-4 pb-28">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-bold">Weekly Food Diary</h1>
+      <PageHeading
+        title="Weekly Food Diary"
+        description="Review your logged meals, macros, and targets at a glance."
+        actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigateWeek('prev')}
-            >
+            <Button variant="outline" size="icon" onClick={() => navigateWeek('prev')}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="text-sm font-medium">
+            <div className="text-sm font-medium text-muted-foreground sm:text-base">
               {format(currentWeekStart, 'MMM d')} - {format(endOfWeek(currentWeekStart), 'MMM d, yyyy')}
             </div>
             <Button
@@ -205,8 +203,9 @@ export default function WeeklyFoodDiary() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-      </div>
+        }
+        className="mb-6"
+      />
 
       {/* Week Overview */}
       <div className="grid grid-cols-7 gap-2 mb-6">

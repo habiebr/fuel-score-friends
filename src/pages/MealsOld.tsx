@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useGoogleFit } from '@/hooks/useGoogleFit';
 import { format, subDays } from 'date-fns';
+import { PageHeading } from '@/components/PageHeading';
 
 interface FoodLog {
   id: string;
@@ -444,14 +445,17 @@ export default function Meals() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-6">
-            <Button variant="ghost" onClick={() => navigate('/')} className="mb-4 -ml-2">
+          <div className="mb-2">
+            <Button variant="ghost" onClick={() => navigate('/')} className="-ml-2">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Meal Diary</h1>
-            <p className="text-muted-foreground text-sm">Track your nutrition and search for foods</p>
           </div>
+          <PageHeading
+            title="Meal Diary"
+            description="Track your nutrition and search for foods."
+            className="mt-3"
+          />
 
           {/* Food Search */}
           <Card className="shadow-card mb-6">

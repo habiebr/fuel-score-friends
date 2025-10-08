@@ -14,6 +14,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
+import { PageHeading } from '@/components/PageHeading';
 
 export default function ProfileInformation() {
   const { user } = useAuth();
@@ -102,22 +103,27 @@ export default function ProfileInformation() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-6">
+          <div className="mb-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate('/profile')}
-              className="flex-shrink-0 mb-4"
+              className="-ml-2 flex-shrink-0"
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
-            <div className="flex items-center gap-3">
+            <div className="mt-4 flex items-center gap-3">
               <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
                 <Activity className="w-6 h-6 text-white dark:text-black" />
               </div>
               <AppHeader />
             </div>
           </div>
+          <PageHeading
+            title="Profile Information"
+            description="Update your personal details and training stats."
+            className="mt-3 mb-6"
+          />
 
           {/* Content */}
           <div>
@@ -241,4 +247,3 @@ export default function ProfileInformation() {
     </>
   );
 }
-

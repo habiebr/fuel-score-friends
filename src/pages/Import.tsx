@@ -2,6 +2,7 @@ import { ArrowLeft, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
+import { PageHeading } from '@/components/PageHeading';
 
 export default function Import() {
   const navigate = useNavigate();
@@ -10,25 +11,17 @@ export default function Import() {
     <div className="min-h-screen bg-gradient-background pb-20">
       <div className="max-w-none mx-auto p-4">
         {/* Header with Back Button */}
-        <div className="mb-8">
-          <Button
-            variant="ghost"
-            onClick={() => navigate('/profile')}
-            className="mb-4"
-          >
+        <div className="mb-2">
+          <Button variant="ghost" onClick={() => navigate('/profile')} className="-ml-2">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Profile
           </Button>
-          
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent mb-2">
-              Google Fit Integration
-            </h1>
-            <p className="text-muted-foreground">
-              Connect your Google Fit account to automatically sync your activity data
-            </p>
-          </div>
         </div>
+        <PageHeading
+          title="Google Fit Integration"
+          description="Connect your Google Fit account to automatically sync your activity data."
+          className="mt-3 mb-6"
+        />
 
         {/* Google Fit Card */}
         <Card className="shadow-card">

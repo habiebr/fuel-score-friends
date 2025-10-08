@@ -9,6 +9,7 @@ import { Trophy, MapPin, Activity as ActivityIcon, Target, Users, Crown } from '
 import AppHeader from '@/components/AppHeader';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { PageHeading } from '@/components/PageHeading';
 
 interface LeaderboardEntry {
   user_id: string;
@@ -232,7 +233,7 @@ export default function Community() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-6">
+          <div className="mb-2">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
                 <ActivityIcon className="w-6 h-6 text-white dark:text-black" />
@@ -240,6 +241,11 @@ export default function Community() {
               <AppHeader />
             </div>
           </div>
+          <PageHeading
+            title="Community"
+            description="Compete with fellow runners and celebrate weekly wins."
+            className="mt-3"
+          />
 
           {/* Content */}
           <div className="space-y-4">

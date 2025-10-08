@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { PageHeading } from '@/components/PageHeading';
 
 export default function MarathonCalendarPage() {
   const navigate = useNavigate();
@@ -16,23 +17,17 @@ export default function MarathonCalendarPage() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-6">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/goals')}
-              className="mb-4"
-            >
+          <div className="mb-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/goals')} className="-ml-2">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Goals
             </Button>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent mb-2">
-              Marathon Calendar
-            </h1>
-            <p className="text-muted-foreground">
-              Browse upcoming marathons and set your race goal
-            </p>
           </div>
+          <PageHeading
+            title="Marathon Calendar"
+            description="Browse upcoming marathons and set your race goal."
+            className="mt-3"
+          />
 
           {/* Calendar Component */}
           <MarathonCalendar />
