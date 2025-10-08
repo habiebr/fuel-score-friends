@@ -166,7 +166,7 @@ export async function getWeeklyMileageTarget(userId: string): Promise<number> {
   try {
     const { data: profile, error } = await supabase
       .from('profiles')
-      .select('weekly_mileage_target, fitness_level, goal_type')
+      .select('weekly_miles_target, fitness_level, goal_type')
       .eq('user_id', userId)
       .single();
 
@@ -177,8 +177,8 @@ export async function getWeeklyMileageTarget(userId: string): Promise<number> {
     }
 
     // If user has set a specific target, use it
-    if (profile.weekly_mileage_target) {
-      return profile.weekly_mileage_target;
+    if (profile.weekly_miles_target) {
+      return profile.weekly_miles_target;
     }
 
     // Otherwise, calculate based on fitness level and goal type

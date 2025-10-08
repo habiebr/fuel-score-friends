@@ -5,7 +5,11 @@ import { getServiceRoleKey, getSupabaseUrl } from "../_shared/env.ts";
 import {
   type UserProfile,
   type GoalType,
-  generateGoalCentricDayTarget,
+  aggregateActivitiesToLoad,
+  calculateDayTarget,
+  adjustDayTargetForGoal,
+  determineRacePhase,
+  adjustDayTargetForPhase,
 } from "../_shared/nutrition-unified.ts";
 
 function buildCorsHeaders(req: Request) {
@@ -125,13 +129,11 @@ serve(async (req) => {
     const activities = await activityRes.json();
 
     // Compute goal-centric DayTarget using science engine
-    const dayTarget = generateGoalCentricDayTarget(
-      userProfile,
-      requestDate,
-      (activities || []) as any[],
-      goal,
-      raceDateISO
-    );
+    const trainingLoad = aggregateActivitiesToLoad((activities || []) as any[]);
+    const baseTarget = calculateDayTarget(userProfile, trainingLoad, requestDate);
+    const goalAdjusted = adjustDayTargetForGoal(baseTarget, goal);
+    const racePhase = determineRacePhase(requestDate, raceDateISO);
+    const dayTarget = adjustDayTargetForPhase(goalAdjusted, racePhase);
 
     // Prepare AI prompt context
     const context = `
