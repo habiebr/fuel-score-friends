@@ -6,6 +6,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
+import { ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -26,6 +28,7 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 
 export default function TrainingCalendar() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const datesOfWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const [activitiesByDate, setActivitiesByDate] = useState<Record<string, TrainingActivity[]>>({});
@@ -74,21 +77,29 @@ export default function TrainingCalendar() {
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-none mx-auto p-4 space-y-4">
+        <div className="max-w-none mx-auto p-4">
+          {/* Header */}
+          <div className="mb-2">
+            <Button variant="ghost" onClick={() => navigate('/')} className="-ml-2">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+          </div>
           <PageHeading
             title="Training Calendar"
             description="Weekly view of your training plan."
-            actions={
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>
-                  Prev
-                </Button>
-                <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>
-                  Next
-                </Button>
-              </div>
-            }
+            className="mt-3"
           />
+
+          {/* Navigation Controls */}
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+              Prev
+            </Button>
+            <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+              Next
+            </Button>
+          </div>
 
           <Card className="shadow-card">
             <CardHeader className="pb-4">
