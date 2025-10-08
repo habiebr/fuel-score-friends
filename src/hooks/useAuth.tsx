@@ -160,7 +160,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (envUrl && envUrl.trim().length > 0) return envUrl;
     // Force cursor branch deployments to use Pages cursor alias
     const isCursorHost = typeof window !== 'undefined' && window.location.hostname.includes('cursor.nutrisync.pages.dev');
-    if (isCursorHost) return 'https://cursor.nutrisync.pages.dev/';
+    if (isCursorHost) {
+      try {
+        const back = localStorage.getItem('oauth_return_to');
+        if (back) return `https://cursor.nutrisync.pages.dev${back}`;
+      } catch {}
+      return 'https://cursor.nutrisync.pages.dev/';
+    }
+    try {
+      const back = typeof window !== 'undefined' ? localStorage.getItem('oauth_return_to') : null;
+      if (back) return `${window.location.origin}${back}`;
+    } catch {}
     return `${window.location.origin}/`;
   };
 

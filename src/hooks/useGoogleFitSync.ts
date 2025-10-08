@@ -151,6 +151,8 @@ export function useGoogleFitSync() {
 
   const connectGoogleFit = useCallback(async () => {
     try {
+      // Set return URL so OAuth redirect comes back to onboarding step
+      try { localStorage.setItem('oauth_return_to', '/onboarding?step=5'); } catch {}
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

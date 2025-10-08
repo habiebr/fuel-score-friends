@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -86,7 +86,18 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
     setStep((prev => (Math.min(6, (prev + 1)) as Step)));
   };
 
-  const prev = () => setStep((prev => (Math.max(0, (prev - 1)) as Step))));
+  const prev = () => setStep(prev => (Math.max(0, (prev - 1)) as Step));
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const stepParam = params.get('step');
+      if (stepParam) {
+        const n = Number(stepParam);
+        if (!Number.isNaN(n)) setStep(Math.min(6, Math.max(0, n)) as Step);
+      }
+    } catch {}
+  }, []);
 
   const StepHeader = (
     <PageHeading title={step === 0 ? 'Welcome' : 'Onboarding'} description={step === 0 ? 'Let’s complete your profile.' : undefined} />
@@ -205,7 +216,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Sync with Google Fit</h3>
                 <p className="text-sm text-muted-foreground">Connect your account to unlock smart activity-based nutrition suggestions.</p>
-                <div className="flex justify-end gap-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={async ()=>{await connectGoogleFit(); next();}}>Connect</Button></div>
+                <div className="flex justify-end gap-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={async ()=>{ try { localStorage.setItem('oauth_return_to','/onboarding?step=5'); } catch {} await connectGoogleFit(); }}>Connect</Button></div>
               </div>
             )}
 
