@@ -116,7 +116,7 @@ export default function Goals() {
   const [targetDate, setTargetDate] = useState('');
   const [fitnessLevel, setFitnessLevel] = useState('');
   
-  // Step 2: Training Plan (inline editor using training_activities)
+  // Step 2: Training Plan (inline editor using training_activities) - One week only
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const datesOfWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const [activitiesByDate, setActivitiesByDate] = useState<Record<string, TrainingActivity[]>>({});
@@ -186,7 +186,6 @@ export default function Goals() {
         try {
           const start = format(weekStart, 'yyyy-MM-dd');
           const end = format(addDays(weekStart, 6), 'yyyy-MM-dd');
-          console.log('Loading training activities for week:', start, 'to', end);
           const { data: acts, error: actErr } = await (supabase as any)
             .from('training_activities')
             .select('*')
@@ -195,7 +194,6 @@ export default function Goals() {
             .lte('date', end)
             .order('date', { ascending: true });
           if (actErr) throw actErr;
-          console.log('Loaded activities:', acts);
           const grouped: Record<string, TrainingActivity[]> = {};
           for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = [];
           (acts || []).forEach((row: any) => {
@@ -215,7 +213,6 @@ export default function Goals() {
             if (!grouped[key]) grouped[key] = [];
             grouped[key].push(act);
           });
-          console.log('Grouped activities:', grouped);
           setActivitiesByDate(grouped);
         } catch (e) {
           console.error('Failed to load training activities for summary', e);
@@ -394,28 +391,24 @@ export default function Goals() {
 
       if (profileError) throw profileError;
 
-      // 2. Persist weekly pattern by repeating until race date
+      // 2. Persist only the current week's training plan
       const startDateObj = datesOfWeek[0];
-      const endRepeat = targetDate ? new Date(targetDate) : addDays(weekStart, 6);
+      const endDateObj = addDays(weekStart, 6);
 
-      // delete existing between start and race date
-      console.log('Deleting existing activities from', format(startDateObj, 'yyyy-MM-dd'), 'to', format(endRepeat, 'yyyy-MM-dd'));
+      // delete existing activities for this week only
       const { error: delErr } = await (supabase as any)
         .from('training_activities')
         .delete()
         .eq('user_id', user.id)
         .gte('date', format(startDateObj, 'yyyy-MM-dd'))
-        .lte('date', format(endRepeat, 'yyyy-MM-dd'));
+        .lte('date', format(endDateObj, 'yyyy-MM-dd'));
       if (delErr) throw delErr;
-      console.log('Successfully deleted existing activities');
 
-      const patternDates = datesOfWeek.map((d) => format(d, 'yyyy-MM-dd'));
+      // Save only the current week's activities
       const rows: any[] = [];
-      for (let dt = new Date(startDateObj); dt <= endRepeat; dt = addDays(dt, 1)) {
-        const key = format(dt, 'yyyy-MM-dd');
-        const weekdayIndex = (dt.getDay() + 6) % 7; // Mon=0 ... Sun=6
-        const patternDate = patternDates[weekdayIndex];
-        const acts = activitiesByDate[patternDate] || [];
+      datesOfWeek.forEach((date) => {
+        const key = format(date, 'yyyy-MM-dd');
+        const acts = activitiesByDate[key] || [];
         acts.forEach((act) => {
           rows.push({
             user_id: user.id,
@@ -429,20 +422,18 @@ export default function Goals() {
             notes: act.notes,
           });
         });
-      }
+      });
 
       if (rows.length > 0) {
-        console.log('Inserting training activities:', rows.length, 'rows');
         const { error: insErr } = await (supabase as any).from('training_activities').insert(rows);
         if (insErr) throw insErr;
-        console.log('Successfully inserted training activities');
       }
 
-      // 3. Regenerate meal plans for the next 7 weeks
+      // 3. Regenerate meal plans for this week only
       const startDate = format(startDateObj, 'yyyy-MM-dd');
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       await supabase.functions.invoke('generate-meal-plan-range', {
-        body: { startDate, weeks: 7 },
+        body: { startDate, weeks: 1 },
         headers: {
           ...(apiKey ? { apikey: apiKey } : {}),
           Authorization: `Bearer ${session.access_token}`
@@ -450,8 +441,8 @@ export default function Goals() {
       });
 
       toast({
-        title: "Goals & Plan saved!",
-        description: "Your running goal and training plan have been updated",
+        title: "Goals & Weekly Pattern saved!",
+        description: "Your running goal and base weekly training pattern have been saved",
       });
 
     } catch (error) {
@@ -504,6 +495,11 @@ export default function Goals() {
             <p className="text-muted-foreground text-sm sm:text-base">
               Define your running goal and create your weekly training schedule
             </p>
+            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Note:</strong> This creates your base weekly training pattern. A separate weekly generator will use this pattern with our calculator and science layer to create your full training plan leading up to your race date.
+              </p>
+            </div>
           </div>
 
 
@@ -637,14 +633,14 @@ export default function Goals() {
                   Step 2: Create Your Weekly Training Plan
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Plan your weekly schedule. This pattern repeats until your race date.
+                  Plan your base weekly training pattern. This will be used by our weekly generator to create your full training plan.
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Controls */}
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
-                    Weekly pattern (Mon–Sun)
+                    Base weekly pattern (Monday–Sunday) - One week only
                   </div>
                   <div className="flex items-center gap-2"></div>
                 </div>
