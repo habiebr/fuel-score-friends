@@ -230,9 +230,9 @@ export default function Community() {
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="w-full mx-auto">
+        <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
+          <div className="mb-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
                 <ActivityIcon className="w-6 h-6 text-white dark:text-black" />
@@ -242,7 +242,7 @@ export default function Community() {
           </div>
 
           {/* Content */}
-          <div className="p-4 space-y-4">
+          <div className="space-y-4">
             {/* Beta Badge */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <div className="flex items-start gap-3">

@@ -100,31 +100,27 @@ export default function ProfileInformation() {
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="w-full mx-auto">
+        <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
+          <div className="mb-6">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/profile')}
+              className="flex-shrink-0 mb-4"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
             <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate('/profile')}
-                className="flex-shrink-0"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
-                    <Activity className="w-6 h-6 text-white dark:text-black" />
-                  </div>
-                <AppHeader />
-                </div>
+              <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
+                <Activity className="w-6 h-6 text-white dark:text-black" />
               </div>
+              <AppHeader />
             </div>
           </div>
 
           {/* Content */}
-          <div className="p-4">
+          <div>
             <h2 className="text-2xl font-bold mb-4">Profile Information</h2>
 
             <Card className="shadow-card mb-6">
