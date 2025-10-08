@@ -167,7 +167,7 @@ export default function FoodPreferences() {
 
           {/* Content */}
           <div className="p-4">
-            <h2 className="text-2xl font-bold mb-4">Food Preferences</h2>
+            <h2 className="text-xl font-bold text-foreground mb-4">Food Preferences</h2>
             
             {/* Info Box */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">

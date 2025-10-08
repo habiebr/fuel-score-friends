@@ -97,7 +97,7 @@ export default function ProfileNew() {
                   <UserIcon className="w-8 h-8 text-white dark:text-black" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-semibold truncate">
+                  <h2 className="text-xl font-bold text-foreground truncate">
                     {profile?.full_name || 'Alex Runner'}
                   </h2>
                   <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
@@ -129,7 +129,7 @@ export default function ProfileNew() {
                         <Icon className="w-6 h-6" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-base leading-tight">{item.title}</h3>
+                        <h3 className="text-lg font-semibold text-foreground leading-tight">{item.title}</h3>
                         <p className="text-sm text-muted-foreground mt-0.5">{item.subtitle}</p>
                       </div>
                       <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
@@ -141,7 +141,7 @@ export default function ProfileNew() {
           </div>
 
           {/* Account Section */}
-          <h2 className="text-xl font-bold mb-3">Account</h2>
+          <h2 className="text-xl font-bold text-foreground mb-3">Account</h2>
           <div className="space-y-3">
             <Card className="shadow-card">
               <CardContent className="p-6">

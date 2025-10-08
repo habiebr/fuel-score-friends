@@ -81,7 +81,7 @@ export default function AppIntegrations() {
                 <Activity className="w-6 h-6 text-white dark:text-black" />
               </div>
               <div>
-                <h1 className="text-xl font-bold leading-tight">App Integrations</h1>
+                <h1 className="text-2xl font-bold text-foreground">App Integrations</h1>
               </div>
             </div>
           </div>
@@ -90,7 +90,7 @@ export default function AppIntegrations() {
           <div className="space-y-4">
             {/* App Integrations Section */}
             <div>
-              <h2 className="text-xl font-bold mb-2">App Integrations</h2>
+              <h2 className="text-xl font-bold text-foreground mb-2">App Integrations</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Connect with fitness apps to sync your training data
               </p>
@@ -103,7 +103,7 @@ export default function AppIntegrations() {
                       <Activity className="w-6 h-6" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-base">Google Fit</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Google Fit</h3>
                       <p className="text-sm text-muted-foreground">
                         {isConnected ? (syncLabel || 'Connected') : 'Not connected'}
                       </p>
@@ -129,7 +129,7 @@ export default function AppIntegrations() {
 
             {/* Privacy & Data Section */}
             <div>
-              <h2 className="text-xl font-bold mb-2">Privacy & Data</h2>
+              <h2 className="text-xl font-bold text-foreground mb-2">Privacy & Data</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Control how your data is used and shared
               </p>

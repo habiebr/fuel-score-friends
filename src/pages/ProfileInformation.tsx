@@ -121,7 +121,7 @@ export default function ProfileInformation() {
 
           {/* Content */}
           <div>
-            <h2 className="text-2xl font-bold mb-4">Profile Information</h2>
+            <h2 className="text-xl font-bold text-foreground mb-4">Profile Information</h2>
 
             <Card className="shadow-card mb-6">
               <CardContent className="p-6 space-y-4">

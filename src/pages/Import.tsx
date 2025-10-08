@@ -36,7 +36,7 @@ export default function Import() {
             <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <Activity className="w-8 h-8 text-primary" />
             </div>
-            <h2 className="text-2xl font-bold mb-3">Connect Google Fit</h2>
+            <h2 className="text-xl font-bold text-foreground mb-3">Connect Google Fit</h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Automatically sync your steps, calories burned, active minutes, and heart rate data from Google Fit.
             </p>

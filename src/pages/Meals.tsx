@@ -749,7 +749,7 @@ export default function Meals() {
                 {aiPlan && (
                   <Card className="shadow-card">
                     <CardContent className="p-6">
-                      <h3 className="font-semibold text-base mb-3">AI Meal Plan (Today)</h3>
+                      <h3 className="text-lg font-semibold text-foreground mb-3">AI Meal Plan (Today)</h3>
                       {['breakfast','lunch','dinner','snack'].map((m) => aiPlan[m] ? (
                         <div key={m} className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
                           <div className="flex items-center justify-between mb-2">
@@ -795,7 +795,7 @@ export default function Meals() {
                     <CardContent className="p-6">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-lg mb-1">{recipe.name}</h3>
+                          <h3 className="text-lg font-semibold text-foreground mb-1">{recipe.name}</h3>
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                             {recipe.tags.slice(0, 2).map((tag) => (
                               <span key={tag} className="text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 rounded-full capitalize">
