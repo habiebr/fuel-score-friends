@@ -147,6 +147,15 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
           profile,
           load,
           date: dateStr
+        },
+        headers: async () => {
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData?.session?.access_token;
+            return token
+              ? { Authorization: `Bearer ${token}` }
+              : {};
+          } catch { return {}; }
         }
       });
 
