@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.generate-nutrition-suggestions]
 verify_jwt = false
+
+[functions.refresh-expiring-google-tokens]
+verify_jwt = false

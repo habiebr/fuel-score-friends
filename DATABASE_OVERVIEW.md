@@ -179,8 +179,8 @@ This project uses **Supabase (PostgreSQL)** with a comprehensive fitness and nut
 - `update_*_updated_at` - Updates timestamps on record changes
 
 ### **Scheduled Jobs:**
-- **Daily nutrition generation** at 6 AM UTC via `pg_cron`
-- Calls `generate-daily-nutrition` Supabase function
+- **Daily nutrition generation** at 6 AM UTC via `pg_cron`, calling the `generate-daily-nutrition` edge function.
+- **Google Fit token refresh** every 10 minutes via `pg_cron`, posting to `refresh-expiring-google-tokens` so access tokens stay warm without user interaction.
 
 ---
 

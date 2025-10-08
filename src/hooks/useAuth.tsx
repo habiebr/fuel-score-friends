@@ -236,40 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return accessToken;
         }
       } catch (dbError) {
-        console.warn('Database refresh failed, trying local refresh:', dbError);
-        
-        // Fallback to local refresh using stored refresh token
-        const refreshToken = localStorage.getItem(GOOGLE_REFRESH_KEY);
-        if (!refreshToken) {
-          console.error('No refresh token available for local refresh');
-          throw new Error('No refresh token available');
-        }
-
-        const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-            client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
-            refresh_token: refreshToken,
-            grant_type: 'refresh_token',
-          }),
-        });
-
-        if (!refreshResponse.ok) {
-          const errorText = await refreshResponse.text();
-          console.error('Google OAuth refresh failed:', errorText);
-          throw new Error(`OAuth refresh failed: ${errorText}`);
-        }
-
-        const tokenData = await refreshResponse.json();
-        const newExpiresAt = Date.now() + (tokenData.expires_in * 1000);
-        
-        persistTokensToStorage(tokenData.access_token, tokenData.refresh_token || refreshToken, newExpiresAt);
-        console.log(`Google Fit token refreshed successfully via OAuth, expires at: ${new Date(newExpiresAt).toISOString()}`);
-        return tokenData.access_token;
+        console.warn('Database refresh failed (no custom local OAuth fallback).', dbError);
       }
 
       console.warn('No access token received from refresh response');
@@ -364,7 +331,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return refreshedToken;
     }
 
-    console.warn('Failed to refresh Google Fit token, using stored token if available');
+    console.warn('Failed to refresh Google Fit token via function, using stored token if available');
     return storedToken || null;
   };
 
