@@ -15,7 +15,7 @@ import { WeeklyScoreCard } from '@/components/WeeklyScoreCard';
 import { getTodayScore, getWeeklyScorePersisted } from '@/services/score.service';
 import { TodayMealScoreCard } from '@/components/TodayMealScoreCard';
 import { TodayNutritionCard } from '@/components/TodayNutritionCard';
-import { WeeklyMilesCard } from '@/components/WeeklyMilesCard';
+import { WeeklyKilometersCard } from '@/components/WeeklyMilesCard';
 import { UpcomingWorkouts } from '@/components/UpcomingWorkouts';
 import { TodayInsightsCard } from '@/components/TodayInsightsCard';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
@@ -691,9 +691,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
         </div>
 
-        {/* 5. Weekly Miles */}
+        {/* 5. Weekly Kilometers */}
         <div className="mb-4">
-          <WeeklyMilesCard
+          <WeeklyKilometersCard
             current={weeklyGoogleFitData.current}
             target={weeklyGoogleFitData.target}
           />

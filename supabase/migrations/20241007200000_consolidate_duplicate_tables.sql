@@ -132,7 +132,7 @@ BEGIN
         COUNT(DISTINCT fl.id) as total_meals_logged,
         COUNT(DISTINCT ns.date) as days_with_scores,
         AVG(ns.daily_score) as avg_nutrition_score,
-        SUM(COALESCE(gf.distance_meters, 0)) / 1609.34 as total_miles
+        SUM(COALESCE(gf.distance_meters, 0)) / 1000 as total_kilometers
       FROM public.profiles p
       LEFT JOIN public.food_logs fl ON fl.user_id = p.user_id
       LEFT JOIN public.nutrition_scores ns ON ns.user_id = p.user_id
@@ -147,7 +147,7 @@ BEGIN
         COUNT(DISTINCT fl.id) as total_meals_logged,
         COUNT(DISTINCT ns.date) as days_with_scores,
         AVG(ns.daily_score) as avg_nutrition_score,
-        SUM(COALESCE(gf.distance_meters, 0)) / 1609.34 as total_miles
+        SUM(COALESCE(gf.distance_meters, 0)) / 1000 as total_kilometers
       FROM public.profiles p
       LEFT JOIN public.food_logs fl ON fl.user_id = p.user_id
       LEFT JOIN public.nutrition_scores ns ON ns.user_id = p.user_id

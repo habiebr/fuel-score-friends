@@ -14,8 +14,8 @@ interface LeaderboardEntry {
   user_id: string;
   full_name: string;
   location: string;
-  total_miles: number;
-  weekly_miles: number;
+  total_kilometers: number;
+  weekly_kilometers: number;
   nutrition_score: number;
   rank: number;
   composite_score: number;
@@ -116,11 +116,11 @@ export default function Community() {
         const fitDataArr = (fitData as any[]) || [];
         const userFitData = fitDataArr.filter(f => f.user_id === userId);
         const weeklyMeters = userFitData.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
-        const weeklyMiles = Math.round(weeklyMeters / 1609.34);
+        const weeklyKilometers = Math.round(weeklyMeters / 1000);
         const fitYearArr = (fitYear as any[]) || [];
         const userFitYear = fitYearArr.filter(f => f.user_id === userId);
         const yearMeters = userFitYear.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
-        const totalMiles = Math.round(yearMeters / 1609.34); // cumulative miles over last year
+        const totalKilometers = Math.round(yearMeters / 1000); // cumulative kilometers over last year
 
         // Generate display name: use full_name or show as "Anonymous Runner"
         const displayName = profile.full_name || `Runner ${userId.substring(0, 4)}`;
@@ -129,8 +129,8 @@ export default function Community() {
           user_id: userId,
           full_name: displayName,
           location: 'New York, NY', // Placeholder: should be from profile
-          total_miles: totalMiles,
-          weekly_miles: weeklyMiles,
+          total_kilometers: totalKilometers,
+          weekly_kilometers: weeklyKilometers,
           nutrition_score: avgScore,
           rank: 0,
           composite_score: 0 // Will calculate next
@@ -139,16 +139,16 @@ export default function Community() {
 
       console.log(`Processed ${userStats.length} user stats`);
 
-      // Calculate composite score (60% nutrition, 40% miles-based)
+      // Calculate composite score (60% nutrition, 40% kilometers-based)
       // Normalize both metrics to 0-100 scale
-      const maxMiles = Math.max(...userStats.map(u => u.total_miles), 1);
+      const maxKilometers = Math.max(...userStats.map(u => u.total_kilometers), 1);
       userStats.forEach(entry => {
-        const normalizedMiles = (entry.total_miles / maxMiles) * 100;
+        const normalizedKilometers = (entry.total_kilometers / maxKilometers) * 100;
         const normalizedNutrition = entry.nutrition_score;
         
-        // Composite score: 60% nutrition (more important) + 40% miles
+        // Composite score: 60% nutrition (more important) + 40% kilometers
         // If both are 0, give a small base score to show in leaderboard
-        entry.composite_score = (normalizedNutrition * 0.6) + (normalizedMiles * 0.4);
+        entry.composite_score = (normalizedNutrition * 0.6) + (normalizedKilometers * 0.4);
       });
 
       // Sort by composite score (both nutrition and miles) and assign ranks
@@ -161,8 +161,8 @@ export default function Community() {
         if (b.nutrition_score !== a.nutrition_score) {
           return b.nutrition_score - a.nutrition_score;
         }
-        // If still tied, sort by miles
-        return b.total_miles - a.total_miles;
+        // If still tied, sort by kilometers
+        return b.total_kilometers - a.total_kilometers;
       });
       
       userStats.forEach((entry, index) => {
@@ -174,7 +174,7 @@ export default function Community() {
         name: u.full_name,
         user_id: u.user_id.substring(0, 8),
         score: u.nutrition_score,
-        miles: u.total_miles,
+        kilometers: u.total_kilometers,
         composite: u.composite_score.toFixed(2)
       })));
 
@@ -318,16 +318,16 @@ export default function Community() {
                       </div>
                       <div className="grid grid-cols-3 gap-4 text-center">
                         <div>
-                          <div className="text-2xl font-bold">{userRank.total_miles}</div>
-                          <div className="text-xs text-muted-foreground">Total Miles</div>
+                          <div className="text-2xl font-bold">{userRank.total_kilometers}</div>
+                          <div className="text-xs text-muted-foreground">Total Kilometers</div>
                         </div>
                         <div>
                           <div className="text-2xl font-bold text-orange-500">{userRank.nutrition_score}</div>
                           <div className="text-xs text-muted-foreground">Nutrition Score</div>
                         </div>
                         <div>
-                          <div className="text-2xl font-bold">{userRank.weekly_miles}</div>
-                          <div className="text-xs text-muted-foreground">Day Streak</div>
+                          <div className="text-2xl font-bold">{userRank.weekly_kilometers}</div>
+                          <div className="text-xs text-muted-foreground">This Week</div>
                         </div>
                       </div>
                     </CardContent>
@@ -407,10 +407,10 @@ export default function Community() {
 
                           {/* Stats */}
                           <div className="text-right flex-shrink-0">
-                            <div className="font-bold">{entry.total_miles} mi</div>
+                            <div className="font-bold">{entry.total_kilometers} km</div>
                             <div className="text-xs text-muted-foreground flex items-center justify-end gap-1">
                               <ActivityIcon className="w-3 h-3" />
-                              {entry.weekly_miles} mi this week
+                              {entry.weekly_kilometers} km this week
                             </div>
                           </div>
 

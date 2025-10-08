@@ -2,12 +2,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Activity } from 'lucide-react';
 
-interface WeeklyMilesCardProps {
+interface WeeklyKilometersCardProps {
   current: number;
   target: number;
 }
 
-export function WeeklyMilesCard({ current, target }: WeeklyMilesCardProps) {
+export function WeeklyKilometersCard({ current, target }: WeeklyKilometersCardProps) {
   const percentage = Math.round((current / target) * 100);
 
   return (
@@ -16,7 +16,7 @@ export function WeeklyMilesCard({ current, target }: WeeklyMilesCardProps) {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5 text-muted-foreground" />
-            <h3 className="font-semibold text-base text-foreground">Weekly Miles</h3>
+            <h3 className="font-semibold text-base text-foreground">Weekly Kilometers</h3>
           </div>
           <Badge variant="secondary" className="border border-border/40 bg-muted/40 text-foreground">
             {percentage}%
@@ -28,7 +28,7 @@ export function WeeklyMilesCard({ current, target }: WeeklyMilesCardProps) {
             {current.toFixed(1)}
           </div>
           <div className="pb-2 text-sm text-muted-foreground">
-            of {target} miles
+            of {target} km
           </div>
         </div>
 

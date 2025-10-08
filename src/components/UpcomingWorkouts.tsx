@@ -68,7 +68,7 @@ export function UpcomingWorkouts({ workouts = [], preRunMeal }: UpcomingWorkouts
                   </div>
                   {nextWorkout.distance && (
                     <Badge variant="outline" className="text-sm">
-                      {nextWorkout.distance} miles
+                      {nextWorkout.distance} km
                     </Badge>
                   )}
                 </div>

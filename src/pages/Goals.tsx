@@ -544,10 +544,10 @@ export default function Goals() {
                       <SelectValue placeholder="Select your target race distance or event" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="5k">5K (3.1 miles)</SelectItem>
-                      <SelectItem value="10k">10K (6.2 miles)</SelectItem>
-                      <SelectItem value="half_marathon">Half Marathon (13.1 miles)</SelectItem>
-                      <SelectItem value="full_marathon">Full Marathon (26.2 miles)</SelectItem>
+                      <SelectItem value="5k">5K (5 km)</SelectItem>
+                      <SelectItem value="10k">10K (10 km)</SelectItem>
+                      <SelectItem value="half_marathon">Half Marathon (21.1 km)</SelectItem>
+                      <SelectItem value="full_marathon">Full Marathon (42.2 km)</SelectItem>
                       <SelectItem value="ultra">Ultra Marathon (50K+)</SelectItem>
                       <SelectItem value="custom">Custom Race/Event</SelectItem>
                     </SelectContent>
