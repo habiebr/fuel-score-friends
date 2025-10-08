@@ -215,18 +215,16 @@ export function useGoogleFitSync() {
           return await res.json();
         };
 
-        const [stepsData, caloriesData, activeMinutesData, distanceData, heartRateData] = await Promise.all([
+        const [stepsData, caloriesData, activeMinutesData, heartRateData] = await Promise.all([
           aggregate('com.google.step_count.delta'),
           aggregate('com.google.calories.expended'),
           aggregate('com.google.active_minutes'),
-          aggregate('com.google.distance.delta'),
           aggregate('com.google.heart_rate.bpm').catch(() => null)
         ]);
 
         const steps = stepsData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
         const caloriesBurned = caloriesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
         const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-        const distanceMeters = distanceData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
         const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
 
         const sessionsRes = await fetch(
@@ -244,13 +242,61 @@ export function useGoogleFitSync() {
           sessions = sessionsData.session || [];
         }
 
+        // Filter sessions to only include running/sport activities (exclude walking)
+        const exerciseActivities = ['running', 'jogging', 'cycling', 'biking', 'swimming', 'hiking', 'elliptical', 'rowing', 'soccer', 'basketball', 'tennis', 'volleyball', 'golf', 'skiing', 'snowboarding', 'skating', 'dancing', 'aerobics', 'strength_training', 'weight_lifting', 'crossfit', 'yoga', 'pilates', 'martial_arts', 'boxing', 'kickboxing', 'climbing', 'rock_climbing', 'surfing', 'kayaking', 'canoeing', 'rowing', 'triathlon', 'duathlon', 'athletics', 'track_and_field'];
+        
+        const filteredSessions = sessions.filter((session: any) => {
+          const activityType = (session.activityType || session.activityTypeId || session.activity || '').toLowerCase();
+          return exerciseActivities.some(activity => activityType.includes(activity));
+        });
+
+        // Calculate distance only from exercise activities
+        let exerciseDistanceMeters = 0;
+        if (filteredSessions.length > 0) {
+          // Get detailed data for each exercise session to calculate distance
+          for (const session of filteredSessions) {
+            try {
+              const sessionStartTime = new Date(Number(session.startTimeMillis));
+              const sessionEndTime = new Date(Number(session.endTimeMillis));
+              
+              const sessionDistanceRes = await fetch(
+                "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate",
+                {
+                  method: "POST",
+                  headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    aggregateBy: [{ dataTypeName: 'com.google.distance.delta' }],
+                    bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
+                    startTimeMillis: sessionStartTime.getTime(),
+                    endTimeMillis: sessionEndTime.getTime(),
+                    filter: [{
+                      dataSourceId: session.dataSourceId || undefined
+                    }].filter(f => f.dataSourceId)
+                  }),
+                }
+              );
+              
+              if (sessionDistanceRes.ok) {
+                const sessionDistanceData = await sessionDistanceRes.json();
+                const sessionDistance = sessionDistanceData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
+                exerciseDistanceMeters += sessionDistance;
+              }
+            } catch (error) {
+              console.warn('Failed to get distance for session:', error);
+            }
+          }
+        }
+
         const googleFitData: GoogleFitData = {
           steps,
           caloriesBurned,
           activeMinutes,
-          distanceMeters,
+          distanceMeters: exerciseDistanceMeters, // Use exercise-only distance
           heartRateAvg,
-          sessions
+          sessions: filteredSessions // Use filtered sessions
         };
 
         const { error: upsertErr } = await (supabase as any)
@@ -261,17 +307,17 @@ export function useGoogleFitSync() {
             steps,
             calories_burned: caloriesBurned,
             active_minutes: activeMinutes,
-            distance_meters: distanceMeters,
+            distance_meters: exerciseDistanceMeters, // Use exercise-only distance
             heart_rate_avg: heartRateAvg,
-            sessions,
+            sessions: filteredSessions, // Use filtered sessions
             last_synced_at: new Date().toISOString(),
             sync_source: 'google_fit'
           }, { onConflict: 'user_id,date' });
         if (upsertErr) throw upsertErr;
 
         try {
-          if (Array.isArray(sessions) && sessions.length > 0) {
-            const mapped = sessions.map((s: any) => ({
+          if (Array.isArray(filteredSessions) && filteredSessions.length > 0) {
+            const mapped = filteredSessions.map((s: any) => ({
               user_id: user.id,
               session_id: String(s.id || `${s.startTimeMillis}-${s.endTimeMillis}`),
               start_time: s.startTimeMillis ? new Date(Number(s.startTimeMillis)).toISOString() : new Date().toISOString(),
