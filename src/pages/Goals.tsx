@@ -264,10 +264,14 @@ export default function Goals() {
       };
       base.estimated_calories = calculateCalories(base);
       next[dateStr] = [...(next[dateStr] || []), base];
+      
+      // Set the editor to the newly added activity
+      const newIndex = (next[dateStr]?.length || 1) - 1;
+      setExpandedEditor({ date: dateStr, index: newIndex });
+      
+      console.log('Added activity:', base, 'at index:', newIndex);
       return next;
     });
-    const idx = (activitiesByDate[dateStr]?.length || 0);
-    setExpandedEditor({ date: dateStr, index: idx });
   };
 
   const updateActivity = (
@@ -279,14 +283,24 @@ export default function Goals() {
       const next = { ...prev };
       const list = [...(next[dateStr] || [])];
       const current = list[index];
-      if (!current) return next;
+      if (!current) {
+        console.error('Activity not found at index', index, 'for date', dateStr);
+        return next;
+      }
+      
       const updated =
         typeof patch === 'function'
           ? patch(current)
           : ({ ...current, ...patch } as TrainingActivity);
+      
+      // Recalculate calories after update
       updated.estimated_calories = calculateCalories(updated);
+      
+      // Update the activity in the list
       list[index] = updated;
       next[dateStr] = list;
+      
+      console.log('Updated activity:', updated);
       return next;
     });
   };
@@ -295,8 +309,27 @@ export default function Goals() {
     setActivitiesByDate((prev) => {
       const next = { ...prev };
       next[dateStr] = (next[dateStr] || []).filter((_, i) => i !== index);
+      
+      // Close editor if we're removing the currently edited activity
+      if (expandedEditor && expandedEditor.date === dateStr && expandedEditor.index === index) {
+        setExpandedEditor(null);
+      }
+      
+      console.log('Removed activity at index:', index, 'for date:', dateStr);
       return next;
     });
+  };
+
+  const handleEditActivity = (dateStr: string, index: number) => {
+    console.log('Edit button clicked for date:', dateStr, 'index:', index);
+    console.log('Current activities for date:', activitiesByDate[dateStr]);
+    console.log('Activity at index:', activitiesByDate[dateStr]?.[index]);
+    
+    setExpandedEditor({ date: dateStr, index });
+  };
+
+  const handleCloseEditor = () => {
+    console.log('Closing editor');
     setExpandedEditor(null);
   };
 
@@ -661,6 +694,15 @@ export default function Goals() {
                           {list.map((a, i) => {
                             const uiType = deriveUiActivityType(a);
                             const isExpanded = expandedEditor && expandedEditor.date === key && expandedEditor.index === i;
+                            
+                            console.log(`Activity ${i} for ${key}:`, {
+                              activity: a,
+                              uiType,
+                              isExpanded,
+                              expandedEditor,
+                              currentDate: key,
+                              currentIndex: i
+                            });
                             const metrics =
                               uiType === 'rest'
                                 ? 'Recovery focus'
@@ -691,7 +733,7 @@ export default function Goals() {
                                         variant="ghost"
                                         size="sm"
                                         className="h-7 px-2"
-                                        onClick={() => setExpandedEditor({ date: key, index: i })}
+                                        onClick={() => handleEditActivity(key, i)}
                                       >
                                         Edit
                                       </Button>
@@ -812,7 +854,7 @@ export default function Goals() {
                                           variant="ghost"
                                           size="sm"
                                           className="h-8 px-2"
-                                          onClick={() => setExpandedEditor(null)}
+                                          onClick={handleCloseEditor}
                                         >
                                           Done
                                         </Button>
