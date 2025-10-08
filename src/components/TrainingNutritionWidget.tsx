@@ -15,6 +15,7 @@ import {
   CheckCircle, 
   AlertCircle
 } from 'lucide-react';
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { format, addDays, isToday, isTomorrow, isYesterday } from 'date-fns';
 
 // Import unified engine types and functions
@@ -105,7 +106,7 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
     calories: number;
   }>({ carbs: 0, protein: 0, fat: 0, calories: 0 });
   const [dayTarget, setDayTarget] = useState<DayTarget | null>(null);
-  const [actualTrainingData, setActualTrainingData] = useState<any>(null);
+  const [actualTrainingData, setActualTrainingData] = useState<any | any[] | null>(null);
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const todayActivities = activities.filter(a => a.date === dateStr);
@@ -192,7 +193,7 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
         .order('start_time', { ascending: false });
 
       if (data && data.length > 0) {
-        setActualTrainingData(data[0]);
+        setActualTrainingData(data);
         setRecentWorkout(data[0]);
       }
     };
@@ -238,18 +239,19 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
       let trainingLoad: TrainingLoad;
       let activity = todayActivities[0];
       
-      if (actualTrainingData) {
+      if (Array.isArray(actualTrainingData) ? actualTrainingData.length > 0 : !!actualTrainingData) {
         // Use actual training data
+        const first = Array.isArray(actualTrainingData) ? actualTrainingData[0] : actualTrainingData;
         const actualActivity: TrainingActivity = {
-          id: actualTrainingData.id,
+          id: first.id,
           date: dateStr,
-          activity_type: actualTrainingData.activity_type || 'run',
-          start_time: actualTrainingData.start_time ? format(new Date(actualTrainingData.start_time), 'HH:mm') : null,
-          duration_minutes: actualTrainingData.duration_minutes || 30,
-          distance_km: actualTrainingData.distance_km || null,
-          intensity: actualTrainingData.intensity || 'moderate',
-          estimated_calories: actualTrainingData.calories_burned || 300,
-          notes: actualTrainingData.description || null
+          activity_type: first.activity_type || 'run',
+          start_time: first.start_time ? format(new Date(first.start_time), 'HH:mm') : null,
+          duration_minutes: first.duration_minutes || 30,
+          distance_km: first.distance_km || null,
+          intensity: first.intensity || 'moderate',
+          estimated_calories: first.calories_burned || 300,
+          notes: first.description || null
         };
         activity = actualActivity;
         trainingLoad = determineTrainingLoad(actualActivity);
@@ -436,6 +438,43 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
   };
 
 
+  const renderSessionMetrics = (s: any) => {
+    const isRun = String(s.activity_type || '').toLowerCase().includes('run');
+    const computedDuration = (() => {
+      if (typeof s.duration_minutes === 'number' && s.duration_minutes > 0) return s.duration_minutes;
+      try {
+        const start = s.start_time ? new Date(s.start_time).getTime() : (s.startTimeMillis ? Number(s.startTimeMillis) : 0);
+        const end = s.end_time ? new Date(s.end_time).getTime() : (s.endTimeMillis ? Number(s.endTimeMillis) : 0);
+        if (end > start) return Math.max(1, Math.round((end - start) / 60000));
+      } catch {}
+      return 0;
+    })();
+    const computedDistanceKm = (() => {
+      if (typeof s.distance_km === 'number' && s.distance_km > 0) return s.distance_km;
+      const meters = s.distance_meters || s.distanceMeters || s.raw?.distance_meters || s.raw?.distanceMeters;
+      if (typeof meters === 'number' && meters > 0) return Math.round((meters / 1000) * 10) / 10;
+      return null;
+    })();
+    const hasKm = isRun && typeof computedDistanceKm === 'number' && computedDistanceKm > 0;
+    const primaryValue = hasKm ? `${computedDistanceKm} km` : `${computedDuration} min`;
+    const primaryLabel = hasKm ? 'distance' : 'duration';
+    return (
+      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <span className="font-semibold text-foreground">{primaryValue}</span>
+          <span>{primaryLabel}</span>
+        </div>
+        {typeof s.calories_burned === 'number' && (
+          <div className="flex items-center gap-1">
+            <span className="font-semibold text-foreground">{s.calories_burned}</span>
+            <span>kcal</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+
   if (isRestDay) {
     return (
       <Card className="shadow-card">
@@ -480,24 +519,59 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
           <div className="flex items-center gap-2 mb-2">
             <Activity className="h-4 w-4 text-primary" />
             <span className="font-medium text-primary">
-              {actualTrainingData ? 'Actual Training' : 'Planned Training'}
+              {Array.isArray(actualTrainingData) ? 'Actual Training' : (actualTrainingData ? 'Actual Training' : 'Planned Training')}
             </span>
-            {actualTrainingData && (
+            { (Array.isArray(actualTrainingData) ? actualTrainingData.length>0 : !!actualTrainingData) && (
               <Badge variant="secondary" className="text-xs">Live Data</Badge>
             )}
           </div>
-          {todayActivities.map((activity, index) => (
-            <div key={index} className="text-sm">
-              <p className="font-medium capitalize">{activity.activity_type}</p>
-              <p className="text-muted-foreground">
-                {activity.duration_minutes} min • {activity.intensity} intensity
-                {activity.distance_km && ` • ${activity.distance_km}km`}
-                {actualTrainingData && (
-                  <span className="text-green-600 ml-2">✓ Completed</span>
-                )}
-              </p>
+          {/* If 2 or more actual sessions, show a carousel; if 1, list it */}
+          {Array.isArray(actualTrainingData) && actualTrainingData.length >= 2 ? (
+            <div className="relative">
+              <Carousel className="w-full">
+                <CarouselContent>
+                  {actualTrainingData.map((s: any, idx: number) => (
+                    <CarouselItem key={idx}>
+                      <div className="text-sm p-2 rounded-md bg-background/60 border">
+                        <p className="font-medium capitalize">{s.activity_type || 'run'}</p>
+                        {renderSessionMetrics(s)}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {(s.intensity || 'moderate')} intensity
+                          <span className="text-green-600 ml-2">✓ Completed</span>
+                        </p>
+                      </div>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                <CarouselPrevious className="-left-2" />
+                <CarouselNext className="-right-2" />
+              </Carousel>
             </div>
-          ))}
+          ) : Array.isArray(actualTrainingData) && actualTrainingData.length === 1 ? (
+            actualTrainingData.map((s: any, idx: number) => (
+              <div key={idx} className="text-sm">
+                <p className="font-medium capitalize">{s.activity_type || 'run'}</p>
+                {renderSessionMetrics(s)}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(s.intensity || 'moderate')} intensity
+                  <span className="text-green-600 ml-2">✓ Completed</span>
+                </p>
+              </div>
+            ))
+          ) : (
+            todayActivities.map((activity, index) => (
+              <div key={index} className="text-sm">
+                <p className="font-medium capitalize">{activity.activity_type}</p>
+                <p className="text-muted-foreground">
+                  {activity.duration_minutes} min • {activity.intensity} intensity
+                  {activity.distance_km && ` • ${activity.distance_km}km`}
+                  {(Array.isArray(actualTrainingData) ? actualTrainingData.length>0 : !!actualTrainingData) && (
+                    <span className="text-green-600 ml-2">✓ Completed</span>
+                  )}
+                </p>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Nutrition Recommendations */}
@@ -586,20 +660,18 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
                )}
 
                {/* Recent Workout Recovery */}
-               {recentWorkout && (
-                 <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                   <div className="flex items-center gap-2 mb-2">
-                     <CheckCircle className="h-4 w-4 text-green-600" />
-                     <span className="font-medium text-green-800 dark:text-green-200">Recent Workout Detected</span>
-                   </div>
-                   <p className="text-sm text-green-700 dark:text-green-300 mb-2">
-                     {recentWorkout.activity_type} • {format(new Date(recentWorkout.start_time), 'MMM dd, HH:mm')}
-                   </p>
-                   <p className="text-xs text-green-600 dark:text-green-400">
-                     Focus on post-workout recovery nutrition above
-                   </p>
-                 </div>
-               )}
+              {recentWorkout && (
+                <div className="flex items-center justify-between rounded-lg border bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 px-3 py-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                    <span className="font-medium text-green-800 dark:text-green-200">Recent Workout</span>
+                    <span className="text-green-700 dark:text-green-300">
+                      {recentWorkout.activity_type} • {format(new Date(recentWorkout.start_time), 'MMM dd, HH:mm')}
+                    </span>
+                  </div>
+                  <span className="text-green-600/80">Recovery tips above</span>
+                </div>
+              )}
       </CardContent>
     </Card>
   );

@@ -83,11 +83,15 @@ export function usePWA() {
 
   const enablePushNotifications = async () => {
     try {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') return false;
-
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return false;
+      // Ensure SW is registered (vite-plugin-pwa registers automatically in prod)
       const reg = await navigator.serviceWorker.ready;
+      // Trigger OS permission prompt if needed
+      let permission: NotificationPermission = Notification.permission;
+      if (permission === 'default') {
+        permission = await Notification.requestPermission();
+      }
+      if (permission !== 'granted') return false;
       // Fetch VAPID public key from Edge Function
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       const res = await fetch('/functions/v1/push-config', {
@@ -113,6 +117,14 @@ export function usePWA() {
       });
 
       setNotificationsEnabled(true);
+      // Optional: show a confirmation notification to surface native banner in some browsers
+      try {
+        reg.showNotification('Notifications enabled', {
+          body: 'You will receive training and nutrition alerts.',
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
+        });
+      } catch {}
       return true;
     } catch (e) {
       console.error('Enable push failed', e);

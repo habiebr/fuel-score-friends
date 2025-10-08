@@ -126,6 +126,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
 
         persistGoogleTokens(session as ProviderSession);
+
+        // Attempt to prompt OS notification permission shortly after login
+        try {
+          if (session?.user && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+            setTimeout(async () => {
+              try {
+                // Ensure SW is ready to make the permission meaningful for PWA
+                if ('serviceWorker' in navigator) {
+                  try { await navigator.serviceWorker.ready; } catch {}
+                }
+                await Notification.requestPermission();
+              } catch {}
+            }, 1000);
+          }
+        } catch {}
       }
     );
 
@@ -140,8 +155,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [persistGoogleTokens]);
 
+  const resolveRedirectUrl = () => {
+    const envUrl = (import.meta as any).env?.VITE_SUPABASE_REDIRECT_URL as string | undefined;
+    if (envUrl && envUrl.trim().length > 0) return envUrl;
+    // Force cursor branch deployments to use Pages cursor alias
+    const isCursorHost = typeof window !== 'undefined' && window.location.hostname.includes('cursor.nutrisync.pages.dev');
+    if (isCursorHost) return 'https://cursor.nutrisync.pages.dev/';
+    return `${window.location.origin}/`;
+  };
+
   const signUp = async (email: string, password: string) => {
-    const redirectUrl = (import.meta as any).env?.VITE_SUPABASE_REDIRECT_URL || `${window.location.origin}/`;
+    const redirectUrl = resolveRedirectUrl();
     
     const { error } = await supabase.auth.signUp({
       email,
@@ -253,7 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [persistTokensToStorage, user?.id]);
 
   const signInWithGoogle = async () => {
-    const redirectUrl = (import.meta as any).env?.VITE_SUPABASE_REDIRECT_URL || `${window.location.origin}/`;
+    const redirectUrl = resolveRedirectUrl();
     const scopes = [
       'https://www.googleapis.com/auth/fitness.activity.read',
       'https://www.googleapis.com/auth/fitness.body.read',

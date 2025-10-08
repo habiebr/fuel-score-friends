@@ -385,12 +385,7 @@ export function Dashboard3({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         <div className="mb-6 pt-2">
           <div className="flex items-center justify-between">
             <PageHeading title="Dashboard 3" description="Your nutrition and training overview" icon={Home} />
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate('/profile/notifications')}>
-                <Settings className="w-4 h-4" />
-                Customize
-              </Button>
-            </div>
+            <div className="flex items-center gap-3" />
           </div>
         </div>
 

@@ -609,18 +609,7 @@ export default function Meals() {
               <Utensils className="w-4 h-4 mr-2" />
               Suggestions
             </Button>
-            <Button
-              variant={activeTab === 'training' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setActiveTab('training');
-                navigate('/goals');
-              }}
-              className="flex-shrink-0"
-            >
-              <Activity className="w-4 h-4 mr-2" />
-              Training
-            </Button>
+            {/* Training button removed per UX update */}
           </div>
         </div>
 

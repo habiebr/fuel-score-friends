@@ -191,9 +191,16 @@ export default function Profile() {
             actions={
               <div className="flex items-center gap-2">
                 {!isInstalled && (
-                  <Button variant="ghost" size="icon" onClick={handleInstallClick} title="Install App">
-                    <Download className="h-5 w-5" />
-                  </Button>
+                  <>
+                    {/* Compact icon for small screens */}
+                    <Button variant="ghost" size="icon" onClick={handleInstallClick} title="Install App" className="sm:hidden">
+                      <Download className="h-5 w-5" />
+                    </Button>
+                    {/* Visible labeled button on larger screens */}
+                    <Button variant="outline" onClick={handleInstallClick} className="hidden sm:flex items-center gap-2">
+                      <Download className="h-4 w-4" /> Install App
+                    </Button>
+                  </>
                 )}
                 <Button
                   variant="ghost"
