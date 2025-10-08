@@ -1,5 +1,6 @@
+import { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +11,7 @@ interface ScoreCardProps {
   subtitle?: string;
   className?: string;
   variant?: "default" | "success" | "warning" | "info";
-  tooltip?: string;
+  tooltip?: ReactNode;
 }
 
 export function ScoreCard({ 
@@ -49,18 +50,20 @@ export function ScoreCard({
           <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2 flex items-center justify-center gap-1">
             <span>{title}</span>
             {tooltip && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button aria-label={`${title} info`} className="text-muted-foreground hover:text-foreground">
-                      <Info className="w-3.5 h-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-xs leading-relaxed">
-                    {tooltip}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`${title} info`}
+                    className="text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-full"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="top" align="center" className="w-64 text-xs leading-relaxed">
+                  <div className="space-y-2">{tooltip}</div>
+                </PopoverContent>
+              </Popover>
             )}
           </h3>
           <div className={cn("text-2xl sm:text-4xl font-bold mb-1", getScoreColor())}>

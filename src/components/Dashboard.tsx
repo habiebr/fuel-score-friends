@@ -647,14 +647,26 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             score={todayScore} 
             subtitle="Today" 
             variant="success" 
-            tooltip="Reflects today’s fueling + training balance. Aim ≥ 70. High scores mean you’re close to targets and timing windows for today."
+            tooltip={
+              <>
+                <p className="font-semibold">🟢 Daily Score</p>
+                <p>Reflects how well you met today&apos;s nutrition and training goals.</p>
+                <p>Resets every day to track your daily balance.</p>
+              </>
+            }
           />
           <ScoreCard 
             title="Weekly Score" 
             score={weeklyScore} 
             subtitle="Mon–Sun avg" 
             variant="warning"
-            tooltip="7‑day average (Mon–Sun). Use this to track consistency. ≥ 75 = very consistent week; 60–74 = decent; < 60 = improve fueling or plan adherence."
+            tooltip={
+              <>
+                <p className="font-semibold">🟠 Weekly Score</p>
+                <p>Shows your 7-day average performance and consistency.</p>
+                <p>Higher scores mean steadier nutrition–training habits.</p>
+              </>
+            }
           />
         </div>
 
