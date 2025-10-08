@@ -286,53 +286,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const getGoogleAccessToken = async (options?: { forceRefresh?: boolean }): Promise<string | null> => {
-    const forceRefresh = options?.forceRefresh ?? false;
-    let providerToken: string | null = null;
-
+  const getGoogleAccessToken = async (): Promise<string | null> => {
     try {
       const { data } = await supabase.auth.getSession();
       const sessionLike = data?.session as ProviderSession | null;
-      if (sessionLike) {
-        persistGoogleTokens(sessionLike);
-        providerToken = sessionLike.provider_token || sessionLike.provider_access_token || null;
-      }
-    } catch (error) {
-      console.warn('Failed to obtain session for Google token', error);
+      if (!sessionLike) return null;
+      // Supabase auto-refreshes the provider access token; just read it from session
+      persistGoogleTokens(sessionLike);
+      return sessionLike.provider_token || sessionLike.provider_access_token || null;
+    } catch (e) {
+      console.warn('Failed to read provider token from session', e);
+      return null;
     }
-
-    let expiresAt: number | null = null;
-    try {
-      const expiresAtStr = localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
-      expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
-    } catch {}
-
-    const storedToken = providerToken || localStorage.getItem(GOOGLE_TOKEN_KEY);
-    const now = Date.now();
-    const timeUntilExpiry = expiresAt ? expiresAt - now : 0;
-    const minutesUntilExpiry = timeUntilExpiry / (1000 * 60);
-
-    // More aggressive refresh strategy
-    const shouldRefresh =
-      forceRefresh ||
-      !storedToken ||
-      !expiresAt ||
-      timeUntilExpiry <= TOKEN_REFRESH_BUFFER_MS ||
-      (timeUntilExpiry <= TOKEN_EXPIRY_WARNING_MS && Math.random() < 0.3); // 30% chance to refresh early
-
-    if (!shouldRefresh && storedToken) {
-      console.log(`Using cached Google Fit token (expires in ${minutesUntilExpiry.toFixed(2)} minutes)`);
-      return storedToken;
-    }
-
-    console.log(`Refreshing Google Fit token (expires in ${minutesUntilExpiry.toFixed(2)} minutes)...`);
-    const refreshedToken = await refreshGoogleAccessToken();
-    if (refreshedToken) {
-      return refreshedToken;
-    }
-
-    console.warn('Failed to refresh Google Fit token via function, using stored token if available');
-    return storedToken || null;
   };
 
   const signOut = async () => {
@@ -345,132 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {}
   };
 
-  // Startup token validation and background refresh mechanism
-  useEffect(() => {
-    if (!user) return;
-
-    const validateAndRefreshToken = async () => {
-      try {
-        const refreshToken = localStorage.getItem(GOOGLE_REFRESH_KEY);
-        if (!refreshToken) {
-          console.log('Token validation: No refresh token available');
-          return;
-        }
-
-        const expiresAtStr = localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
-        const expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
-        
-        if (!expiresAt) {
-          console.log('Token validation: No expiry time available, attempting refresh');
-          await refreshGoogleAccessToken();
-          return;
-        }
-
-        const now = Date.now();
-        const timeUntilExpiry = expiresAt - now;
-        const minutesUntilExpiry = timeUntilExpiry / (1000 * 60);
-
-        console.log(`Token validation: Token expires in ${minutesUntilExpiry.toFixed(2)} minutes`);
-
-        // Always refresh on startup if token is close to expiring
-        if (timeUntilExpiry <= TOKEN_REFRESH_BUFFER_MS) {
-          console.log('Token validation: Token is close to expiring, refreshing...');
-          await refreshGoogleAccessToken();
-        } else if (timeUntilExpiry <= TOKEN_EXPIRY_WARNING_MS) {
-          console.log('Token validation: Token will expire soon, pre-emptively refreshing...');
-          await refreshGoogleAccessToken();
-        } else {
-          console.log('Token validation: Token is still valid, no action needed');
-        }
-      } catch (error) {
-        console.error('Token validation failed:', error);
-      }
-    };
-
-    const backgroundRefresh = async () => {
-      try {
-        const refreshToken = localStorage.getItem(GOOGLE_REFRESH_KEY);
-        if (!refreshToken) {
-          console.log('Background refresh: No refresh token available');
-          return;
-        }
-
-        const expiresAtStr = localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
-        const expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
-        
-        if (!expiresAt) {
-          console.log('Background refresh: No expiry time available, attempting refresh');
-          await refreshGoogleAccessToken();
-          return;
-        }
-
-        const now = Date.now();
-        const timeUntilExpiry = expiresAt - now;
-        const minutesUntilExpiry = timeUntilExpiry / (1000 * 60);
-
-        console.log(`Background refresh: Token expires in ${minutesUntilExpiry.toFixed(2)} minutes`);
-
-        // Refresh if token expires within the buffer time
-        if (timeUntilExpiry <= TOKEN_REFRESH_BUFFER_MS) {
-          console.log('Background refresh: Token is close to expiring, refreshing...');
-          await refreshGoogleAccessToken();
-        } else if (timeUntilExpiry <= TOKEN_EXPIRY_WARNING_MS) {
-          console.log('Background refresh: Token will expire soon, preparing refresh...');
-          // Pre-emptive refresh for better reliability
-          await refreshGoogleAccessToken();
-        } else {
-          console.log('Background refresh: Token is still valid, no action needed');
-        }
-      } catch (error) {
-        console.error('Background token refresh failed:', error);
-      }
-    };
-
-    // Initial validation on startup
-    validateAndRefreshToken();
-
-    // Set up interval for background refresh
-    const interval = setInterval(backgroundRefresh, BACKGROUND_REFRESH_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [user, refreshGoogleAccessToken]);
-
-  // PWA-friendly: refresh token when app returns to foreground or regains connectivity
-  useEffect(() => {
-    if (!user) return;
-
-    const maybeRefreshOnVisibility = async () => {
-      try {
-        if (document.visibilityState !== 'visible') return;
-        const expiresAtStr = localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
-        const expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
-        if (!expiresAt) {
-          await refreshGoogleAccessToken();
-          return;
-        }
-        const timeUntilExpiry = expiresAt - Date.now();
-        if (timeUntilExpiry <= TOKEN_EXPIRY_WARNING_MS) {
-          await refreshGoogleAccessToken();
-        }
-      } catch (e) {
-        console.warn('Visibility/online refresh failed', e);
-      }
-    };
-
-    const onVisibility = () => { maybeRefreshOnVisibility(); };
-    const onFocus = () => { maybeRefreshOnVisibility(); };
-    const onOnline = () => { maybeRefreshOnVisibility(); };
-
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('online', onOnline);
-
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('online', onOnline);
-    };
-  }, [user, refreshGoogleAccessToken]);
+  // Remove custom background refresh logic; rely on Supabase session auto-refresh
 
   return (
     <AuthContext.Provider value={{
