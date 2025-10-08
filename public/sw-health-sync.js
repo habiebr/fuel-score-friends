@@ -1,6 +1,8 @@
 // Enhanced Service Worker for Health Data Sync
-const CACHE_NAME = 'nutrisync-health-v1';
+const CACHE_NAME = 'nutrisync-health-v2';
 const HEALTH_SYNC_TAG = 'health-sync';
+const NUTRITION_SYNC_TAG = 'nutrition-sync';
+const TOKEN_REFRESH_TAG = 'token-refresh';
 
 // Cache strategies
 const CACHE_STRATEGIES = {
@@ -37,9 +39,17 @@ self.addEventListener('activate', (event) => {
 
 // Background sync for health data
 self.addEventListener('sync', (event) => {
+  console.log('Background sync triggered:', event.tag);
+  
   if (event.tag === HEALTH_SYNC_TAG) {
     console.log('Background sync triggered for health data');
     event.waitUntil(performHealthSync());
+  } else if (event.tag === NUTRITION_SYNC_TAG) {
+    console.log('Background sync triggered for nutrition data');
+    event.waitUntil(performNutritionSync());
+  } else if (event.tag === TOKEN_REFRESH_TAG) {
+    console.log('Background sync triggered for token refresh');
+    event.waitUntil(performTokenRefresh());
   }
 });
 
@@ -399,5 +409,317 @@ async function sendMilestoneNotifications(milestones) {
         milestone
       });
     });
+  }
+}
+
+// Nutrition data sync function
+async function performNutritionSync() {
+  try {
+    console.log('Starting nutrition data sync...');
+    
+    const clients = await self.clients.matchAll();
+    if (clients.length === 0) {
+      console.log('No clients available for nutrition sync');
+      return;
+    }
+
+    // Get stored nutrition data
+    const nutritionData = await getStoredNutritionData();
+    if (!nutritionData) {
+      console.log('No nutrition data available for sync');
+      return;
+    }
+
+    // Sync with Supabase
+    await syncNutritionToSupabase(nutritionData);
+
+    // Update sync status
+    await updateSyncStatus('nutrition_success', new Date().toISOString());
+    
+    // Notify clients
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'NUTRITION_SYNC_SUCCESS',
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    console.log('Nutrition data sync completed successfully');
+  } catch (error) {
+    console.error('Nutrition data sync failed:', error);
+    
+    await updateSyncStatus('nutrition_error', new Date().toISOString(), error.message);
+    
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'NUTRITION_SYNC_ERROR',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
+}
+
+// Token refresh function
+async function performTokenRefresh() {
+  try {
+    console.log('Starting token refresh...');
+    
+    const clients = await self.clients.matchAll();
+    if (clients.length === 0) {
+      console.log('No clients available for token refresh');
+      return;
+    }
+
+    // Get stored token data
+    const tokenData = await getStoredTokenData();
+    if (!tokenData) {
+      console.log('No token data available for refresh');
+      return;
+    }
+
+    // Refresh Google Fit token
+    if (tokenData.googleFitToken) {
+      await refreshGoogleFitToken(tokenData.googleFitToken);
+    }
+
+    // Update refresh status
+    await updateSyncStatus('token_refresh_success', new Date().toISOString());
+    
+    // Notify clients
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'TOKEN_REFRESH_SUCCESS',
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    console.log('Token refresh completed successfully');
+  } catch (error) {
+    console.error('Token refresh failed:', error);
+    
+    await updateSyncStatus('token_refresh_error', new Date().toISOString(), error.message);
+    
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'TOKEN_REFRESH_ERROR',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
+}
+
+// Get stored nutrition data
+async function getStoredNutritionData() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('NutritionDataDB', 1);
+    
+    request.onerror = () => reject(request.error);
+    
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(['nutritionData'], 'readonly');
+      const store = transaction.objectStore('nutritionData');
+      
+      const getRequest = store.get('nutritionData');
+      getRequest.onsuccess = () => resolve(getRequest.result);
+      getRequest.onerror = () => reject(getRequest.error);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('nutritionData')) {
+        db.createObjectStore('nutritionData', { keyPath: 'id' });
+      }
+    };
+  });
+}
+
+// Get stored token data
+async function getStoredTokenData() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('TokenDataDB', 1);
+    
+    request.onerror = () => reject(request.error);
+    
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(['tokenData'], 'readonly');
+      const store = transaction.objectStore('tokenData');
+      
+      const getRequest = store.get('tokenData');
+      getRequest.onsuccess = () => resolve(getRequest.result);
+      getRequest.onerror = () => reject(getRequest.error);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('tokenData')) {
+        db.createObjectStore('tokenData', { keyPath: 'id' });
+      }
+    };
+  });
+}
+
+// Sync nutrition data to Supabase
+async function syncNutritionToSupabase(nutritionData) {
+  try {
+    const authHeader = await getCurrentAuthHeader();
+    if (!authHeader) {
+      throw new Error('No authentication available');
+    }
+
+    const response = await fetch('https://eecdbddpzwedficnpenm.supabase.co/rest/v1/food_logs', {
+      method: 'POST',
+      headers: {
+        'Authorization': authHeader,
+        'Content-Type': 'application/json',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlY2RiZGRwendlZGZpY25wZW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY0NzQ0NzEsImV4cCI6MjA1MjA1MDQ3MX0.8QZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQ'
+      },
+      body: JSON.stringify(nutritionData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase sync failed: ${response.status}`);
+    }
+
+    console.log('Nutrition data synced to Supabase successfully');
+  } catch (error) {
+    console.error('Failed to sync nutrition data to Supabase:', error);
+    throw error;
+  }
+}
+
+// Refresh Google Fit token
+async function refreshGoogleFitToken(refreshToken) {
+  try {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: 'YOUR_GOOGLE_CLIENT_ID',
+        client_secret: 'YOUR_GOOGLE_CLIENT_SECRET',
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google token refresh failed: ${response.status}`);
+    }
+
+    const tokenData = await response.json();
+    
+    // Store new token data
+    await storeTokenData({
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token || refreshToken,
+      expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+      timestamp: new Date().toISOString()
+    });
+
+    console.log('Google Fit token refreshed successfully');
+  } catch (error) {
+    console.error('Failed to refresh Google Fit token:', error);
+    throw error;
+  }
+}
+
+// Store token data
+async function storeTokenData(tokenData) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('TokenDataDB', 1);
+    
+    request.onerror = () => reject(request.error);
+    
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(['tokenData'], 'readwrite');
+      const store = transaction.objectStore('tokenData');
+      
+      const data = {
+        id: 'tokenData',
+        ...tokenData
+      };
+      
+      const putRequest = store.put(data);
+      putRequest.onsuccess = () => resolve();
+      putRequest.onerror = () => reject(putRequest.error);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('tokenData')) {
+        db.createObjectStore('tokenData', { keyPath: 'id' });
+      }
+    };
+  });
+}
+
+// Enhanced message handling for PWA features
+self.addEventListener('message', (event) => {
+  try {
+    if (event && event.data) {
+      switch (event.data.type) {
+        case 'TRIGGER_HEALTH_SYNC':
+          event.waitUntil(performHealthSync());
+          break;
+        case 'TRIGGER_NUTRITION_SYNC':
+          event.waitUntil(performNutritionSync());
+          break;
+        case 'TRIGGER_TOKEN_REFRESH':
+          event.waitUntil(performTokenRefresh());
+          break;
+        case 'REQUEST_AUTH_HEADER':
+          // Handle auth header request
+          event.ports[0].postMessage({
+            accessToken: 'stored_access_token' // This would be retrieved from storage
+          });
+          break;
+        case 'REQUEST_SUPABASE_ANON':
+          // Handle Supabase anon key request
+          event.ports[0].postMessage({
+            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlY2RiZGRwendlZGZpY25wZW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY0NzQ0NzEsImV4cCI6MjA1MjA1MDQ3MX0.8QZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQZQ'
+          });
+          break;
+        case 'CACHE_NUTRITION_DATA':
+          // Cache nutrition data for offline use
+          event.waitUntil(cacheNutritionData(event.data.data));
+          break;
+        case 'CACHE_HEALTH_DATA':
+          // Cache health data for offline use
+          event.waitUntil(cacheHealthData(event.data.data));
+          break;
+      }
+    }
+  } catch (error) {
+    console.error('Service worker message handling error:', error);
+  }
+});
+
+// Cache nutrition data
+async function cacheNutritionData(data) {
+  try {
+    const cache = await caches.open('nutrition-cache');
+    await cache.put('/api/nutrition', new Response(JSON.stringify(data)));
+    console.log('Nutrition data cached successfully');
+  } catch (error) {
+    console.error('Failed to cache nutrition data:', error);
+  }
+}
+
+// Cache health data
+async function cacheHealthData(data) {
+  try {
+    const cache = await caches.open('health-cache');
+    await cache.put('/api/health', new Response(JSON.stringify(data)));
+    console.log('Health data cached successfully');
+  } catch (error) {
+    console.error('Failed to cache health data:', error);
   }
 }

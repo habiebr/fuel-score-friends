@@ -24,7 +24,9 @@ interface RecoverySuggestionProps {
   duration: number;
   distance?: number;
   calories_burned: number;
-  onDismiss: () => void;
+  onDismiss: () => void; // close (X) or when window expires
+  onLogQuick?: () => void; // open meal photo dialog
+  onLogFull?: () => void;  // open meal photo dialog
 }
 
 export function RecoverySuggestion({ 
@@ -33,9 +35,14 @@ export function RecoverySuggestion({
   duration,
   distance,
   calories_burned,
-  onDismiss
+  onDismiss,
+  onLogQuick,
+  onLogFull
 }: RecoverySuggestionProps) {
   const [showNotification, setShowNotification] = useState(true);
+  const [remainingMs, setRemainingMs] = useState<number>(
+    Math.max(0, (sessionEnd.getTime() + 30 * 60 * 1000) - Date.now())
+  );
 
   // Request notification permission on mount
   useEffect(() => {
@@ -60,6 +67,19 @@ export function RecoverySuggestion({
       };
     }
   }, []);
+
+  // Countdown timer that persists the card during the 30-minute window
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const ms = Math.max(0, (sessionEnd.getTime() + 30 * 60 * 1000) - Date.now());
+      setRemainingMs(ms);
+      if (ms === 0) {
+        clearInterval(interval);
+        onDismiss();
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sessionEnd, onDismiss]);
 
   // Get recovery meals from unified engine and AI
   const getRecoveryMeals = async () => {
@@ -180,10 +200,14 @@ export function RecoverySuggestion({
     };
     loadRecoveryMeals();
   }, []);
-  const minutesSinceEnd = Math.round((new Date().getTime() - sessionEnd.getTime()) / 60000);
-  const isWithinWindow = minutesSinceEnd <= 30;
+  const minutes = Math.floor(remainingMs / 60000);
+  const seconds = Math.floor((remainingMs % 60000) / 1000);
+  const isWithinWindow = remainingMs > 0;
 
   if (!showNotification) return null;
+  if (loading || !recoveryMeals) {
+    return null;
+  }
 
   return (
     <Card className="shadow-card mb-4 border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10">
@@ -210,8 +234,8 @@ export function RecoverySuggestion({
             <Clock className="h-4 w-4" />
             <span>
               {isWithinWindow
-                ? `${30 - minutesSinceEnd} minutes remaining in optimal window`
-                : 'Recovery window closing soon'}
+                ? `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} remaining in optimal window`
+                : 'Recovery window ended'}
             </span>
           </div>
 
@@ -219,22 +243,22 @@ export function RecoverySuggestion({
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h4 className="font-medium">{recoveryMeals.quick.name}</h4>
-                <p className="text-xs text-muted-foreground">{recoveryMeals.quick.timing}</p>
+                <h4 className="font-medium">{recoveryMeals?.quick?.name}</h4>
+                <p className="text-xs text-muted-foreground">{recoveryMeals?.quick?.timing}</p>
               </div>
-              <Badge variant="secondary">{recoveryMeals.quick.calories} cal</Badge>
+              <Badge variant="secondary">{recoveryMeals?.quick?.calories} cal</Badge>
             </div>
             <div className="grid grid-cols-3 gap-2 mb-2">
               <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded p-1">
-                <div className="text-sm font-medium">{recoveryMeals.quick.protein}g</div>
+                <div className="text-sm font-medium">{recoveryMeals?.quick?.protein}g</div>
                 <div className="text-xs text-muted-foreground">Protein</div>
               </div>
               <div className="text-center bg-green-50 dark:bg-green-900/20 rounded p-1">
-                <div className="text-sm font-medium">{recoveryMeals.quick.carbs}g</div>
+                <div className="text-sm font-medium">{recoveryMeals?.quick?.carbs}g</div>
                 <div className="text-xs text-muted-foreground">Carbs</div>
               </div>
               <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded p-1">
-                <div className="text-sm font-medium">{recoveryMeals.quick.fat}g</div>
+                <div className="text-sm font-medium">{recoveryMeals?.quick?.fat}g</div>
                 <div className="text-xs text-muted-foreground">Fat</div>
               </div>
             </div>
@@ -242,10 +266,7 @@ export function RecoverySuggestion({
               variant="default" 
               size="sm" 
               className="w-full bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200"
-              onClick={() => {
-                // TODO: Log quick recovery meal
-                onDismiss();
-              }}
+              onClick={() => onLogQuick?.()}
             >
               Log Quick Recovery
             </Button>
@@ -255,22 +276,22 @@ export function RecoverySuggestion({
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h4 className="font-medium">{recoveryMeals.full.name}</h4>
-                <p className="text-xs text-muted-foreground">{recoveryMeals.full.timing}</p>
+                <h4 className="font-medium">{recoveryMeals?.full?.name}</h4>
+                <p className="text-xs text-muted-foreground">{recoveryMeals?.full?.timing}</p>
               </div>
-              <Badge variant="secondary">{recoveryMeals.full.calories} cal</Badge>
+              <Badge variant="secondary">{recoveryMeals?.full?.calories} cal</Badge>
             </div>
             <div className="grid grid-cols-3 gap-2 mb-2">
               <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded p-1">
-                <div className="text-sm font-medium">{recoveryMeals.full.protein}g</div>
+                <div className="text-sm font-medium">{recoveryMeals?.full?.protein}g</div>
                 <div className="text-xs text-muted-foreground">Protein</div>
               </div>
               <div className="text-center bg-green-50 dark:bg-green-900/20 rounded p-1">
-                <div className="text-sm font-medium">{recoveryMeals.full.carbs}g</div>
+                <div className="text-sm font-medium">{recoveryMeals?.full?.carbs}g</div>
                 <div className="text-xs text-muted-foreground">Carbs</div>
               </div>
               <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded p-1">
-                <div className="text-sm font-medium">{recoveryMeals.full.fat}g</div>
+                <div className="text-sm font-medium">{recoveryMeals?.full?.fat}g</div>
                 <div className="text-xs text-muted-foreground">Fat</div>
               </div>
             </div>
@@ -278,10 +299,7 @@ export function RecoverySuggestion({
               variant="outline" 
               size="sm" 
               className="w-full"
-              onClick={() => {
-                // TODO: Log full recovery meal
-                onDismiss();
-              }}
+              onClick={() => onLogFull?.()}
             >
               Log Full Recovery Meal
             </Button>
@@ -294,7 +312,7 @@ export function RecoverySuggestion({
               <div>
                 <p className="font-medium mb-1">Why Recovery Nutrition Matters</p>
                 <ul className="space-y-1 list-disc list-inside">
-                  {recoveryMeals.quick.benefits.map((benefit, idx) => (
+                  {recoveryMeals?.quick?.benefits?.map((benefit, idx) => (
                     <li key={idx}>{benefit}</li>
                   ))}
                 </ul>

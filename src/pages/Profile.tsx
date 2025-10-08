@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { PageHeading } from '@/components/PageHeading';
-import AppHeader from '@/components/AppHeader';
+import { User } from 'lucide-react';
 
 export default function Profile() {
   const { user, signOut } = useAuth();
@@ -176,15 +176,10 @@ export default function Profile() {
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
-          {/* Logo Header */}
-          <div className="mb-6">
-            <AppHeader />
-          </div>
-
-          {/* Premium Header */}
           <PageHeading
             title="Profile"
             description={user?.email || 'Manage your NutriSync account.'}
+            icon={User}
             actions={
               <Button
                 variant="ghost"
@@ -224,6 +219,26 @@ export default function Profile() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Dashboard2 Link */}
+          <Card className="premium-card mb-6 bg-gradient-to-br from-green-500/5 to-green-600/10 border-green-500/20">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg mb-1">Enhanced Dashboard</h3>
+                  <p className="text-sm text-muted-foreground">Try our new robust dashboard with better performance</p>
+                </div>
+                <Button 
+                  variant="default" 
+                  onClick={() => navigate('/dashboard2')}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  <Activity className="h-4 w-4 mr-2" />
+                  Try Dashboard2
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Google Fit Sync Section */}
           <Card className="premium-card mb-6 bg-gradient-to-br from-primary/5 to-primary-glow/10 border-primary/20">

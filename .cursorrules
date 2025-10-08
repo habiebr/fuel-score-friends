@@ -1,0 +1,108 @@
+# 🧠 SYSTEM / DEV RULES — Marathon Nutrition PWA
+
+You are the developer of a **Marathon Nutrition Progressive Web App (PWA)** that helps runners prepare nutritionally for race day.
+
+---
+
+## 🔬 Science Layer (Already Implemented)
+- Core nutrition and physiology calculations (BMR, TDEE, macronutrients, fueling windows, scoring) already exist in `src/science/*` and `src/lib/*`.
+- **Never rewrite or hardcode formulas.**
+- Always **import existing functions**:
+  - `targetsMVP()` → for calorie & macro calculations (from `src/lib/marathon-nutrition.ts`)
+  - `dailyScore()` → for nutrition & training score (from `src/science/dailyScore.ts`)
+  - `reconcileDay()` → to align planned vs actual sessions (from `src/lib/marathon-nutrition.ts`)
+  - `calculateBMR()`, `calculateTDEE()` → from `src/lib/nutrition-engine.ts`
+  - `calculateFuelingWindows()`, `calculateRecoveryNeeds()` → from `supabase/functions/_shared/nutrition-unified.ts`
+- If a function is missing, add it **under `/science/` or `/lib/` only** and write Vitest coverage.
+
+---
+
+## 🧩 Data Derivation
+- All computed data must come from existing Supabase tables:
+  - `profiles` → User profile data (weight, height, age, sex, goals)
+  - `daily_meal_plans` → Daily nutrition targets per meal type
+  - `food_logs` → Actual food consumption logs
+  - `nutrition_scores` → Calculated daily scores
+  - `google_fit_data` → Google Fit activity data
+  - `google_fit_sessions` → Individual workout sessions
+  - `training_notifications` → Pre/post training notifications
+- Derive totals from relations:
+  - Daily totals = sum of `daily_meal_plans` by date
+  - Actual consumption = sum of `food_logs` by date
+  - Scores calculated using `dailyScore()` from science layer
+- Do not duplicate data between tables — always compute on read.
+
+---
+
+## 📱 Frontend Rules (PWA + Accessibility)
+- Design for **mobile-first** experience:
+  - No hover-based interactions — use tap or press.
+  - Button targets ≥ 44×44 px.
+  - Color contrast ≥ 4.5:1.
+  - Use `<button>` and semantic HTML elements.
+  - Support dark/light themes and reduced motion (`prefers-reduced-motion`).
+- App must work offline (service worker) and be installable (manifest.json).
+- Cache daily targets, meals, and scores in IndexedDB/localForage for offline use.
+
+---
+
+## 🔗 API / Backend Rules
+- APIs must derive from existing `services/*` and call science functions.
+- Use Supabase Edge Functions for backend logic:
+  - `calculate-nutrition-score` → uses `dailyScore()` from science layer
+  - `generate-meal-plan` → uses unified nutrition engine
+  - `sync-all-google-fit-data` → syncs Google Fit data
+  - `refresh-google-fit-token-v2` → manages Google Fit tokens
+- Services layer (`src/services/*`) wraps Supabase calls and science functions.
+- Never calculate macros directly in SQL — use TypeScript functions.
+
+---
+
+## ✅ Developer Reminders
+- Before creating new code, **check if a function or type already exists.**
+- Keep logic pure and modular — no business logic in components.
+- Ensure consistency: frontend displays → backend computes → science layer defines.
+- Test new pure functions with Vitest (`tests/*.test.ts`).
+- Maintain code readability, accessibility, and performance for PWA users.
+
+---
+
+## 🧭 Cursor Commands (Examples)
+> "Use `targetsMVP` to display per-meal macros in a mobile card layout."  
+> "Fetch today's score using `getTodayUnifiedScore` and render a progress ring component."  
+> "Extend `services/unified-score.service.ts` to include bonus/penalty details using `dailyScore()` output."  
+> "Ensure new UI components are touch-accessible, no hover, and meet WCAG AA."
+
+---
+
+## 🎯 Current Project Context
+- **Tech Stack**: React + TypeScript + Vite + Supabase + Tailwind CSS
+- **Database**: Supabase (PostgreSQL) with Edge Functions
+- **Deployment**: Cloudflare Pages
+- **PWA**: Service Worker + Manifest for offline capability
+- **Mobile-First**: Touch-optimized UI with no hover dependencies
+
+## 🔧 Key Files & Patterns
+- **Science Layer**: `src/science/*` - Pure calculation functions
+- **Services**: `src/services/*` - Business logic and API calls
+- **Components**: `src/components/*` - Reusable UI components
+- **Pages**: `src/pages/*` - Route components
+- **Hooks**: `src/hooks/*` - Custom React hooks
+- **Types**: `src/integrations/supabase/types.ts` - Database types
+
+## 🚫 Anti-Patterns to Avoid
+- Don't hardcode nutrition formulas in components
+- Don't create hover-only interactions
+- Don't duplicate data between tables
+- Don't put business logic in UI components
+- Don't skip accessibility considerations
+- Don't ignore mobile touch targets
+
+## ✅ Best Practices
+- Always check existing functions before creating new ones
+- Use semantic HTML and proper ARIA labels
+- Implement proper error boundaries and loading states
+- Cache data for offline functionality
+- Write tests for pure functions
+- Follow mobile-first responsive design
+- Use TypeScript strictly for type safety

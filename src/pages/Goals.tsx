@@ -682,7 +682,7 @@ export default function Goals() {
                     const key = format(d, 'yyyy-MM-dd');
                     const list = activitiesByDate[key] || [];
                     return (
-                      <div key={key} className="overflow-hidden rounded-lg border bg-muted/20">
+                      <div key={key} className="rounded-lg border bg-muted/20 overflow-visible">
                         <div className="flex items-center justify-between border-b px-4 py-2">
                           <div className="text-sm font-semibold">{DAYS[idx]}</div>
                           <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
@@ -743,7 +743,7 @@ export default function Goals() {
                                 {isExpanded && (
                                   <div className="space-y-3">
                                     <div className="grid gap-2 sm:grid-cols-2">
-                                      <div className="space-y-1">
+                                      <div className="space-y-1 overflow-visible">
                                         <Label className="text-xs">Activity</Label>
                                         <Select
                                           value={uiType}
@@ -753,10 +753,10 @@ export default function Goals() {
                                             )
                                           }
                                         >
-                                          <SelectTrigger className="h-9 text-sm">
+                                          <SelectTrigger className="h-9 text-sm relative z-10">
                                             <SelectValue />
                                           </SelectTrigger>
-                                          <SelectContent>
+                                          <SelectContent className="z-50">
                                             <SelectItem value="run">Run</SelectItem>
                                             <SelectItem value="long_run">Long Run</SelectItem>
                                             <SelectItem value="interval">Interval Session</SelectItem>
@@ -765,17 +765,17 @@ export default function Goals() {
                                           </SelectContent>
                                         </Select>
                                       </div>
-                                      <div className="space-y-1">
+                                      <div className="space-y-1 overflow-visible">
                                         <Label className="text-xs">Intensity</Label>
                                         <Select
                                           value={a.intensity}
                                           onValueChange={(v: Intensity) => updateActivity(key, i, { intensity: v })}
                                           disabled={uiType === 'rest'}
                                         >
-                                          <SelectTrigger className="h-9 text-sm">
+                                          <SelectTrigger className="h-9 text-sm relative z-10">
                                             <SelectValue />
                                           </SelectTrigger>
-                                          <SelectContent>
+                                          <SelectContent className="z-50">
                                             <SelectItem value="low">Low</SelectItem>
                                             <SelectItem value="moderate">Moderate</SelectItem>
                                             <SelectItem value="high">High</SelectItem>

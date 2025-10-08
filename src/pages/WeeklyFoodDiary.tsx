@@ -5,9 +5,10 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Calendar, Clock, Utensils } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, Utensils, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { PageHeading } from '@/components/PageHeading';
+import { FoodLogEditDialog } from '@/components/FoodLogEditDialog';
 
 interface FoodLog {
   id: string;
@@ -48,6 +49,8 @@ export default function WeeklyFoodDiary() {
   const [loading, setLoading] = useState(true);
   const [weekData, setWeekData] = useState<WeekData>({});
   const [currentWeekStart, setCurrentWeekStart] = useState(() => startOfWeek(new Date()));
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingFoodLog, setEditingFoodLog] = useState<FoodLog | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -145,6 +148,17 @@ export default function WeeklyFoodDiary() {
     }
   };
 
+  const handleEditFoodLog = (foodLog: FoodLog) => {
+    setEditingFoodLog(foodLog);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSave = () => {
+    loadWeekData();
+    setEditDialogOpen(false);
+    setEditingFoodLog(null);
+  };
+
   const navigateWeek = (direction: 'prev' | 'next') => {
     setCurrentWeekStart(prev => 
       direction === 'prev' ? subWeeks(prev, 1) : addWeeks(prev, 1)
@@ -181,7 +195,14 @@ export default function WeeklyFoodDiary() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-background p-4 pb-28">
+    <>
+      <FoodLogEditDialog 
+        open={editDialogOpen} 
+        onOpenChange={setEditDialogOpen}
+        foodLog={editingFoodLog}
+        onSave={handleEditSave}
+      />
+      <div className="min-h-screen bg-gradient-background p-4 pb-28">
       {/* Header */}
       <PageHeading
         title="Weekly Food Diary"
@@ -308,7 +329,7 @@ export default function WeeklyFoodDiary() {
                   data.logs.map((log) => (
                     <div
                       key={log.id}
-                      className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                      className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg group hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     >
                       <div className="text-2xl">{getMealIcon(log.meal_type)}</div>
                       <div className="flex-1">
@@ -328,11 +349,21 @@ export default function WeeklyFoodDiary() {
                           )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold">{log.calories} kcal</div>
-                        <div className="text-xs text-muted-foreground">
-                          P: {log.protein_grams}g • C: {log.carbs_grams}g • F: {log.fat_grams}g
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <div className="font-bold">{log.calories} kcal</div>
+                          <div className="text-xs text-muted-foreground">
+                            P: {log.protein_grams}g • C: {log.carbs_grams}g • F: {log.fat_grams}g
+                          </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditFoodLog(log)}
+                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity h-8 w-8 p-0 hover:bg-white/20"
+                        >
+                          <Pencil className="h-4 w-4 text-white" />
+                        </Button>
                       </div>
                     </div>
                   ))
@@ -343,5 +374,6 @@ export default function WeeklyFoodDiary() {
         ))}
       </div>
     </div>
+    </>
   );
 }

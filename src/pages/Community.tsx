@@ -6,7 +6,6 @@ import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Button } from '@/components/ui/button';
 import { Trophy, MapPin, Activity as ActivityIcon, Target, Users, Crown } from 'lucide-react';
-import AppHeader from '@/components/AppHeader';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeading } from '@/components/PageHeading';
@@ -232,14 +231,10 @@ export default function Community() {
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
-          {/* Logo Header */}
-          <div className="mb-6">
-            <AppHeader />
-          </div>
-
           <PageHeading
             title="Community"
-            description="Compete with fellow runners and celebrate weekly wins."
+            description="Compete with fellow runners and celebrate weekly wins"
+            icon={Users}
           />
 
           {/* Content */}

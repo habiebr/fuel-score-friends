@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
-import AppHeader from '@/components/AppHeader';
+import { Activity } from 'lucide-react';
+import { TrainingNutritionWidget } from '@/components/TrainingNutritionWidget';
+import { TrainingNotifications } from '@/components/TrainingNotifications';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon } from 'lucide-react';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -37,6 +42,7 @@ export default function Training() {
   const [saving, setSaving] = useState(false);
   const [activitiesByDate, setActivitiesByDate] = useState<Record<string, TrainingActivity[]>>({});
   const [expandedEditor, setExpandedEditor] = useState<{ date: string; index: number } | null>(null);
+  const [selectedNutritionDate, setSelectedNutritionDate] = useState<Date>(new Date());
 
   const datesOfWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
@@ -202,14 +208,10 @@ export default function Training() {
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
-          {/* Logo Header */}
-          <div className="mb-6">
-            <AppHeader />
-          </div>
-
           <PageHeading
-            title="Weekly Training"
-            description="Plan multiple activities per day."
+            title="Training"
+            description="Plan and track your workouts"
+            icon={Activity}
             actions={
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>
@@ -224,6 +226,48 @@ export default function Training() {
               </div>
             }
           />
+
+          {/* Training Notifications */}
+          <div className="mb-6">
+            <TrainingNotifications />
+          </div>
+
+          {/* Training Nutrition Widget */}
+          <div className="mb-6">
+            <Card className="shadow-card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Training Nutrition</CardTitle>
+                    <CardDescription>Get personalized nutrition recommendations for your training</CardDescription>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4" />
+                        {format(selectedNutritionDate, 'MMM dd, yyyy')}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <Calendar
+                        mode="single"
+                        selected={selectedNutritionDate}
+                        onSelect={(date) => date && setSelectedNutritionDate(date)}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <TrainingNutritionWidget
+                  selectedDate={selectedNutritionDate}
+                  activities={Object.values(activitiesByDate).flat()}
+                  onRefresh={loadWeek}
+                />
+              </CardContent>
+            </Card>
+          </div>
 
           <Card className="shadow-card">
             <CardHeader>

@@ -217,38 +217,82 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
             </Select>
           </div>
 
-          {/* Upload Button */}
-          <label htmlFor="food-image">
-            <Button 
-              variant="secondary" 
-              className="w-full" 
-              disabled={stage !== 'idle' && stage !== 'complete'}
-              asChild
-            >
-              <span>
-                {stage === 'uploading' || stage === 'analyzing' ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Camera className="h-4 w-4 mr-2" />
-                    Take/Upload Photo
-                  </>
-                )}
-              </span>
-            </Button>
-            <input
-              id="food-image"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={handleImageUpload}
-              disabled={stage !== 'idle' && stage !== 'complete'}
-            />
-          </label>
+          {/* Upload Area */}
+          <div className="space-y-3">
+            <Label>Upload Food Photo</Label>
+            <div className="relative">
+              <label htmlFor="food-image">
+                <div className={`
+                  w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200
+                  ${stage !== 'idle' && stage !== 'complete' 
+                    ? 'border-muted bg-muted/50 cursor-not-allowed' 
+                    : 'border-primary/50 bg-primary/5 hover:border-primary hover:bg-primary/10'
+                  }
+                `}>
+                  {stage === 'uploading' || stage === 'analyzing' ? (
+                    <>
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <span className="text-sm font-medium text-primary">
+                        {stage === 'uploading' ? 'Uploading...' : 'Analyzing...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Camera className="h-8 w-8 text-primary" />
+                        <Upload className="h-6 w-6 text-primary" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-medium text-foreground">
+                          Take Photo or Upload Image
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Click to select or drag & drop
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </label>
+              <input
+                id="food-image"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleImageUpload}
+                disabled={stage !== 'idle' && stage !== 'complete'}
+              />
+            </div>
+            
+            {/* Alternative upload methods */}
+            {stage === 'idle' && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => document.getElementById('food-image')?.click()}
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  Camera
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    const input = document.getElementById('food-image') as HTMLInputElement;
+                    input.removeAttribute('capture');
+                    input.click();
+                  }}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Gallery
+                </Button>
+              </div>
+            )}
+          </div>
 
           {/* Nutrition Results */}
           {nutritionData && (

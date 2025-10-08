@@ -25,12 +25,12 @@ serve(async (req) => {
       });
     }
 
-    const clientId = getEnv("GOOGLE_FIT_CLIENT_ID");
-    const clientSecret = getEnv("GOOGLE_FIT_CLIENT_SECRET", false);
+    const clientId = getEnv("GOOGLE_CLIENT_ID");
+    const clientSecret = getEnv("GOOGLE_CLIENT_SECRET", false);
 
     if (!clientId) {
-      console.error("GOOGLE_FIT_CLIENT_ID not configured");
-      return new Response(JSON.stringify({ error: "Google Fit client ID not configured" }), {
+      console.error("GOOGLE_CLIENT_ID not configured");
+      return new Response(JSON.stringify({ error: "Google client ID not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

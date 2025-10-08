@@ -10,8 +10,6 @@ import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { GoogleFitTokenRefresh } from '@/components/GoogleFitTokenRefresh';
-import { GoogleFitTokenDebug } from '@/components/GoogleFitTokenDebug';
 import { PageHeading } from '@/components/PageHeading';
 
 export default function AppIntegrations() {
@@ -123,11 +121,6 @@ export default function AppIntegrations() {
                 </CardContent>
               </Card>
 
-              {/* Token Refresh Section */}
-              <div className="mt-4 space-y-4">
-                <GoogleFitTokenRefresh />
-                <GoogleFitTokenDebug />
-              </div>
             </div>
 
             {/* Privacy & Data Section */}

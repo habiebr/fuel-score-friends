@@ -7,7 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils, Settings } from 'lucide-react';
-import AppHeader from '@/components/AppHeader';
+import { Home } from 'lucide-react';
+import { PageHeading } from '@/components/PageHeading';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
@@ -619,7 +620,11 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         {/* Header - NutriSync Branding */}
         <div className="mb-6 pt-2">
           <div className="flex items-center justify-between">
-            <AppHeader />
+            <PageHeading
+              title="Dashboard"
+              description="Your nutrition and training overview"
+              icon={Home}
+            />
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" className="gap-2">
                 <Settings className="w-4 h-4" />
@@ -641,6 +646,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
               localStorage.setItem('lastAckSessionId', newActivity.sessionId);
               setNewActivity(null);
             }}
+            onLogQuick={() => setFoodTrackerOpen(true)}
+            onLogFull={() => setFoodTrackerOpen(true)}
           />
         )}
 

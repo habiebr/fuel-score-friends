@@ -11,6 +11,7 @@ import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Activity } from 'lucide-react';
 import { PageHeading } from '@/components/PageHeading';
+import { DebugMenu } from '@/components/DebugMenu';
 
 export default function ProfileNew() {
   const { user, signOut } = useAuth();
@@ -140,6 +141,12 @@ export default function ProfileNew() {
                 </Card>
               );
             })}
+          </div>
+
+          {/* Debug Section */}
+          <h2 className="text-xl font-bold text-foreground mb-3">Debug</h2>
+          <div className="space-y-3">
+            <DebugMenu />
           </div>
 
           {/* Account Section */}

@@ -4,8 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ChevronLeft, X, Plus, Activity } from 'lucide-react';
-import AppHeader from '@/components/AppHeader';
+import { ChevronLeft, X, Plus, Activity, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BottomNav } from '@/components/BottomNav';
@@ -160,7 +159,11 @@ export default function FoodPreferences() {
                   <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
                     <Activity className="w-6 h-6 text-white dark:text-black" />
                   </div>
-                  <AppHeader />
+                  <PageHeading
+                    title="Food Preferences"
+                    description="Customize your nutrition preferences"
+                    icon={Settings}
+                  />
                 </div>
               </div>
             </div>

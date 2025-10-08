@@ -109,7 +109,7 @@ serve(async (req) => {
     const exerciseActivities = ['running', 'jogging', 'cycling', 'biking', 'swimming', 'hiking', 'elliptical', 'rowing', 'soccer', 'basketball', 'tennis', 'volleyball', 'golf', 'skiing', 'snowboarding', 'skating', 'dancing', 'aerobics', 'strength_training', 'weight_lifting', 'crossfit', 'yoga', 'pilates', 'martial_arts', 'boxing', 'kickboxing', 'climbing', 'rock_climbing', 'surfing', 'kayaking', 'canoeing', 'rowing', 'triathlon', 'duathlon', 'athletics', 'track_and_field'];
     
     const filteredSessions = sessions.filter((session: any) => {
-      const activityType = (session.activityType || session.activityTypeId || session.activity || '').toLowerCase();
+      const activityType = String(session.activityType || session.activityTypeId || session.activity || '').toLowerCase();
       return exerciseActivities.some(activity => activityType.includes(activity));
     });
 

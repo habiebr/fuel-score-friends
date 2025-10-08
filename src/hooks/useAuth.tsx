@@ -19,9 +19,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const GOOGLE_TOKEN_KEY = "google_fit_provider_token";
 const GOOGLE_REFRESH_KEY = "google_fit_provider_refresh_token";
 const GOOGLE_TOKEN_EXPIRY_KEY = "google_fit_provider_token_expires_at";
-const TOKEN_REFRESH_BUFFER_MS = 10 * 60 * 1000; // 10 minutes buffer (increased from 5)
-const BACKGROUND_REFRESH_INTERVAL_MS = 15 * 60 * 1000; // Refresh every 15 minutes
+const TOKEN_REFRESH_BUFFER_MS = 15 * 60 * 1000; // 15 minutes buffer - refresh when 15 min left
+const BACKGROUND_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
 const DEFAULT_ACCESS_TOKEN_TTL = 50 * 60 * 1000; // 50 minutes buffer
+const TOKEN_EXPIRY_WARNING_MS = 20 * 60 * 1000; // Warn when 20 minutes left
 
 type ProviderSession = Session & {
   provider_token?: string;
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const persistGoogleTokens = useCallback((sessionLike?: ProviderSession | null) => {
+  const persistGoogleTokens = useCallback(async (sessionLike?: ProviderSession | null) => {
     if (!sessionLike) return;
     try {
       const providerToken = sessionLike.provider_token || sessionLike.provider_access_token || null;
@@ -73,7 +74,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       persistTokensToStorage(providerToken, providerRefreshToken, expiresAt);
 
-      if (sessionLike.user?.id) {
+      if (sessionLike.user?.id && providerToken && providerRefreshToken) {
+        // Store token in database for better management
+        try {
+          const expiresIn = expiresAt ? Math.floor((expiresAt - Date.now()) / 1000) : 3600;
+          await (supabase as any).functions.invoke('store-google-token', {
+            method: 'POST',
+            body: {
+              user_id: sessionLike.user.id,
+              access_token: providerToken,
+              refresh_token: providerRefreshToken,
+              expires_in: expiresIn,
+              token_type: 'Bearer',
+              scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read'
+            },
+          });
+          console.log('Google token stored in database successfully');
+        } catch (dbError) {
+          console.warn('Failed to store Google token in database:', dbError);
+        }
+
+        // Also update user preferences for backward compatibility
         const connected = Boolean(providerToken || providerRefreshToken);
         const payload = {
           user_id: sessionLike.user.id,
@@ -142,47 +163,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshGoogleAccessToken = useCallback(async (): Promise<string | null> => {
     try {
-      const refreshToken = localStorage.getItem(GOOGLE_REFRESH_KEY);
-      if (!refreshToken) {
-        console.log('No refresh token available for Google Fit');
+      if (!user?.id) {
+        console.log('No user ID available for Google Fit token refresh');
         return null;
       }
 
-      console.log('Refreshing Google Fit access token...');
-      const { data, error } = await (supabase as any).functions.invoke('refresh-google-fit-token', {
-        method: 'POST',
-        body: { refreshToken },
-      });
+      console.log('Refreshing Google Fit access token using database...');
+      
+      // Try database refresh first
+      try {
+        const { data, error } = await (supabase as any).functions.invoke('refresh-google-fit-token-v2', {
+          method: 'POST',
+          body: { user_id: user.id },
+        });
 
-      if (error) {
-        console.error('Google token refresh failed:', error);
-        throw new Error(error.message || 'Unable to refresh Google token');
-      }
+        if (error) {
+          console.error('Database token refresh failed:', error);
+          throw new Error(error.message || 'Database refresh failed');
+        }
 
-      const accessToken = data?.access_token as string | undefined;
-      const newRefreshToken = (data?.refresh_token as string | undefined) || null;
-      const expiresIn = typeof data?.expires_in === 'number' ? data.expires_in : 3600;
+        const accessToken = data?.access_token as string | undefined;
+        const expiresAt = data?.expires_at as string | undefined;
 
-      if (accessToken) {
-        const expiresAt = Date.now() + Math.max(0, expiresIn - 60) * 1000;
-        persistTokensToStorage(accessToken, newRefreshToken || undefined, expiresAt);
-        console.log(`Google Fit token refreshed successfully, expires at: ${new Date(expiresAt).toISOString()}`);
-        return accessToken;
+        if (accessToken && expiresAt) {
+          const expiresAtMs = new Date(expiresAt).getTime();
+          persistTokensToStorage(accessToken, null, expiresAtMs);
+          console.log(`Google Fit token refreshed successfully via database, expires at: ${expiresAt}`);
+          return accessToken;
+        }
+      } catch (dbError) {
+        console.warn('Database refresh failed, trying local refresh:', dbError);
+        
+        // Fallback to local refresh using stored refresh token
+        const refreshToken = localStorage.getItem(GOOGLE_REFRESH_KEY);
+        if (!refreshToken) {
+          console.error('No refresh token available for local refresh');
+          throw new Error('No refresh token available');
+        }
+
+        const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+            client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token',
+          }),
+        });
+
+        if (!refreshResponse.ok) {
+          const errorText = await refreshResponse.text();
+          console.error('Google OAuth refresh failed:', errorText);
+          throw new Error(`OAuth refresh failed: ${errorText}`);
+        }
+
+        const tokenData = await refreshResponse.json();
+        const newExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+        
+        persistTokensToStorage(tokenData.access_token, tokenData.refresh_token || refreshToken, newExpiresAt);
+        console.log(`Google Fit token refreshed successfully via OAuth, expires at: ${new Date(newExpiresAt).toISOString()}`);
+        return tokenData.access_token;
       }
 
       console.warn('No access token received from refresh response');
       return null;
     } catch (error) {
       console.error('Failed to refresh Google Fit token', error);
-      // Clear invalid tokens on refresh failure
-      try {
-        localStorage.removeItem(GOOGLE_TOKEN_KEY);
-        localStorage.removeItem(GOOGLE_REFRESH_KEY);
-        localStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
-      } catch {}
+      
+      // Only clear tokens if it's a permanent auth failure
+      if (error instanceof Error && (
+        error.message.includes('invalid_grant') || 
+        error.message.includes('invalid_token') ||
+        error.message.includes('unauthorized_client')
+      )) {
+        console.log('Permanent auth failure detected, clearing tokens');
+        try {
+          localStorage.removeItem(GOOGLE_TOKEN_KEY);
+          localStorage.removeItem(GOOGLE_REFRESH_KEY);
+          localStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
+          localStorage.removeItem("google_fit_connected");
+        } catch {}
+      }
+      
       return null;
     }
-  }, [persistTokensToStorage]);
+  }, [persistTokensToStorage, user?.id]);
 
   const signInWithGoogle = async () => {
     const redirectUrl = `${window.location.origin}/`;
@@ -229,17 +297,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {}
 
     const storedToken = providerToken || localStorage.getItem(GOOGLE_TOKEN_KEY);
+    const now = Date.now();
+    const timeUntilExpiry = expiresAt ? expiresAt - now : 0;
+    const minutesUntilExpiry = timeUntilExpiry / (1000 * 60);
+
+    // More aggressive refresh strategy
     const shouldRefresh =
       forceRefresh ||
       !storedToken ||
-      (expiresAt !== null && Number.isFinite(expiresAt) && Date.now() > expiresAt - TOKEN_REFRESH_BUFFER_MS);
+      !expiresAt ||
+      timeUntilExpiry <= TOKEN_REFRESH_BUFFER_MS ||
+      (timeUntilExpiry <= TOKEN_EXPIRY_WARNING_MS && Math.random() < 0.3); // 30% chance to refresh early
 
     if (!shouldRefresh && storedToken) {
-      console.log('Using cached Google Fit token');
+      console.log(`Using cached Google Fit token (expires in ${minutesUntilExpiry.toFixed(2)} minutes)`);
       return storedToken;
     }
 
-    console.log('Refreshing Google Fit token...');
+    console.log(`Refreshing Google Fit token (expires in ${minutesUntilExpiry.toFixed(2)} minutes)...`);
     const refreshedToken = await refreshGoogleAccessToken();
     if (refreshedToken) {
       return refreshedToken;
@@ -259,30 +334,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {}
   };
 
-  // Background token refresh mechanism
+  // Startup token validation and background refresh mechanism
   useEffect(() => {
     if (!user) return;
 
-    const backgroundRefresh = async () => {
+    const validateAndRefreshToken = async () => {
       try {
         const refreshToken = localStorage.getItem(GOOGLE_REFRESH_KEY);
-        if (!refreshToken) return;
+        if (!refreshToken) {
+          console.log('Token validation: No refresh token available');
+          return;
+        }
 
         const expiresAtStr = localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
         const expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
         
-        // Only refresh if token exists and is close to expiring
-        if (expiresAt && Date.now() > expiresAt - TOKEN_REFRESH_BUFFER_MS) {
+        if (!expiresAt) {
+          console.log('Token validation: No expiry time available, attempting refresh');
+          await refreshGoogleAccessToken();
+          return;
+        }
+
+        const now = Date.now();
+        const timeUntilExpiry = expiresAt - now;
+        const minutesUntilExpiry = timeUntilExpiry / (1000 * 60);
+
+        console.log(`Token validation: Token expires in ${minutesUntilExpiry.toFixed(2)} minutes`);
+
+        // Always refresh on startup if token is close to expiring
+        if (timeUntilExpiry <= TOKEN_REFRESH_BUFFER_MS) {
+          console.log('Token validation: Token is close to expiring, refreshing...');
+          await refreshGoogleAccessToken();
+        } else if (timeUntilExpiry <= TOKEN_EXPIRY_WARNING_MS) {
+          console.log('Token validation: Token will expire soon, pre-emptively refreshing...');
+          await refreshGoogleAccessToken();
+        } else {
+          console.log('Token validation: Token is still valid, no action needed');
+        }
+      } catch (error) {
+        console.error('Token validation failed:', error);
+      }
+    };
+
+    const backgroundRefresh = async () => {
+      try {
+        const refreshToken = localStorage.getItem(GOOGLE_REFRESH_KEY);
+        if (!refreshToken) {
+          console.log('Background refresh: No refresh token available');
+          return;
+        }
+
+        const expiresAtStr = localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
+        const expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
+        
+        if (!expiresAt) {
+          console.log('Background refresh: No expiry time available, attempting refresh');
+          await refreshGoogleAccessToken();
+          return;
+        }
+
+        const now = Date.now();
+        const timeUntilExpiry = expiresAt - now;
+        const minutesUntilExpiry = timeUntilExpiry / (1000 * 60);
+
+        console.log(`Background refresh: Token expires in ${minutesUntilExpiry.toFixed(2)} minutes`);
+
+        // Refresh if token expires within the buffer time
+        if (timeUntilExpiry <= TOKEN_REFRESH_BUFFER_MS) {
           console.log('Background refresh: Token is close to expiring, refreshing...');
           await refreshGoogleAccessToken();
+        } else if (timeUntilExpiry <= TOKEN_EXPIRY_WARNING_MS) {
+          console.log('Background refresh: Token will expire soon, preparing refresh...');
+          // Pre-emptive refresh for better reliability
+          await refreshGoogleAccessToken();
+        } else {
+          console.log('Background refresh: Token is still valid, no action needed');
         }
       } catch (error) {
         console.error('Background token refresh failed:', error);
       }
     };
 
-    // Initial check
-    backgroundRefresh();
+    // Initial validation on startup
+    validateAndRefreshToken();
 
     // Set up interval for background refresh
     const interval = setInterval(backgroundRefresh, BACKGROUND_REFRESH_INTERVAL_MS);

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
-import { ArrowLeft } from 'lucide-react';
+import { ChevronDown, ChevronUp, Activity, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { TrainingNutritionWidget } from '@/components/TrainingNutritionWidget';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -22,6 +24,7 @@ interface TrainingActivity {
   intensity: Intensity;
   estimated_calories: number;
   notes?: string | null;
+  is_actual?: boolean; // Flag to distinguish actual vs planned activities
 }
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -33,6 +36,7 @@ export default function TrainingCalendar() {
   const datesOfWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const [activitiesByDate, setActivitiesByDate] = useState<Record<string, TrainingActivity[]>>({});
   const [loading, setLoading] = useState(true);
+  const [isNutritionExpanded, setIsNutritionExpanded] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -47,10 +51,13 @@ export default function TrainingCalendar() {
           .eq('user_id', user.id)
           .gte('date', start)
           .lte('date', end)
-          .order('date', { ascending: true });
+          .order('date', { ascending: true })
+          .order('is_actual', { ascending: false }); // Actual activities first
         if (error) throw error;
         const grouped: Record<string, TrainingActivity[]> = {};
         for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = [];
+        
+        // Process activities and prioritize actual over planned
         (data || []).forEach((row: any) => {
           const key = row.date;
           const act: TrainingActivity = {
@@ -63,9 +70,20 @@ export default function TrainingCalendar() {
             intensity: row.intensity,
             estimated_calories: row.estimated_calories,
             notes: row.notes,
+            is_actual: row.is_actual || false, // Add is_actual flag
           };
-          if (!grouped[key]) grouped[key] = [];
-          grouped[key].push(act);
+          
+          // If there's already an actual activity for this date, replace planned activities
+          if (act.is_actual) {
+            // Remove any existing planned activities for this date
+            grouped[key] = [act];
+          } else {
+            // Only add planned activity if no actual activity exists for this date
+            if (!grouped[key] || grouped[key].length === 0 || !grouped[key][0].is_actual) {
+              if (!grouped[key]) grouped[key] = [];
+              grouped[key].push(act);
+            }
+          }
         });
         setActivitiesByDate(grouped);
       } finally {
@@ -78,18 +96,11 @@ export default function TrainingCalendar() {
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
-          {/* Header */}
-          <div className="mb-2">
-            <Button variant="ghost" onClick={() => navigate('/')} className="-ml-2">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </div>
-          <PageHeading
-            title="Training Calendar"
-            description="Weekly view of your training plan."
-            className="mt-3"
-          />
+                 <PageHeading
+                   title="Training Calendar"
+                   description="Weekly view of your training plan"
+                   icon={Calendar}
+                 />
 
           {/* Navigation Controls */}
           <div className="flex items-center justify-center gap-2 mb-6">
@@ -99,6 +110,51 @@ export default function TrainingCalendar() {
             <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>
               Next
             </Button>
+          </div>
+
+          {/* Training Nutrition Widget - Simplified */}
+          <div className="mb-6">
+            <Collapsible open={isNutritionExpanded} onOpenChange={setIsNutritionExpanded}>
+              <Card className="shadow-card">
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                          <Activity className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg">Training Nutrition</CardTitle>
+                          <CardDescription>
+                            {isNutritionExpanded 
+                              ? 'Click to minimize nutrition recommendations'
+                              : 'Click to view personalized nutrition recommendations'
+                            }
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isNutritionExpanded ? (
+                          <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <TrainingNutritionWidget
+                      selectedDate={new Date()}
+                      activities={Object.values(activitiesByDate).flat()}
+                      tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
+                      onRefresh={() => window.location.reload()}
+                    />
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           </div>
 
           <Card className="shadow-card">
@@ -115,6 +171,7 @@ export default function TrainingCalendar() {
                 const totalDuration = list.reduce((sum, a) => sum + (a.duration_minutes || 0), 0);
                 const totalCalories = list.reduce((sum, a) => sum + (a.estimated_calories || 0), 0);
                 const isRestDay = !loading && list.length === 0;
+                const hasActualActivity = list.some(a => a.is_actual);
                 const primarySummary =
                   totalDistance > 0
                     ? `${parseFloat(totalDistance.toFixed(totalDistance >= 10 ? 0 : 1))} km`
@@ -136,7 +193,14 @@ export default function TrainingCalendar() {
                       <div className="flex-1 space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <div>
-                            <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">Day {idx + 1}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">Day {idx + 1}</p>
+                              {hasActualActivity && (
+                                <span className="rounded-full bg-green-100 dark:bg-green-900/20 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+                                  Actual Data
+                                </span>
+                              )}
+                            </div>
                             <h3 className="text-lg font-semibold">{DAYS[idx]}</h3>
                             <p className="text-xs text-muted-foreground">{format(d, 'EEEE, MMM dd')}</p>
                           </div>
@@ -170,10 +234,22 @@ export default function TrainingCalendar() {
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(49,255,176,0.5)]" />
+                                    <span className={`h-2.5 w-2.5 rounded-full shadow-[0_0_10px_rgba(49,255,176,0.5)] ${
+                                      a.is_actual ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-primary'
+                                    }`} />
                                     <span className="text-sm font-semibold capitalize">{a.activity_type}</span>
+                                    {a.is_actual && (
+                                      <span className="rounded-full bg-green-100 dark:bg-green-900/20 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+                                        Actual
+                                      </span>
+                                    )}
                                   </div>
-                                  <span className="text-xs uppercase tracking-wider text-muted-foreground">{a.intensity}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">{a.intensity}</span>
+                                    {a.is_actual && (
+                                      <span className="text-xs text-green-600 dark:text-green-400">✓</span>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                                   <div className="flex items-center gap-1">

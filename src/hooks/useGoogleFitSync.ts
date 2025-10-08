@@ -20,6 +20,8 @@ export function useGoogleFitSync() {
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'success' | 'error' | 'pending' | null>(null);
+  const [lastErrorTime, setLastErrorTime] = useState<number | null>(null);
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
 
   // Load last sync time from Supabase on mount
   useEffect(() => {
@@ -177,6 +179,13 @@ export function useGoogleFitSync() {
       return null;
     }
 
+    // Circuit breaker: if we've had too many consecutive errors, wait before retrying
+    const now = Date.now();
+    if (consecutiveErrors >= 3 && lastErrorTime && (now - lastErrorTime) < 5 * 60 * 1000) {
+      console.log('Circuit breaker active: too many consecutive errors, skipping sync');
+      return null;
+    }
+
     setIsSyncing(true);
     setSyncStatus('pending');
 
@@ -248,11 +257,72 @@ export function useGoogleFitSync() {
         }
 
         // Filter sessions to only include running/sport activities (exclude walking)
-        const exerciseActivities = ['running', 'jogging', 'cycling', 'biking', 'swimming', 'hiking', 'elliptical', 'rowing', 'soccer', 'basketball', 'tennis', 'volleyball', 'golf', 'skiing', 'snowboarding', 'skating', 'dancing', 'aerobics', 'strength_training', 'weight_lifting', 'crossfit', 'yoga', 'pilates', 'martial_arts', 'boxing', 'kickboxing', 'climbing', 'rock_climbing', 'surfing', 'kayaking', 'canoeing', 'rowing', 'triathlon', 'duathlon', 'athletics', 'track_and_field'];
+        // More comprehensive list of exercise activities, explicitly excluding walking
+        const exerciseActivities = [
+          'running', 'jogging', 'sprint', 'marathon', 'half_marathon', '5k', '10k',
+          'cycling', 'biking', 'bike', 'road_cycling', 'mountain_biking', 'indoor_cycling',
+          'swimming', 'swim', 'pool_swimming', 'open_water_swimming',
+          'hiking', 'trail_running', 'mountain_hiking',
+          'elliptical', 'elliptical_trainer',
+          'rowing', 'indoor_rowing', 'outdoor_rowing',
+          'soccer', 'football', 'basketball', 'tennis', 'volleyball', 'badminton',
+          'golf', 'golfing',
+          'skiing', 'alpine_skiing', 'cross_country_skiing', 'snowboarding',
+          'skating', 'ice_skating', 'roller_skating', 'inline_skating',
+          'dancing', 'aerobic_dance', 'zumba', 'salsa', 'hip_hop',
+          'aerobics', 'step_aerobics', 'water_aerobics',
+          'strength_training', 'weight_lifting', 'weight_training', 'resistance_training',
+          'crossfit', 'functional_fitness',
+          'yoga', 'power_yoga', 'hot_yoga', 'vinyasa_yoga',
+          'pilates', 'mat_pilates', 'reformer_pilates',
+          'martial_arts', 'karate', 'taekwondo', 'judo', 'boxing', 'kickboxing', 'muay_thai',
+          'climbing', 'rock_climbing', 'indoor_climbing', 'bouldering',
+          'surfing', 'kayaking', 'canoeing', 'paddleboarding',
+          'triathlon', 'duathlon', 'athletics', 'track_and_field',
+          'gymnastics', 'calisthenics', 'plyometrics',
+          'kickboxing', 'boxing', 'mma', 'wrestling',
+          'rugby', 'hockey', 'lacrosse', 'baseball', 'softball',
+          'cricket', 'squash', 'racquetball', 'handball',
+          'archery', 'shooting', 'fencing',
+          'rowing_machine', 'treadmill', 'stair_climbing', 'stair_master'
+        ];
+        
+        // Explicitly exclude walking and related activities
+        const excludedActivities = [
+          'walking', 'walk', 'strolling', 'leisurely_walk', 'casual_walk',
+          'dog_walking', 'power_walking', 'brisk_walking',
+          'commuting', 'transportation', 'travel'
+        ];
         
         const filteredSessions = sessions.filter((session: any) => {
-          const activityType = (session.activityType || session.activityTypeId || session.activity || '').toLowerCase();
-          return exerciseActivities.some(activity => activityType.includes(activity));
+          const activityType = String(session.activityType || session.activityTypeId || session.activity || '').toLowerCase();
+          const sessionName = String(session.name || '').toLowerCase();
+          const sessionDescription = String(session.description || '').toLowerCase();
+          
+          // Check if it's explicitly excluded
+          const isExcluded = excludedActivities.some(excluded => 
+            activityType.includes(excluded) || 
+            sessionName.includes(excluded) || 
+            sessionDescription.includes(excluded)
+          );
+          
+          if (isExcluded) {
+            console.log(`Excluding session: ${sessionName || activityType} (${sessionDescription})`);
+            return false;
+          }
+          
+          // Check if it's an exercise activity
+          const isExercise = exerciseActivities.some(activity => 
+            activityType.includes(activity) || 
+            sessionName.includes(activity) || 
+            sessionDescription.includes(activity)
+          );
+          
+          if (isExercise) {
+            console.log(`Including exercise session: ${sessionName || activityType} (${sessionDescription})`);
+          }
+          
+          return isExercise;
         });
 
         // Calculate distance only from exercise activities
@@ -350,12 +420,28 @@ export function useGoogleFitSync() {
         setLastSync(now);
         setSyncStatus('success');
         setIsConnected(true);
+        
+        // Reset error counters on successful sync
+        setConsecutiveErrors(0);
+        setLastErrorTime(null);
 
         // Refresh weekly aggregates after successful sync
         try {
           await refreshWeeklyAggregates(user.id);
         } catch (aggregateError) {
           console.warn('Failed to refresh weekly aggregates:', aggregateError);
+        }
+
+        // Trigger automatic training activity update for today
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          await supabase.functions.invoke('update-actual-training', {
+            body: { date: today }
+          });
+          console.log('Triggered automatic training activity update');
+        } catch (updateError) {
+          console.error('Error triggering training update:', updateError);
+          // Don't fail the whole sync if training update fails
         }
 
         toast({
@@ -370,12 +456,17 @@ export function useGoogleFitSync() {
         // Handle token expiration with retry
         if (attempt === 0 && (error?.status === 401 || `${error?.message || ''}`.includes('401') || error?.message?.includes('invalid_token'))) {
           console.log('Token appears to be expired, attempting refresh...');
-          const refreshed = await getGoogleAccessToken({ forceRefresh: true });
-          if (refreshed && refreshed !== accessToken) {
-            console.log('Token refreshed successfully, retrying sync...');
-            return performSync(refreshed, attempt + 1);
-          } else {
-            console.error('Failed to refresh token');
+          try {
+            const refreshed = await getGoogleAccessToken({ forceRefresh: true });
+            if (refreshed && refreshed !== accessToken) {
+              console.log('Token refreshed successfully, retrying sync...');
+              return performSync(refreshed, attempt + 1);
+            } else {
+              console.error('Failed to refresh token - no new token received');
+              throw new Error('Unable to refresh Google Fit token');
+            }
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
             throw new Error('Unable to refresh Google Fit token');
           }
         }
@@ -398,6 +489,10 @@ export function useGoogleFitSync() {
       return await performSync(initialToken, 0);
     } catch (error: any) {
       console.error('Google Fit sync failed:', error);
+
+      // Increment error counter and set last error time
+      setConsecutiveErrors(prev => prev + 1);
+      setLastErrorTime(Date.now());
 
       const errorMessage = error?.message || "Could not sync Google Fit data";
       
@@ -425,7 +520,7 @@ export function useGoogleFitSync() {
     } finally {
       setIsSyncing(false);
     }
-  }, [user, getGoogleAccessToken, toast]);
+  }, [user, getGoogleAccessToken, toast, consecutiveErrors, lastErrorTime]);
 
   /**
    * Fetch today's Google Fit data from database (cached)
@@ -474,6 +569,12 @@ export function useGoogleFitSync() {
     }
   }, [user, syncGoogleFit]);
 
+  const resetErrorState = useCallback(() => {
+    setConsecutiveErrors(0);
+    setLastErrorTime(null);
+    setSyncStatus(null);
+  }, []);
+
   return {
     syncGoogleFit,
     getTodayData,
@@ -481,6 +582,9 @@ export function useGoogleFitSync() {
     lastSync,
     isConnected,
     syncStatus,
-    connectGoogleFit
+    connectGoogleFit,
+    resetErrorState,
+    consecutiveErrors,
+    lastErrorTime
   };
 }

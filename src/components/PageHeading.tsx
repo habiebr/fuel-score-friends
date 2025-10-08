@@ -1,11 +1,13 @@
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { LucideIcon } from "lucide-react";
 
 interface PageHeadingProps {
   title: string;
   description?: string;
   eyebrow?: string;
   actions?: ReactNode;
+  icon?: LucideIcon;
   className?: string;
 }
 
@@ -14,6 +16,7 @@ export function PageHeading({
   description,
   eyebrow,
   actions,
+  icon: Icon,
   className,
 }: PageHeadingProps) {
   return (
@@ -29,9 +32,16 @@ export function PageHeading({
             {eyebrow}
           </span>
         )}
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          {title}
-        </h1>
+        <div className="flex items-center gap-3">
+          {Icon && (
+            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+              <Icon className="h-5 w-5 text-primary" />
+            </div>
+          )}
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            {title}
+          </h1>
+        </div>
         {description && (
           <p className="text-sm text-muted-foreground sm:text-base">{description}</p>
         )}

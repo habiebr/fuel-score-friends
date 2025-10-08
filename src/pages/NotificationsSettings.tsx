@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { ChevronLeft, Activity } from 'lucide-react';
-import AppHeader from '@/components/AppHeader';
+import { ChevronLeft, Activity, Bell } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
@@ -72,7 +71,11 @@ export default function NotificationsSettings() {
                 <ChevronLeft className="w-5 h-5" />
               </Button>
               <div className="flex-1 min-w-0">
-                <AppHeader />
+                <PageHeading
+                  title="Notifications"
+                  description="Manage your notification preferences"
+                  icon={Bell}
+                />
               </div>
             </div>
           </div>

@@ -8,6 +8,7 @@ import { UploadProvider } from "@/contexts/UploadContext";
 import { ErrorBoundary } from "react-error-boundary";
 import Index from "./pages/Index";
 import ProfileNew from "./pages/ProfileNew";
+import { Dashboard2 } from "./components/Dashboard2";
 import ProfileInformation from "./pages/ProfileInformation";
 import FoodPreferences from "./pages/FoodPreferences";
 import NotificationsSettings from "./pages/NotificationsSettings";
@@ -23,6 +24,8 @@ import MealPlans from "./pages/MealPlans";
 import ShoppingList from "./pages/ShoppingList";
 import MealHistory from "./pages/MealHistory";
 import SupabaseDebug from "./pages/SupabaseDebug";
+import GoogleFitDebug from "./pages/GoogleFitDebug";
+import ForceSyncDebug from "./pages/ForceSyncDebug";
 import MarathonCalendarPage from "./pages/MarathonCalendarPage";
 import Offline from "./pages/Offline";
 import NotFound from "./pages/NotFound";
@@ -84,6 +87,7 @@ function App() {
               <BrowserRouter>
                 <Routes>
                   <Route path="/" element={<Index />} />
+                  <Route path="/dashboard2" element={<Dashboard2 />} />
                   <Route path="/profile" element={<ProfileNew />} />
                   <Route path="/profile/information" element={<ProfileInformation />} />
                   <Route path="/profile/food-preferences" element={<FoodPreferences />} />
@@ -101,6 +105,8 @@ function App() {
                   <Route path="/meal-history" element={<MealHistory />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/debug/supabase" element={<SupabaseDebug />} />
+                  <Route path="/debug/google-fit" element={<GoogleFitDebug />} />
+            <Route path="/debug/force-sync" element={<ForceSyncDebug />} />
                   <Route path="/offline" element={<Offline />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
