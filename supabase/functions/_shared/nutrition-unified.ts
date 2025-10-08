@@ -480,3 +480,68 @@ export function getIndonesianRecoveryMeals(needs: RecoveryNeeds): {
     }
   };
 }
+
+/**
+ * Determine training load based on activity type, duration, and distance
+ */
+export function determineTrainingLoad(
+  activity: string,
+  duration?: number,
+  distance?: number
+): TrainingLoad {
+  if (!activity || activity === 'rest') return 'rest';
+  
+  // For running activities
+  if (activity === 'run' || activity === 'running') {
+    if (distance && distance >= 15) return 'long';
+    if (duration && duration >= 90) return 'quality';
+    if (duration && duration >= 60) return 'moderate';
+    return 'easy';
+  }
+  
+  // For other activities
+  if (activity === 'strength' || activity === 'strength_training') {
+    return 'easy';
+  }
+  
+  if (activity === 'cardio' || activity === 'cycling') {
+    if (duration && duration >= 90) return 'moderate';
+    return 'easy';
+  }
+  
+  // Default for any other activity
+  return 'easy';
+}
+
+/**
+ * Check if snack should be included based on training load
+ */
+export function shouldIncludeSnack(load: TrainingLoad): boolean {
+  return load === 'long' || load === 'quality';
+}
+
+/**
+ * Generate meal plan from day target
+ */
+export function generateMealPlan(dayTarget: DayTarget, includeSnack: boolean = false): Record<string, {
+  kcal: number;
+  protein_g: number;
+  cho_g: number;
+  fat_g: number;
+}> {
+  const { meals } = dayTarget;
+  const result: Record<string, any> = {};
+  
+  for (const meal of meals) {
+    if (meal.meal === 'snack' && !includeSnack) continue;
+    
+    result[meal.meal] = {
+      kcal: meal.kcal,
+      protein_g: meal.protein_g,
+      cho_g: meal.cho_g,
+      fat_g: meal.fat_g
+    };
+  }
+  
+  return result;
+}
