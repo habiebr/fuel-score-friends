@@ -8,6 +8,7 @@ import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
 import { ChevronDown, ChevronUp, Activity, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { TrainingNutritionWidget } from '@/components/TrainingNutritionWidget';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
@@ -111,7 +112,7 @@ export default function TrainingCalendar() {
             </Button>
           </div>
 
-          {/* Training Nutrition Widget - Simplified */}
+          {/* Actual/Planned Training widget */}
           <div className="mb-6">
             <Collapsible open={isNutritionExpanded} onOpenChange={setIsNutritionExpanded}>
               <Card className="shadow-card">
@@ -123,12 +124,11 @@ export default function TrainingCalendar() {
                           <Activity className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <CardTitle className="text-lg">Training Nutrition</CardTitle>
+                          <CardTitle className="text-lg">Training</CardTitle>
                           <CardDescription>
                             {isNutritionExpanded 
-                              ? 'Click to minimize nutrition recommendations'
-                              : 'Click to view personalized nutrition recommendations'
-                            }
+                              ? 'Click to hide training summary'
+                              : 'Click to view today\'s actual/planned training'}
                           </CardDescription>
                         </div>
                       </div>
@@ -142,7 +142,15 @@ export default function TrainingCalendar() {
                     </div>
                   </CardHeader>
                 </CollapsibleTrigger>
-                {/* TrainingNutritionWidget removed per request */}
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <TrainingNutritionWidget
+                      selectedDate={new Date()}
+                      activities={Object.values(activitiesByDate).flat()}
+                      tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
+                    />
+                  </CardContent>
+                </CollapsibleContent>
               </Card>
             </Collapsible>
           </div>
