@@ -42,7 +42,7 @@ export default function FoodPreferences() {
       const { data, error } = await supabase
         .from('profiles')
         .select('dietary_restrictions, eating_behaviors')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) throw error;
@@ -70,7 +70,7 @@ export default function FoodPreferences() {
           eating_behaviors: behaviors,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id);
+        .eq('user_id', user.id);
 
       if (error) throw error;
 
@@ -134,7 +134,7 @@ export default function FoodPreferences() {
           eating_behaviors: newBehaviors,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id);
+        .eq('user_id', user.id);
     } catch (error) {
       console.error('Error auto-saving preferences:', error);
     }

@@ -90,6 +90,12 @@ serve(async (req) => {
     const fitnessGoal = profile?.goal_type || profile?.fitness_goals?.[0];
     const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
     const dayPlan = Array.isArray(weekPlan) ? weekPlan.find((d: any) => d && d.day === requestWeekday) : null;
+    
+    // Get user dietary preferences
+    const dietaryRestrictions = profile?.dietary_restrictions || [];
+    const eatingBehaviors = profile?.eating_behaviors || [];
+    
+    console.log(`User preferences - Restrictions: ${dietaryRestrictions.join(', ') || 'None'}, Behaviors: ${eatingBehaviors.join(', ') || 'None'}`);
 
     // Create user profile for unified engine
     const userProfile = {
@@ -111,7 +117,9 @@ serve(async (req) => {
       trainingDistance: dayPlan?.distanceKm,
       googleFitCalories: googleFitData?.calories_burned,
       useAI: true,
-      groqApiKey: getGroqKey()
+      groqApiKey: getGroqKey(),
+      dietaryRestrictions,
+      eatingBehaviors
     };
 
     const mealPlanResult = await generateUserMealPlan(mealPlanOptions);

@@ -27,6 +27,8 @@ export interface MealPlanOptions {
   googleFitCalories?: number;
   useAI?: boolean;
   groqApiKey?: string;
+  dietaryRestrictions?: string[];
+  eatingBehaviors?: string[];
 }
 
 export interface MealPlanResult {
@@ -122,7 +124,9 @@ export async function generateUserMealPlan(
       date,
       includeSnack,
       unifiedMealPlan,
-      groqApiKey
+      groqApiKey,
+      dietaryRestrictions: dietaryRestrictions || [],
+      eatingBehaviors: eatingBehaviors || []
     });
   }
 
@@ -187,6 +191,8 @@ async function generateAISuggestions(options: {
   includeSnack: boolean;
   unifiedMealPlan: any;
   groqApiKey: string;
+  dietaryRestrictions: string[];
+  eatingBehaviors: string[];
 }): Promise<Record<string, any[]>> {
   const {
     userProfile,
@@ -195,7 +201,9 @@ async function generateAISuggestions(options: {
     date,
     includeSnack,
     unifiedMealPlan,
-    groqApiKey
+    groqApiKey,
+    dietaryRestrictions,
+    eatingBehaviors
   } = options;
 
   const context = `
@@ -206,6 +214,9 @@ User Profile:
 - Weight: ${userProfile.weightKg} kg
 - Height: ${userProfile.heightCm} cm
 - Sex: ${userProfile.sex}
+
+Dietary Restrictions: ${dietaryRestrictions.length > 0 ? dietaryRestrictions.join(', ') : 'None'}
+Eating Behaviors: ${eatingBehaviors.length > 0 ? eatingBehaviors.join(', ') : 'None'}
 
 Nutrition Targets for ${date}:
 - Training Load: ${trainingLoad} (rest/easy/moderate/long/quality)
@@ -226,6 +237,8 @@ REQUIREMENTS:
 3. Provide 2-3 meal options per meal type
 4. Match the nutrition targets closely
 5. Consider runner-specific needs for ${trainingLoad} training days
+6. RESPECT DIETARY RESTRICTIONS: ${dietaryRestrictions.length > 0 ? `Avoid foods containing: ${dietaryRestrictions.join(', ')}` : 'No dietary restrictions to consider'}
+7. INCORPORATE EATING BEHAVIORS: ${eatingBehaviors.length > 0 ? `Prefer foods that match: ${eatingBehaviors.join(', ')}` : 'No specific eating behaviors to consider'}
 
 Return ONLY valid JSON in this format:
 {
