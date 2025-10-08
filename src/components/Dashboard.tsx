@@ -351,21 +351,66 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const loadDashboardData = async () => {
     if (!user) return;
 
+    setLoading((prev) => prev || !data);
+
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
 
-      // Fetch nutrition score for today
-      const { data: nutritionScore } = await supabase
-        .from('nutrition_scores')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .maybeSingle();
+      const scoringPromise = Promise.allSettled([
+        getTodayScore(user.id),
+        getWeeklyScorePersisted(user.id)
+      ]);
 
-      // Fetch Google Fit data for today
-      const googleFitData = await getTodayData();
-      
-      // Transform Google Fit data to match expected format
+      const weeklyGoogleFitPromise = Promise.all([
+        getWeeklyGoogleFitData(user.id),
+        getWeeklyMileageTarget(user.id)
+      ]);
+
+      const [
+        nutritionScoreResult,
+        mealPlansResult,
+        foodLogsResult,
+        profileResult,
+        googleFitData
+      ] = await Promise.all([
+        supabase
+          .from('nutrition_scores')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .maybeSingle(),
+        supabase
+          .from('daily_meal_plans')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('date', today),
+        supabase
+          .from('food_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('logged_at', `${today}T00:00:00`)
+          .lte('logged_at', `${today}T23:59:59`),
+        (supabase as any)
+          .from('profiles')
+          .select('age, sex, weight_kg, height_cm, activity_level')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        getTodayData()
+      ]);
+
+      const nutritionScore = nutritionScoreResult?.data;
+      const rawMealPlans = Array.isArray(mealPlansResult?.data) ? mealPlansResult.data : [];
+      const normalizedMealPlans: MealPlan[] = rawMealPlans.map((plan) => ({
+        ...plan,
+        meal_suggestions: Array.isArray(plan.meal_suggestions)
+          ? (plan.meal_suggestions as unknown as MealSuggestion[])
+          : []
+      }));
+      const foodLogs = Array.isArray(foodLogsResult?.data) ? foodLogsResult.data : [];
+      const profile = profileResult?.data;
+
+      setMealPlans(normalizedMealPlans);
+
       const exerciseData = {
         steps: googleFitData?.steps || 0,
         calories_burned: googleFitData?.caloriesBurned || 0,
@@ -375,38 +420,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         sessions: googleFitData?.sessions || []
       };
 
-      // Fetch meal plans for today
-      const { data: plans } = await supabase
-        .from('daily_meal_plans')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', today);
-
-      // Fetch food logs for today (actual consumed)
-      const { data: foodLogs } = await supabase
-        .from('food_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('logged_at', `${today}T00:00:00`)
-        .lte('logged_at', `${today}T23:59:59`);
-
-      if (plans) {
-        setMealPlans(plans.map(plan => ({
-          ...plan,
-          meal_suggestions: (plan.meal_suggestions as unknown as MealSuggestion[]) || []
-        })));
-      }
-
-      const plannedNutrition = accumulatePlannedFromMealPlans(plans || []);
-      const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs || []);
+      const plannedNutrition = accumulatePlannedFromMealPlans(rawMealPlans);
+      const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs);
       const dailyScore = computeDailyScore(plannedNutrition, consumedNutrition, exerciseData.calories_burned);
-
-      // Calculate targets from user profile or use defaults
-      const { data: profile } = await (supabase as any)
-        .from('profiles')
-        .select('age, sex, weight_kg, height_cm, activity_level')
-        .eq('user_id', user.id)
-        .maybeSingle();
 
       const bmr = profile ? calculateBMR({
         age: profile.age || 30,
@@ -422,7 +438,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       const calorieTarget = Math.round(bmr * activityMultiplier);
       const macroTargets = deriveMacrosFromCalories(calorieTarget);
 
-      // Detect planned vs actual activity for notification
       try {
         const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
         const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
@@ -435,7 +450,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         if (latest) {
           const id = `${latest.startTimeMillis}-${latest.endTimeMillis}`;
           const lastAck = localStorage.getItem('lastAckSessionId');
-          // Consider recent if ended within last 6 hours
           const ended = parseInt(latest.endTimeMillis || '0');
           const isRecent = Date.now() - ended < 6 * 60 * 60 * 1000;
           const activityType = (latest.activityType || latest.application || latest.name || 'activity').toString();
@@ -452,7 +466,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         proteinGrams: consumedNutrition.protein,
         carbsGrams: consumedNutrition.carbs,
         fatGrams: consumedNutrition.fat,
-        mealsLogged: foodLogs?.length || 0,
+        mealsLogged: foodLogs.length,
         steps: exerciseData.steps,
         caloriesBurned: exerciseData.calories_burned,
         activeMinutes: exerciseData.active_minutes,
@@ -484,37 +498,29 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         }
       });
 
-      // Scoring engine: today + weekly (persisted Monday–Sunday)
-      try {
-        const todayScoreRes = await getTodayScore(user.id);
-        setTodayScore(todayScoreRes.score);
-        setTodayBreakdown(todayScoreRes.breakdown);
-      } catch (e) {
-        // ignore scoring errors to not break dashboard
+      const [todayScoreOutcome, weeklyScoreOutcome] = await scoringPromise;
+      if (todayScoreOutcome.status === 'fulfilled') {
+        setTodayScore(todayScoreOutcome.value.score);
+        setTodayBreakdown(todayScoreOutcome.value.breakdown);
+      } else {
         setTodayScore(0);
         setTodayBreakdown({ nutrition: 0, training: 0 });
       }
-      try {
-        const weekly = await getWeeklyScorePersisted(user.id);
-        setWeeklyScore(weekly);
-      } catch (e) {
+
+      if (weeklyScoreOutcome.status === 'fulfilled') {
+        setWeeklyScore(weeklyScoreOutcome.value);
+      } else {
         setWeeklyScore(0);
       }
 
-      // Load weekly Google Fit data
       try {
-        const [weeklyData, target] = await Promise.all([
-          getWeeklyGoogleFitData(user.id),
-          getWeeklyMileageTarget(user.id)
-        ]);
-
+        const [weeklyData, target] = await weeklyGoogleFitPromise;
         setWeeklyGoogleFitData({
           current: weeklyData.totalDistanceKm,
-          target: target
+          target
         });
       } catch (e) {
         console.error('Error loading weekly Google Fit data:', e);
-        // Keep default values
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -604,8 +610,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-background p-4 pb-28 safe-area-inset">
-      <div className="w-full mx-auto">
+    <div className="min-h-screen bg-gradient-background p-3 pb-28 safe-area-inset">
+      <div className="max-w-none mx-auto">
         {/* Header - NutriSync Branding */}
         <div className="mb-6 pt-2">
           <div className="flex items-center justify-between">
@@ -635,7 +641,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         )}
 
         {/* 1. Today & Weekly Scores */}
-        <div className="mb-3 grid grid-cols-2 gap-3">
+        <div className="mb-4 grid grid-cols-2 gap-4">
           <ScoreCard 
             title="Daily Score" 
             score={todayScore} 
@@ -653,12 +659,12 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         </div>
 
         {/* 2. Marathon Countdown */}
-        <div className="mb-4">
+        <div className="mb-5">
           <RaceGoalWidget />
         </div>
 
         {/* 3. Today's Meal Score */}
-        <div className="mb-4">
+        <div className="mb-5">
           <TodayMealScoreCard
             score={mealScore.score}
             rating={mealScore.rating}
@@ -666,7 +672,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         </div>
 
         {/* 4. Today's Nutrition */}
-        <div className="mb-4">
+        <div className="mb-5">
           <TodayNutritionCard
             calories={{
               current: data?.calories?.consumed || 0,
@@ -692,7 +698,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         </div>
 
         {/* 5. Weekly Kilometers */}
-        <div className="mb-4">
+        <div className="mb-5">
           <WeeklyKilometersCard
             current={weeklyGoogleFitData.current}
             target={weeklyGoogleFitData.target}
@@ -701,7 +707,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
         {/* 6. Upcoming Workouts */}
         {(nextWorkout || preRunMeal) && (
-          <div className="mb-4">
+          <div className="mb-5">
             <UpcomingWorkouts
               workouts={nextWorkout ? [nextWorkout] : []}
               preRunMeal={preRunMeal}
@@ -710,7 +716,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         )}
 
         {/* 7. Today's Insights */}
-        <div className="mb-4">
+        <div className="mb-5">
           <TodayInsightsCard insights={insights} />
         </div>
 
