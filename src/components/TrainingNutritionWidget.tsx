@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { format, addDays, isToday, isTomorrow, isYesterday } from 'date-fns';
+import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 
 // Import unified engine types and functions
 interface UserProfile {
@@ -107,11 +108,14 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
   }>({ carbs: 0, protein: 0, fat: 0, calories: 0 });
   const [dayTarget, setDayTarget] = useState<DayTarget | null>(null);
   const [actualTrainingData, setActualTrainingData] = useState<any | any[] | null>(null);
+  const [todayAggregate, setTodayAggregate] = useState<{ distanceMeters?: number; activeMinutes?: number; caloriesBurned?: number } | null>(null);
+  const { getTodayData } = useGoogleFitSync();
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const todayActivities = activities.filter(a => a.date === dateStr);
   const hasTraining = todayActivities.length > 0 && todayActivities[0].activity_type !== 'rest';
   const isRestDay = !hasTraining;
+  const hasActual = Array.isArray(actualTrainingData) ? actualTrainingData.length > 0 : !!actualTrainingData;
 
   // Function to determine training load from activity
   const determineTrainingLoad = (activity: TrainingActivity): TrainingLoad => {
@@ -200,6 +204,24 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
 
     loadActualTrainingData();
   }, [user, dateStr]);
+
+  // Load aggregate daily Google Fit data (old widget behavior)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getTodayData();
+        if (!cancelled && data) {
+          setTodayAggregate({
+            distanceMeters: data.distanceMeters,
+            activeMinutes: data.activeMinutes,
+            caloriesBurned: data.caloriesBurned,
+          });
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [getTodayData, dateStr]);
 
   // Load actual food intake for the day
   useEffect(() => {
@@ -451,7 +473,7 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
     })();
     const computedDistanceKm = (() => {
       if (typeof s.distance_km === 'number' && s.distance_km > 0) return s.distance_km;
-      const meters = s.distance_meters || s.distanceMeters || s.raw?.distance_meters || s.raw?.distanceMeters;
+      const meters = s.distance_meters || s.distanceMeters || s.raw?.distance_meters || s.raw?.distanceMeters || s.raw?.distance;
       if (typeof meters === 'number' && meters > 0) return Math.round((meters / 1000) * 10) / 10;
       return null;
     })();
@@ -482,46 +504,13 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
   };
 
 
-  if (isRestDay) {
-    return (
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Utensils className="h-5 w-5 text-gray-500" />
-            Rest Day Nutrition
-          </CardTitle>
-          <CardDescription>
-            {isToday(selectedDate) ? 'Today is a rest day' : 
-             isTomorrow(selectedDate) ? 'Tomorrow is a rest day' :
-             isYesterday(selectedDate) ? 'Yesterday was a rest day' :
-             `${format(selectedDate, 'MMM dd')} is a rest day`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-6">
-            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Utensils className="h-8 w-8 text-gray-500" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Take It Easy</h3>
-            <p className="text-muted-foreground mb-4">
-              Focus on recovery, hydration, and maintaining a balanced diet.
-            </p>
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>• Stay hydrated throughout the day</p>
-              <p>• Eat whole, nutritious foods</p>
-              <p>• Get adequate sleep</p>
-              <p>• Light stretching or yoga</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Hide widget entirely on rest days without any actual sessions
+  if (isRestDay && !hasActual) return null;
 
   return (
     <Card className="shadow-card">
       <CardContent className="space-y-4">
-        {/* Training Summary */}
+        {/* Actual Training Summary only */}
         <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
           <div className="flex items-center gap-2 mb-2">
             <Activity className="h-4 w-4 text-primary" />
@@ -532,8 +521,25 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
               <Badge variant="secondary" className="text-xs">Live Data</Badge>
             )}
           </div>
-          {/* If 2 or more actual sessions, show a carousel; if 1, list it */}
-          {Array.isArray(actualTrainingData) && actualTrainingData.length >= 2 ? (
+          {/* Old-widget summary using aggregates when available */
+          }
+          {todayAggregate ? (
+            <div className="text-sm p-2 rounded-md bg-background/60 border">
+              <p className="font-medium capitalize">Run</p>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                {typeof todayAggregate.distanceMeters === 'number' && todayAggregate.distanceMeters > 0 && (
+                  <div className="flex items-center gap-1"><span className="font-semibold text-foreground">{Math.round(todayAggregate.distanceMeters/100)/10}</span><span>km</span></div>
+                )}
+                {typeof todayAggregate.activeMinutes === 'number' && todayAggregate.activeMinutes > 0 && (
+                  <div className="flex items-center gap-1"><span className="font-semibold text-foreground">{todayAggregate.activeMinutes}</span><span>min</span></div>
+                )}
+                {typeof todayAggregate.caloriesBurned === 'number' && todayAggregate.caloriesBurned > 0 && (
+                  <div className="flex items-center gap-1"><span className="font-semibold text-foreground">{Math.round(todayAggregate.caloriesBurned)}</span><span>kcal</span></div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">moderate intensity <span className="text-green-600 ml-2">✓ Completed</span></p>
+            </div>
+          ) : Array.isArray(actualTrainingData) && actualTrainingData.length >= 2 ? (
             <div className="relative">
               <Carousel className="w-full">
                 <CarouselContent>
@@ -581,104 +587,6 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
           )}
         </div>
 
-        {/* Nutrition Recommendations */}
-        {recommendations.map((rec, index) => (
-          <div key={index} className="border rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              {getTimingIcon(rec.type)}
-              <Badge className={getTimingColor(rec.type)}>
-                {rec.type.toUpperCase()}
-              </Badge>
-              <span className="text-sm font-medium">{rec.timing}</span>
-            </div>
-
-
-            <div className="space-y-2">
-              <div>
-                <p className="text-sm font-medium text-foreground mb-1">Suggestions:</p>
-                <div className="flex flex-wrap gap-1">
-                  {rec.suggestions.map((suggestion, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs">
-                      {suggestion}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground mb-1">Benefits:</p>
-                <div className="flex flex-wrap gap-1">
-                  {rec.benefits.map((benefit, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">
-                      {benefit}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-
-               {/* Tomorrow's Pre-Training Recommendations */}
-               {tomorrowRecommendations.length > 0 && (
-                 <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                   <div className="flex items-center gap-2 mb-3">
-                     <Coffee className="h-5 w-5 text-blue-600" />
-                     <span className="font-medium text-blue-800 dark:text-blue-200">Tomorrow's Pre-Training Fuel</span>
-                   </div>
-                   <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
-                     Prepare for tomorrow's training with these nutrition suggestions
-                   </p>
-                   
-                   {tomorrowRecommendations.map((rec, index) => (
-                     <div key={`tomorrow-${index}`} className="border rounded-lg p-4 bg-white dark:bg-gray-800">
-                       <div className="flex items-center gap-2 mb-3">
-                         {getTimingIcon(rec.type)}
-                         <Badge className={getTimingColor(rec.type)}>
-                           {rec.type.toUpperCase()}
-                         </Badge>
-                         <span className="text-sm font-medium">{rec.timing}</span>
-                       </div>
-
-                       <div className="space-y-2">
-                         <div>
-                           <p className="text-sm font-medium text-foreground mb-1">Suggestions:</p>
-                           <div className="flex flex-wrap gap-1">
-                             {rec.suggestions.map((suggestion, i) => (
-                               <Badge key={i} variant="secondary" className="text-xs">
-                                 {suggestion}
-                               </Badge>
-                             ))}
-                           </div>
-                         </div>
-                         <div>
-                           <p className="text-sm font-medium text-foreground mb-1">Benefits:</p>
-                           <div className="flex flex-wrap gap-1">
-                             {rec.benefits.map((benefit, i) => (
-                               <Badge key={i} variant="outline" className="text-xs">
-                                 {benefit}
-                               </Badge>
-                             ))}
-                           </div>
-                         </div>
-                       </div>
-                     </div>
-                   ))}
-                 </div>
-               )}
-
-               {/* Recent Workout Recovery */}
-              {recentWorkout && (
-                <div className="flex items-center justify-between rounded-lg border bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 px-3 py-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                    <span className="font-medium text-green-800 dark:text-green-200">Recent Workout</span>
-                    <span className="text-green-700 dark:text-green-300">
-                      {recentWorkout.activity_type} • {format(new Date(recentWorkout.start_time), 'MMM dd, HH:mm')}
-                    </span>
-                  </div>
-                  <span className="text-green-600/80">Recovery tips above</span>
-                </div>
-              )}
       </CardContent>
     </Card>
   );

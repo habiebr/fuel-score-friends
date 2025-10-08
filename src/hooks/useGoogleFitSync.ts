@@ -366,6 +366,10 @@ export function useGoogleFitSync() {
                 const sessionDistanceData = await sessionDistanceRes.json();
                 const sessionDistance = sessionDistanceData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
                 exerciseDistanceMeters += sessionDistance;
+                // Attach computed distance to the session object so UI can read it later
+                try {
+                  (session as any)._computed_distance_meters = sessionDistance;
+                } catch {}
               }
             } catch (error) {
               console.warn('Failed to get distance for session:', error);
@@ -409,7 +413,7 @@ export function useGoogleFitSync() {
               name: s.name || null,
               description: s.description || null,
               source: 'google_fit',
-              raw: s
+              raw: { ...s, distance_meters: (s as any)._computed_distance_meters }
             }));
 
             const batchSize = 50;
