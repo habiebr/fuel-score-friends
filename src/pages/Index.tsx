@@ -15,26 +15,25 @@ const Index = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
+  const ENABLE_ONBOARDING = false;
 
   useEffect(() => {
+    if (!ENABLE_ONBOARDING) return;
     const checkOnboarding = async () => {
       if (!loading && !user) {
         navigate('/auth');
       } else if (!loading && user) {
-        // Check if user has seen onboarding
         const { data } = await supabase
           .from('user_preferences')
           .select('value')
           .eq('user_id', user.id)
           .eq('key', 'onboarding')
           .maybeSingle();
-        
         if (!data?.value?.hasSeenOnboarding) {
           setShowOnboarding(true);
         }
       }
     };
-    
     checkOnboarding();
   }, [user, loading, navigate]);
 
@@ -68,7 +67,9 @@ const Index = () => {
 
   return (
     <>
-      <OnboardingDialog open={showOnboarding} onComplete={handleOnboardingComplete} />
+      {ENABLE_ONBOARDING && (
+        <OnboardingDialog open={showOnboarding} onComplete={handleOnboardingComplete} />
+      )}
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
         <Dashboard 
