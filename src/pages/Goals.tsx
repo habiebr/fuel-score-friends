@@ -489,16 +489,17 @@ export default function Goals() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
+          <div className="mb-2">
+            <Button variant="ghost" onClick={() => navigate('/')} className="-ml-2">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+          </div>
           <PageHeading
             title="Set Your Goals & Training Plan"
             description="Define your running goal and create your weekly training schedule."
-            className="mb-4"
+            className="mt-3"
           />
-          <div className="mb-6 mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              <strong>Note:</strong> This creates your base weekly training pattern. A separate weekly generator will use this pattern with our calculator and science layer to create your full training plan leading up to your race date.
-            </p>
-          </div>
 
 
           {/* Progress Indicator */}
