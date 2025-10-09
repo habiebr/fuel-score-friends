@@ -51,9 +51,6 @@ export function PWAInstallPrompt() {
           <p className="text-sm text-blue-100">
             Get quick access and a better experience with our app
           </p>
-          <p className="text-xs text-blue-200 mt-1">
-            Debug: canInstall={canInstall ? 'true' : 'false'}, isInstalled={isInstalled ? 'true' : 'false'}
-          </p>
         </div>
         <Button
           onClick={installPWA}

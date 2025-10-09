@@ -24,17 +24,9 @@ import { format, differenceInDays, differenceInHours, differenceInMinutes, diffe
 import { RecoverySuggestion } from '@/components/RecoverySuggestion';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 import { calculateBMR } from '@/lib/nutrition-engine';
-import { getWeeklyGoogleFitData, getWeeklyMileageTarget } from '@/lib/weekly-google-fit';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useWidgetCache, clearUserCache } from '@/hooks/useWidgetCache';
 
-// Mock useUnifiedSync for now
-const useUnifiedSync = () => ({
-  syncNow: () => Promise.resolve(),
-  isRunning: false,
-  lastSync: null,
-  error: null
-});
 
 import { readDashboardCache, writeDashboardCache } from '@/lib/dashboard-cache';
 
@@ -114,10 +106,7 @@ export function CachedDashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps)
   const { user, session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { syncNow, isRunning: isSyncing, lastSync, error: syncError } = useUnifiedSync();
-  
-  // Debug authentication state
-  console.log('CachedDashboard render - user:', user?.id, 'session:', session?.access_token ? 'has_token' : 'no_token');
+  const { syncGoogleFit, isSyncing, lastSync, syncStatus } = useGoogleFitSync();
 
   // Cached data hooks
   const {

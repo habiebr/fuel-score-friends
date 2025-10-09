@@ -24,8 +24,7 @@ import { format, differenceInDays, differenceInHours, differenceInMinutes, diffe
 import { RecoverySuggestion } from '@/components/RecoverySuggestion';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 import { calculateBMR } from '@/lib/nutrition-engine';
-import { getWeeklyGoogleFitData, getWeeklyMileageTarget } from '@/lib/weekly-google-fit';
-import { useUnifiedSync } from '@/hooks/useUnifiedSync';
+import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 
 import { readDashboardCache, writeDashboardCache, clearDashboardCache } from '@/lib/dashboard-cache';
 
@@ -88,7 +87,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const { user, session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { syncNow, isRunning: isSyncing, lastSync, error: syncError } = useUnifiedSync();
+  const { syncGoogleFit, isSyncing, lastSync, syncStatus } = useGoogleFitSync();
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,9 +99,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [newActivity, setNewActivity] = useState<null | { planned?: string; actual?: string; sessionId: string }>(null);
   const [weeklyGoogleFitData, setWeeklyGoogleFitData] = useState<{ current: number; target: number }>({ current: 0, target: 30 });
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
-
-  // Debug authentication state
-  console.log('Dashboard render - user:', user?.id, 'session:', session?.access_token ? 'has_token' : 'no_token', 'loading:', loading);
 
   // Function to determine current meal based on time and Google Fit activity patterns
   const getCurrentMealType = () => {

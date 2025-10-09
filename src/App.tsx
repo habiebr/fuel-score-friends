@@ -29,15 +29,13 @@ import Meals from "./pages/Meals";
 import MealPlans from "./pages/MealPlans";
 import ShoppingList from "./pages/ShoppingList";
 import MealHistory from "./pages/MealHistory";
-import SupabaseDebug from "./pages/SupabaseDebug";
-import GoogleFitDebug from "./pages/GoogleFitDebug";
-import ForceSyncDebug from "./pages/ForceSyncDebug";
 import MarathonCalendarPage from "./pages/MarathonCalendarPage";
 import Offline from "./pages/Offline";
 import NotFound from "./pages/NotFound";
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 import { PWAUpdateNotification } from "@/components/PWAUpdateNotification";
 import OnboardingWizard from "./pages/OnboardingWizard";
+import HistoricalScoresPage from "./pages/HistoricalScoresPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -203,21 +201,9 @@ function App() {
                       <MealHistory />
                     </ProtectedRoute>
                   } />
-
-                  {/* Admin/Debug Routes - Require admin role */}
-                  <Route path="/debug/supabase" element={
-                    <ProtectedRoute allowedRoles={['admin']}>
-                      <SupabaseDebug />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/debug/google-fit" element={
-                    <ProtectedRoute allowedRoles={['admin']}>
-                      <GoogleFitDebug />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/debug/force-sync" element={
-                    <ProtectedRoute allowedRoles={['admin']}>
-                      <ForceSyncDebug />
+                  <Route path="/historical-scores" element={
+                    <ProtectedRoute>
+                      <HistoricalScoresPage />
                     </ProtectedRoute>
                   } />
 

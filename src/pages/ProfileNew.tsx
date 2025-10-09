@@ -11,7 +11,6 @@ import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Activity } from 'lucide-react';
 import { PageHeading } from '@/components/PageHeading';
-import { DebugMenu } from '@/components/DebugMenu';
 import { PWAInstallPrompt } from '@/components/PWAInstallButton';
 
 export default function ProfileNew() {
@@ -147,12 +146,6 @@ export default function ProfileNew() {
                 </Card>
               );
             })}
-          </div>
-
-          {/* Debug Section */}
-          <h2 className="text-xl font-bold text-foreground mb-3">Debug</h2>
-          <div className="space-y-3">
-            <DebugMenu />
           </div>
 
           {/* Account Section */}

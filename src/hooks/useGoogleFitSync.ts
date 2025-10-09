@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { refreshWeeklyAggregates } from '@/lib/weekly-google-fit';
 
 interface GoogleFitData {
   steps: number;
@@ -22,6 +21,12 @@ export function useGoogleFitSync() {
   const [syncStatus, setSyncStatus] = useState<'success' | 'error' | 'pending' | null>(null);
   const [lastErrorTime, setLastErrorTime] = useState<number | null>(null);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
+  const [isHistoricalSyncing, setIsHistoricalSyncing] = useState(false);
+  const [historicalSyncProgress, setHistoricalSyncProgress] = useState<{
+    syncedDays: number;
+    totalDays: number;
+    isComplete: boolean;
+  } | null>(null);
 
   // Load last sync time from google_tokens table
   useEffect(() => {
@@ -140,6 +145,12 @@ export function useGoogleFitSync() {
       });
       if (error) throw error;
       setIsConnected(true);
+      
+      // Check if this is a first-time connection and trigger historical sync
+      setTimeout(() => {
+        checkAndTriggerHistoricalSync();
+      }, 2000); // Wait 2 seconds for token to be stored
+      
       return data;
     } catch (error: any) {
       toast({
@@ -214,7 +225,8 @@ export function useGoogleFitSync() {
 
       // Refresh weekly aggregates after successful sync
       try {
-        await refreshWeeklyAggregates(user.id);
+        // TODO: Implement weekly aggregates refresh if needed
+        console.log('Weekly aggregates refresh would be called here');
       } catch (aggregateError) {
         console.warn('Failed to refresh weekly aggregates:', aggregateError);
       }
@@ -320,6 +332,105 @@ export function useGoogleFitSync() {
     }
   }, [user, syncGoogleFit]);
 
+  /**
+   * Check if this is a first-time Google Fit connection and trigger historical sync
+   */
+  const checkAndTriggerHistoricalSync = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      // Check if user has any existing Google Fit data
+      const { data: existingData, error } = await (supabase as any)
+        .from('google_fit_data')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking existing data:', error);
+        return;
+      }
+
+      // If no existing data, this is a first-time connection
+      if (!existingData) {
+        console.log('First-time Google Fit connection detected, triggering historical sync');
+        await syncHistoricalData(30); // Sync last 30 days
+      }
+    } catch (error) {
+      console.error('Error checking for first-time connection:', error);
+    }
+  }, [user]);
+
+  /**
+   * Sync historical Google Fit data
+   */
+  const syncHistoricalData = useCallback(async (daysBack: number = 30): Promise<void> => {
+    if (!user) return;
+
+    setIsHistoricalSyncing(true);
+    setHistoricalSyncProgress({ syncedDays: 0, totalDays: daysBack, isComplete: false });
+
+    try {
+      const accessToken = await getGoogleAccessToken();
+      if (!accessToken) {
+        throw new Error('No Google Fit access token available');
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not signed in');
+      }
+
+      toast({
+        title: "Syncing historical data",
+        description: `Fetching your last ${daysBack} days of Google Fit data...`,
+      });
+
+      const { data: response, error: functionError } = await (supabase as any).functions.invoke('sync-historical-google-fit-data', {
+        body: { accessToken, daysBack },
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (functionError) {
+        throw new Error(functionError.message || 'Failed to sync historical data');
+      }
+
+      if (!response?.success) {
+        throw new Error(response?.error || 'Invalid response from historical sync');
+      }
+
+      setHistoricalSyncProgress({
+        syncedDays: response.data.syncedDays,
+        totalDays: response.data.totalDays,
+        isComplete: true
+      });
+
+      toast({
+        title: "Historical sync complete!",
+        description: `Successfully synced ${response.data.syncedDays} days of data`,
+      });
+
+      // Trigger a regular sync to get today's data
+      setTimeout(() => {
+        syncGoogleFit();
+      }, 1000);
+
+    } catch (error: any) {
+      console.error('Historical sync failed:', error);
+      
+      toast({
+        title: 'Historical sync failed',
+        description: error.message || 'Could not sync historical data',
+        variant: 'destructive',
+      });
+
+      setHistoricalSyncProgress(null);
+    } finally {
+      setIsHistoricalSyncing(false);
+    }
+  }, [user, getGoogleAccessToken, toast, syncGoogleFit]);
+
   const resetErrorState = useCallback(() => {
     setConsecutiveErrors(0);
     setLastErrorTime(null);
@@ -336,6 +447,11 @@ export function useGoogleFitSync() {
     connectGoogleFit,
     resetErrorState,
     consecutiveErrors,
-    lastErrorTime
+    lastErrorTime,
+    // Historical sync functionality
+    syncHistoricalData,
+    isHistoricalSyncing,
+    historicalSyncProgress,
+    checkAndTriggerHistoricalSync
   };
 }
