@@ -74,8 +74,17 @@ serve(async (req) => {
     );
 
     if (userError || !user) {
-      throw new Error('Unauthorized');
+      console.error('JWT validation failed:', userError);
+      throw new Error('Unauthorized - invalid or expired token');
     }
+    
+    // Validate user ID
+    if (!user.id || user.id === 'undefined') {
+      console.error('Invalid user ID:', user.id);
+      throw new Error('Invalid user ID - please sign in again');
+    }
+    
+    console.log(`Fetching Google Fit data for user: ${user.id}`);
 
     // Get access token from request or database
     const { accessToken = null, date = new Date().toISOString().split('T')[0] } = await req.json();
@@ -92,8 +101,17 @@ serve(async (req) => {
         .limit(1)
         .single();
 
-      if (tokenError || !tokenData?.access_token) {
-        throw new Error('No Google Fit token found - background token renewal should handle this');
+      if (tokenError) {
+        console.error('Error fetching Google token:', tokenError);
+        if (tokenError.code === '22P02') {
+          throw new Error('Invalid user ID format - please sign in again');
+        }
+        throw new Error('Failed to fetch Google Fit token from database');
+      }
+      
+      if (!tokenData?.access_token) {
+        console.log(`No Google Fit token found for user: ${user.id}`);
+        throw new Error('No valid Google Fit token found - please connect your Google Fit account in settings');
       }
 
       // Check if token is expired
