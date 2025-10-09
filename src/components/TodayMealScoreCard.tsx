@@ -41,7 +41,7 @@ export function TodayMealScoreCard({ score, rating }: TodayMealScoreCardProps) {
             </div>
           </div>
           <div className="text-right text-sm text-gray-600 dark:text-gray-400 leading-tight max-w-[140px]">
-            Based on macro targets and meal timing
+            Based on unified nutrition scoring
           </div>
         </div>
       </CardContent>

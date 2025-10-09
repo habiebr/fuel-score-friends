@@ -19,8 +19,13 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     persistSession: true,
     autoRefreshToken: true,
   },
-  // Slightly lower event rate to reduce disconnects; rely on anon key above
-  realtime: { params: { eventsPerSecond: 2 } }
+  // Improved realtime configuration with better error handling
+  realtime: { 
+    params: { eventsPerSecond: 2 },
+    timeout: 10000,
+    heartbeatIntervalMs: 30000,
+    reconnectAfterMs: (tries: number) => Math.min(tries * 1000, 30000)
+  }
 });
 
 // Expose globally for any legacy callers that expect window.supabase

@@ -104,37 +104,45 @@ serve(async (req) => {
         if (minutesUntilExpiry <= 15) {
           console.log(`Refreshing token for user ${tokenRecord.user_id}`);
           
-          const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+          // Try to refresh the token using the main refresh function
+          const refreshResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/refresh-all-google-tokens`, {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
             },
-            body: new URLSearchParams({
-              client_id: Deno.env.get('GOOGLE_CLIENT_ID')!,
-              refresh_token: tokenRecord.refresh_token,
-              grant_type: 'refresh_token',
-            }),
+            body: JSON.stringify({
+              batch_size: 1,
+              threshold_minutes: 1
+            })
           });
 
           if (refreshResponse.ok) {
-            const tokenData: GoogleTokenResponse = await refreshResponse.json();
-            const newExpiresAt = new Date(now.getTime() + (tokenData.expires_in * 1000));
-            
-            // Update token in database
-            await supabase
-              .from('google_tokens')
-              .update({
-                access_token: tokenData.access_token,
-                refresh_token: tokenData.refresh_token || tokenRecord.refresh_token,
-                expires_at: newExpiresAt.toISOString(),
-                last_refreshed_at: now.toISOString(),
-                updated_at: now.toISOString()
-              })
-              .eq('user_id', tokenRecord.user_id)
-              .eq('is_active', true);
+            const result = await refreshResponse.json();
+            if (result.successful_refreshes > 0) {
+              // Get the refreshed token
+              const { data: tokenData, error: tokenError } = await supabase
+                .from('google_tokens')
+                .select('access_token')
+                .eq('user_id', tokenRecord.user_id)
+                .eq('is_active', true)
+                .single();
 
-            accessToken = tokenData.access_token;
-            console.log(`Token refreshed for user ${tokenRecord.user_id}`);
+              if (!tokenError && tokenData?.access_token) {
+                accessToken = tokenData.access_token;
+                console.log(`Token refreshed for user ${tokenRecord.user_id}`);
+              } else {
+                console.error(`Failed to get refreshed token for user ${tokenRecord.user_id}`);
+                results.failed_syncs++;
+                results.errors.push(`User ${tokenRecord.user_id}: Failed to get refreshed token`);
+                continue;
+              }
+            } else {
+              console.error(`Token refresh returned no success for user ${tokenRecord.user_id}`);
+              results.failed_syncs++;
+              results.errors.push(`User ${tokenRecord.user_id}: Token refresh returned no success`);
+              continue;
+            }
           } else {
             console.error(`Failed to refresh token for user ${tokenRecord.user_id}`);
             results.failed_syncs++;

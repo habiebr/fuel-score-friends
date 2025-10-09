@@ -6,9 +6,6 @@ import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
-import { FoodLogEditDialog } from '@/components/FoodLogEditDialog';
-import { MealSuggestionsCarousel } from '@/components/MealSuggestionsCarousel';
-import WeeklyFoodDiary from '@/pages/WeeklyFoodDiary';
 import { 
   BookOpen, 
   Utensils, 
@@ -19,9 +16,9 @@ import {
   Zap,
   Award,
   Clock,
-  Calendar,
-  Pencil
+  Calendar
 } from 'lucide-react';
+import AppHeader from '@/components/AppHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useToast } from '@/hooks/use-toast';
@@ -35,26 +32,7 @@ import {
   calculateBMR,
   getActivityFactor
 } from '@/lib/nutrition-engine';
-import { getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
-import { PageHeading } from '@/components/PageHeading';
-// Meals cache (localStorage TTL)
-const MEALS_CACHE_KEY = 'meals:diary-week:v1';
-const MEALS_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
-
-function readMealsCache(userId?: string) {
-  try {
-    const raw = localStorage.getItem(MEALS_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || parsed.userId !== userId) return null;
-    if (Date.now() - (parsed.ts || 0) > MEALS_CACHE_TTL_MS) return null;
-    return parsed.payload;
-  } catch { return null; }
-}
-
-function writeMealsCache(userId: string, payload: any) {
-  try { localStorage.setItem(MEALS_CACHE_KEY, JSON.stringify({ userId, ts: Date.now(), payload })); } catch {}
-}
+import { getActivityMultiplier, deriveMacrosFromCalories, accumulateConsumedFromFoodLogs } from '@/lib/nutrition';
 
 interface FoodLog {
   id: string;
@@ -79,8 +57,6 @@ export default function Meals() {
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingFoodLog, setEditingFoodLog] = useState<FoodLog | null>(null);
   
   // Diary tab state
   const [todayLogs, setTodayLogs] = useState<FoodLog[]>([]);
@@ -117,17 +93,6 @@ export default function Meals() {
 
   useEffect(() => {
     if (user) {
-      // fast paint from cache
-      const cached = readMealsCache(user.id);
-      if (cached) {
-        setTodayLogs(cached.todayLogs || []);
-        setTodayTotals(cached.todayTotals || { calories: 0, protein: 0, carbs: 0, fat: 0 });
-        setWeekLogs(cached.weekLogs || {});
-        setWeekTotals(cached.weekTotals || {});
-        setWeekDays(cached.weekDays || []);
-        setTargets(cached.targets || { calories: 2400, protein: 120, carbs: 330, fat: 67 });
-        setLoading(false);
-      }
       loadDiaryData();
       loadUserPreferences();
     }
@@ -145,12 +110,33 @@ export default function Meals() {
     setLoading(true);
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
+
+      // Fetch today's food logs with same filtering as Dashboard
+      const { data: todayLogs, error: todayError } = await supabase
+        .from('food_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('logged_at', `${today}T00:00:00`)
+        .lt('logged_at', `${today}T23:59:59.999`)
+        .order('logged_at', { ascending: false });
+
+      if (todayError) {
+        console.error('Error fetching today logs:', todayError);
+        throw todayError;
+      }
+
+      setTodayLogs(todayLogs || []);
+
+      // Calculate totals using the same function as Dashboard
+      const totals = accumulateConsumedFromFoodLogs(todayLogs || []);
+      setTodayTotals(totals);
+
+      // For weekly view, we still need to fetch the last 7 days
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
       const start = `${format(sevenDaysAgo, 'yyyy-MM-dd')}T00:00:00`;
       const end = `${today}T23:59:59`;
       
-      // Load last 7 days logs
       const { data: last7 } = await supabase
         .from('food_logs')
         .select('*')
@@ -158,20 +144,6 @@ export default function Meals() {
         .gte('logged_at', start)
         .lte('logged_at', end)
         .order('logged_at', { ascending: false });
-
-      const logs = (last7 || []).filter(l => l.logged_at?.startsWith(today));
-
-      setTodayLogs(logs || []);
-
-      // Calculate totals
-      const totals = (logs || []).reduce((acc, log) => ({
-        calories: acc.calories + (log.calories || 0),
-        protein: acc.protein + (log.protein_grams || 0),
-        carbs: acc.carbs + (log.carbs_grams || 0),
-        fat: acc.fat + (log.fat_grams || 0)
-      }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-      setTodayTotals(totals);
 
       // Group weekly logs by yyyy-MM-dd
       const grouped: Record<string, FoodLog[]> = {};
@@ -182,12 +154,7 @@ export default function Meals() {
         grouped[day].push(log);
       });
       Object.keys(grouped).forEach((day) => {
-        totalsByDay[day] = grouped[day].reduce((acc, log) => ({
-          calories: acc.calories + (log.calories || 0),
-          protein: acc.protein + (log.protein_grams || 0),
-          carbs: acc.carbs + (log.carbs_grams || 0),
-          fat: acc.fat + (log.fat_grams || 0)
-        }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+        totalsByDay[day] = accumulateConsumedFromFoodLogs(grouped[day]);
       });
       // Ensure all 7 days exist in order
       const days: string[] = [];
@@ -204,14 +171,19 @@ export default function Meals() {
       setWeekTotals(totalsByDay);
 
       // Load user's nutrition targets from profile
-      const { data: profile } = await (supabase as any)
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('weight_kg, height_cm, age, sex, activity_level')
         .eq('user_id', user.id)
         .maybeSingle();
 
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+        throw profileError;
+      }
+
       if (profile) {
-        // Calculate BMR using the same method as Dashboard
+        // Use the same accurate calculation as Dashboard
         const bmr = calculateBMR({
           age: profile.age || 30,
           sex: profile.sex || 'male',
@@ -219,7 +191,6 @@ export default function Meals() {
           heightCm: profile.height_cm || 170
         });
         
-        // Use the same activity multiplier logic as Dashboard
         const activityMultiplier = profile?.activity_level 
           ? getActivityMultiplier(profile.activity_level)
           : 1.5;
@@ -234,25 +205,6 @@ export default function Meals() {
           fat: macroTargets.fat
         });
       }
-
-      // persist to cache for fast reloads
-      try {
-        if (user?.id) {
-          writeMealsCache(user.id, {
-            todayLogs: logs || [],
-            todayTotals: totals,
-            weekLogs: grouped,
-            weekTotals: totalsByDay,
-            weekDays: days,
-            targets: profile ? {
-              calories: calorieTarget,
-              protein: macroTargets.protein,
-              carbs: macroTargets.carbs,
-              fat: macroTargets.fat
-            } : undefined
-          });
-        }
-      } catch {}
     } catch (error) {
       console.error('Error loading diary data:', error);
     } finally {
@@ -365,6 +317,24 @@ export default function Meals() {
     try {
       setGeneratingPlan(true);
       const today = format(new Date(), 'yyyy-MM-dd');
+
+      // First, trigger training update with proper auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        try {
+          await supabase.functions.invoke('update-actual-training', {
+            body: { date: today },
+            headers: { 
+              Authorization: `Bearer ${session.access_token}`,
+              apikey: ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string)
+            }
+          });
+          console.log('Training data updated');
+        } catch (e) {
+          console.warn('Failed to update training data:', e);
+        }
+      }
+
       const cacheKey = `nutritionSuggestions:${today}:${planKey || 'default'}`;
       const { data: prefData } = await (supabase as any)
         .from('user_preferences')
@@ -381,27 +351,15 @@ export default function Meals() {
         return;
       }
       
-      let session = (await supabase.auth.getSession()).data.session;
-      if (!session) {
-        try {
-          const refreshed = await supabase.auth.refreshSession();
-          session = refreshed.data.session;
-        } catch (_) {}
-      }
-      if (!session?.access_token) {
-        throw new Error('Missing authorization header');
-      }
-      const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-      const res = await supabase.functions.invoke('generate-nutrition-suggestions', {
+        const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      const { data, error } = await supabase.functions.invoke('smart-ai-cache', {
         body: { date: today },
         headers: {
           ...(apiKey ? { apikey: apiKey } : {}),
-          Authorization: `Bearer ${session.access_token}`,
-          ...(import.meta as any).env?.VITE_GROQ_API_KEY ? { 'x-groq-key': (import.meta as any).env?.VITE_GROQ_API_KEY } : {}
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
         }
       });
-      if (res.error) throw res.error;
-      const data = res.data;
+      if (error) throw error;
       setAiPlan(data?.meals || null);
       setLastUpdated(new Date().toISOString());
       const toCache = { meals: data?.meals || null, updatedAt: new Date().toISOString() };
@@ -418,7 +376,6 @@ export default function Meals() {
       setRecommendedRecipes(extractRecipesFromAiPlan(data?.meals || null).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
       toast({ title: 'Nutrition suggestions ready', description: 'Personalized suggestions generated for today.' });
     } catch (e: any) {
-      console.error('Suggestion generation error:', e);
       toast({ title: 'AI generation failed', description: e?.message || 'Please try again', variant: 'destructive' });
     } finally {
       setGeneratingPlan(false);
@@ -487,53 +444,6 @@ export default function Meals() {
     return Math.min(100, Math.round((totalCal / targetCal) * 100));
   };
 
-  const handleEditFoodLog = (foodLog: FoodLog) => {
-    setEditingFoodLog(foodLog);
-    setEditDialogOpen(true);
-  };
-
-  const handleEditSave = () => {
-    loadDiaryData();
-    setEditDialogOpen(false);
-    setEditingFoodLog(null);
-  };
-
-  const handleAddSuggestionToDiary = async (suggestion: any) => {
-    if (!user) return;
-    
-    try {
-      const { error } = await supabase
-        .from('food_logs')
-        .insert({
-          user_id: user.id,
-          food_name: suggestion.name,
-          meal_type: 'breakfast', // Default, will be updated based on context
-          calories: suggestion.calories || 0,
-          protein_grams: suggestion.protein || 0,
-          carbs_grams: suggestion.carbs || 0,
-          fat_grams: suggestion.fat || 0,
-          serving_size: '1 serving',
-          logged_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: 'Added to food diary!',
-        description: `${suggestion.name} has been added to your food diary.`,
-      });
-
-      loadDiaryData();
-    } catch (error) {
-      console.error('Error adding suggestion to diary:', error);
-      toast({
-        title: 'Failed to add',
-        description: 'Could not add suggestion to food diary. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const groupLogsByMeal = () => {
     const groups: Record<string, FoodLog[]> = {
       breakfast: [],
@@ -574,11 +484,12 @@ export default function Meals() {
       <div className="min-h-screen bg-gradient-background pb-20">
           {/* Header */}
         <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
-          <PageHeading
-            title="Food"
-            description="Track your nutrition and meals"
-            icon={Utensils}
-          />
+          <AppHeader className="mb-4" />
+
+          <div>
+            <h2 className="text-2xl font-bold mb-1">Food & Nutrition</h2>
+            <p className="text-sm text-muted-foreground">Track, calculate, and discover your optimal nutrition</p>
+          </div>
 
           {/* Tab Navigation */}
           <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
@@ -609,7 +520,18 @@ export default function Meals() {
               <Utensils className="w-4 h-4 mr-2" />
               Suggestions
             </Button>
-            {/* Training button removed per UX update */}
+            <Button
+              variant={activeTab === 'training' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setActiveTab('training');
+                navigate('/goals');
+              }}
+              className="flex-shrink-0"
+            >
+              <Activity className="w-4 h-4 mr-2" />
+              Training
+            </Button>
           </div>
         </div>
 
@@ -617,7 +539,9 @@ export default function Meals() {
         <div className="p-4 space-y-4">
           {/* History Tab */}
           {activeTab === 'history' && (
-            <WeeklyFoodDiary />
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Food history coming soon...</p>
+            </div>
           )}
 
           {/* Diary Tab */}
@@ -714,30 +638,20 @@ export default function Meals() {
                     {logs.length > 0 ? (
                       <div className="space-y-2">
                         {logs.map((log) => (
-                          <div key={log.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 group">
+                          <div key={log.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="font-medium">{log.food_name}</div>
                                 <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                                   <Clock className="w-3 h-3" />
-                                  {format(new Date(log.logged_at), 'hh:mm a')} • {log.serving_size || '1 serving'}
+                                  {format(new Date(log.logged_at), 'hh:mm a')} • 1 bowl
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-1">
                                   P: {log.protein_grams}g C: {log.carbs_grams}g F: {log.fat_grams}g
-                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <div className="text-right">
-                                  <div className="text-lg font-bold">{log.calories} kcal</div>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEditFoodLog(log)}
-                                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 h-8 w-8 p-0"
-                                >
-                                  <Pencil className="h-4 w-4 text-white" />
-                                </Button>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-lg font-bold">{log.calories} kcal</div>
                               </div>
                             </div>
                           </div>
@@ -758,7 +672,7 @@ export default function Meals() {
           {activeTab === 'week' && (
             <>
               <Card className="shadow-card">
-                <CardContent className="p-6">
+                <CardContent className="p-4">
                   <h3 className="text-lg font-semibold mb-2">Weekly Food Diary</h3>
                   <div className="grid grid-cols-7 gap-2">
                     {weekDays.map((day) => (
@@ -846,64 +760,34 @@ export default function Meals() {
               <div className="space-y-4">
                 {aiPlan && (
                   <Card className="shadow-card">
-                    <CardContent className="p-6">
-                      <h3 className="text-lg font-semibold text-foreground mb-3">AI Meal Plan (Today)</h3>
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-base mb-3">AI Meal Plan (Today)</h3>
                       {['breakfast','lunch','dinner','snack'].map((m) => aiPlan[m] ? (
-                        <div key={m} className="mb-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="capitalize font-medium text-lg">{m}</div>
-                            <div className="text-sm text-muted-foreground">Target: {aiPlan[m].target_calories || 0} kcal</div>
+                        <div key={m} className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="capitalize font-medium">{m}</div>
+                            <div className="text-xs text-muted-foreground">Target: {aiPlan[m].target_calories} kcal</div>
                           </div>
-                          <div className="grid grid-cols-3 gap-3 mb-4">
-                            <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-3">
-                              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{aiPlan[m].target_protein || 0}g</div>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-2">
+                              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{aiPlan[m].target_protein}g</div>
                               <div className="text-xs text-muted-foreground">Protein</div>
                             </div>
-                            <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-3">
-                              <div className="text-lg font-bold text-green-600 dark:text-green-400">{aiPlan[m].target_carbs || 0}g</div>
+                            <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-2">
+                              <div className="text-lg font-bold text-green-600 dark:text-green-400">{aiPlan[m].target_carbs}g</div>
                               <div className="text-xs text-muted-foreground">Carbs</div>
                             </div>
-                            <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded-lg py-3">
-                              <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{aiPlan[m].target_fat || 0}g</div>
+                            <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded-lg py-2">
+                              <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{aiPlan[m].target_fat}g</div>
                               <div className="text-xs text-muted-foreground">Fat</div>
                             </div>
                           </div>
-                          
-                          {/* Main suggestions */}
                           {Array.isArray(aiPlan[m].suggestions) && aiPlan[m].suggestions.length > 0 && (
-                            <div className="mb-4">
-                              <h5 className="text-sm font-medium text-muted-foreground mb-2">Recommended:</h5>
-                              <ul className="text-sm list-disc list-inside text-muted-foreground space-y-1">
-                                {aiPlan[m].suggestions.slice(0,2).map((s: any, i: number) => (
-                                  <li key={i} className="flex items-center justify-between">
-                                    <span>{s.name}</span>
-                                    <span className="font-medium">{s.calories || 0} kcal</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {/* Alternative suggestions carousel */}
-                          {Array.isArray(aiPlan[m].suggestions) && aiPlan[m].suggestions.length > 2 && (
-                            <MealSuggestionsCarousel
-                              suggestions={aiPlan[m].suggestions.slice(2).map((s: any) => ({
-                                name: s.name,
-                                calories: s.calories || 0,
-                                protein: s.protein || 0,
-                                carbs: s.carbs || 0,
-                                fat: s.fat || 0,
-                                prep_time: s.prep_time || 10,
-                                ingredients: s.ingredients || []
-                              }))}
-                              mealType={m}
-                              onAddToDiary={(suggestion) => {
-                                handleAddSuggestionToDiary({
-                                  ...suggestion,
-                                  meal_type: m
-                                });
-                              }}
-                            />
+                            <ul className="mt-2 text-sm list-disc list-inside text-muted-foreground">
+                              {aiPlan[m].suggestions.slice(0,2).map((s: any, i: number) => (
+                                <li key={i}>{s.name} — {s.calories} kcal</li>
+                              ))}
+                            </ul>
                           )}
                         </div>
                       ) : null)}
@@ -920,10 +804,10 @@ export default function Meals() {
                 )}
                 {recommendedRecipes.map(({ recipe, score, reasons, compatibility }) => (
                   <Card key={recipe.id} className="shadow-card">
-                    <CardContent className="p-6">
+                    <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-foreground mb-1">{recipe.name}</h3>
+                          <h3 className="font-semibold text-lg mb-1">{recipe.name}</h3>
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                             {recipe.tags.slice(0, 2).map((tag) => (
                               <span key={tag} className="text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 rounded-full capitalize">
@@ -1002,13 +886,6 @@ export default function Meals() {
       />
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <FitnessScreenshotDialog open={fitnessScreenshotOpen} onOpenChange={setFitnessScreenshotOpen} />
-      <FoodLogEditDialog 
-        open={editDialogOpen} 
-        onOpenChange={setEditDialogOpen} 
-        foodLog={editingFoodLog} 
-        onSave={handleEditSave}
-        onDelete={handleEditSave}
-      />
     </>
   );
 }

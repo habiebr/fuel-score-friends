@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useUnifiedSync } from '@/hooks/useUnifiedSync';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Activity, Calendar, TrendingUp, Clock, MapPin, Heart, Zap } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { format, subDays, parseISO } from 'date-fns';
+import { SyncStatus } from '@/components/SyncStatus';
 
 interface GoogleFitSession {
   id: string;
@@ -46,10 +48,19 @@ interface ActivityStats {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
 export default function GoogleFitDebug() {
-  const { user, getGoogleAccessToken } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const { 
+    syncState, 
+    syncNow, 
+    isRunning, 
+    lastSync, 
+    nextSync, 
+    error, 
+    phases 
+  } = useUnifiedSync();
+  
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [data, setData] = useState<GoogleFitData[]>([]);
   const [sessions, setSessions] = useState<GoogleFitSession[]>([]);
   const [stats, setStats] = useState<ActivityStats | null>(null);
@@ -61,7 +72,7 @@ export default function GoogleFitDebug() {
     setIsLoading(true);
     try {
       // Load daily data
-      const { data: dailyData, error: dailyError } = await supabase
+      const { data: dailyData, error: dailyError } = await (supabase as any)
         .from('google_fit_data')
         .select('*')
         .eq('user_id', user.id)
@@ -71,7 +82,7 @@ export default function GoogleFitDebug() {
       if (dailyError) throw dailyError;
 
       // Load sessions
-      const { data: sessionsData, error: sessionsError } = await supabase
+      const { data: sessionsData, error: sessionsError } = await (supabase as any)
         .from('google_fit_sessions')
         .select('*')
         .eq('user_id', user.id)
@@ -80,8 +91,8 @@ export default function GoogleFitDebug() {
 
       if (sessionsError) throw sessionsError;
 
-      setData(dailyData || []);
-      setSessions(sessionsData || []);
+      setData((dailyData as GoogleFitData[]) || []);
+      setSessions((sessionsData as GoogleFitSession[]) || []);
 
       // Calculate stats
       if (sessionsData && sessionsData.length > 0) {
@@ -130,163 +141,26 @@ export default function GoogleFitDebug() {
     }
   };
 
-  const syncAllData = async () => {
-    if (!user) return;
-
-    setIsSyncing(true);
+  const handleSyncNow = async () => {
     try {
-      const accessToken = await getGoogleAccessToken();
-      if (!accessToken) {
-        throw new Error('No Google Fit access token available');
-      }
-
-      // Get the current session to include authorization header
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('No active session found');
-      }
-
-      const { data, error } = await supabase.functions.invoke('sync-all-google-fit-data', {
-        body: { 
-          accessToken,
-          days: days
-        },
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Sync successful!",
-        description: data.message || "Data synced successfully",
-      });
-
+      await syncNow();
       // Reload data after sync
       await loadData();
-
     } catch (error) {
-      console.error('Error syncing data:', error);
-      toast({
-        title: "Sync failed",
-        description: error instanceof Error ? error.message : "Failed to sync Google Fit data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSyncing(false);
+      console.error('Sync failed:', error);
     }
   };
 
-  const manualSync = async () => {
-    if (!user) return;
-
-    setIsSyncing(true);
+  const handleForceSync = async () => {
     try {
-      console.log('Starting manual sync process...');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('No active session found');
-      }
-      // Use the currently saved token without forcing a refresh
-      const accessToken = await getGoogleAccessToken();
-      if (!accessToken) {
-        throw new Error('No Google Fit access token available');
-      }
-
-      console.log('Starting manual sync with token:', accessToken.substring(0, 20) + '...');
-
-      const { data, error } = await supabase.functions.invoke('sync-all-google-fit-data', {
-        body: { 
-          accessToken,
-          days: 7 // Sync last 7 days for manual sync
-        },
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      console.log('Sync response:', { data, error });
-
-      if (error) {
-        console.error('Sync function error:', error);
-        throw new Error(`Sync failed: ${error.message || 'Unknown error'}`);
-      }
-
-      toast({
-        title: "Manual sync successful!",
-        description: data?.message || "Data synced successfully",
-      });
-
+      await syncNow(true); // Force sync
       // Reload data after sync
       await loadData();
-
     } catch (error) {
-      console.error('Error in manual sync:', error);
-      toast({
-        title: "Manual sync failed",
-        description: error instanceof Error ? error.message : "Failed to sync Google Fit data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSyncing(false);
+      console.error('Force sync failed:', error);
     }
   };
 
-  const comprehensiveSync = async () => {
-    if (!user) return;
-
-    setIsSyncing(true);
-    try {
-      console.log('Starting comprehensive sync process...');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('No active session found');
-      }
-      // Use the currently saved token without forcing a refresh
-      const accessToken = await getGoogleAccessToken();
-      if (!accessToken) {
-        throw new Error('No Google Fit access token available');
-      }
-
-      console.log('Starting comprehensive sync (using unified sync-all-google-fit-data) with token:', accessToken.substring(0, 20) + '...');
-
-      const { data, error } = await supabase.functions.invoke('sync-all-google-fit-data', {
-        body: { 
-          accessToken,
-          days: 7
-        },
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      console.log('Unified sync response:', { data, error });
-
-      if (error) {
-        console.error('Unified sync function error:', error);
-        throw new Error(`Sync failed: ${error.message || 'Unknown error'}`);
-      }
-
-      toast({
-        title: "Sync successful!",
-        description: data?.message || "Google Fit data synced successfully",
-      });
-
-      // Reload data after sync
-      await loadData();
-
-    } catch (error) {
-      console.error('Error in comprehensive sync:', error);
-      toast({
-        title: "Comprehensive sync failed",
-        description: error instanceof Error ? error.message : "Failed to sync Google Fit data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   useEffect(() => {
     loadData();
@@ -355,7 +229,7 @@ export default function GoogleFitDebug() {
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Days to sync:</label>
+                <label className="text-sm font-medium">Days to view:</label>
                 <select 
                   value={days} 
                   onChange={(e) => setDays(Number(e.target.value))}
@@ -368,43 +242,6 @@ export default function GoogleFitDebug() {
                 </select>
               </div>
               <Button 
-                onClick={syncAllData} 
-                disabled={isSyncing}
-                className="flex items-center gap-2"
-              >
-                {isSyncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Activity className="h-4 w-4" />
-                )}
-                {isSyncing ? 'Syncing...' : 'Sync All Data'}
-              </Button>
-              <Button 
-                onClick={manualSync} 
-                disabled={isSyncing}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                {isSyncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Zap className="h-4 w-4" />
-                )}
-                {isSyncing ? 'Syncing...' : 'Manual Sync'}
-              </Button>
-              <Button 
-                onClick={comprehensiveSync} 
-                disabled={isSyncing}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-              >
-                {isSyncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Activity className="h-4 w-4" />
-                )}
-                {isSyncing ? 'Syncing...' : 'Sync (Unified)'}
-              </Button>
-              <Button 
                 onClick={loadData} 
                 disabled={isLoading}
                 variant="outline"
@@ -415,11 +252,22 @@ export default function GoogleFitDebug() {
                 ) : (
                   <Calendar className="h-4 w-4" />
                 )}
-                Refresh
+                Refresh Data
               </Button>
             </div>
           </CardContent>
         </Card>
+
+        {/* Unified Sync Status */}
+        <SyncStatus
+          phases={phases}
+          isRunning={isRunning}
+          lastSync={lastSync}
+          nextSync={nextSync}
+          error={error}
+          onSyncNow={handleSyncNow}
+          onForceSync={handleForceSync}
+        />
 
         {/* Stats Overview */}
         {stats && (

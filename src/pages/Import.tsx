@@ -1,6 +1,7 @@
 import { ArrowLeft, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { GoogleFitTokenRefresh } from '@/components/GoogleFitTokenRefresh';
 import { useNavigate } from 'react-router-dom';
 import { PageHeading } from '@/components/PageHeading';
 
@@ -68,6 +69,11 @@ export default function Import() {
               <span><strong>Activity sessions:</strong> Running, cycling, and other workouts</span>
             </li>
           </ul>
+        </div>
+
+        {/* Token Tools */}
+        <div className="mt-6">
+          <GoogleFitTokenRefresh />
         </div>
       </div>
     </div>

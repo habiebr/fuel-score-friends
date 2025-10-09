@@ -18,11 +18,15 @@ const Index = () => {
   const ENABLE_ONBOARDING = false;
 
   useEffect(() => {
+    // Always redirect unauthenticated users to /auth
+    if (!loading && !user) {
+      navigate('/auth', { replace: true });
+      return;
+    }
+
     if (!ENABLE_ONBOARDING) return;
     const checkOnboarding = async () => {
-      if (!loading && !user) {
-        navigate('/auth');
-      } else if (!loading && user) {
+      if (!loading && user) {
         const { data } = await supabase
           .from('user_preferences')
           .select('value')
@@ -61,9 +65,7 @@ const Index = () => {
     );
   }
 
-  if (!user) {
-    return null; // Will redirect to auth
-  }
+  if (!user) return null;
 
   return (
     <>

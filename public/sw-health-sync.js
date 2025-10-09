@@ -623,37 +623,35 @@ async function syncNutritionToSupabase(nutritionData) {
   }
 }
 
-// Refresh Google Fit token
+// Refresh Google Fit token using Edge Function
 async function refreshGoogleFitToken(refreshToken) {
   try {
-    const response = await fetch('https://oauth2.googleapis.com/token', {
+    const supabaseUrl = self.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      throw new Error('Supabase URL not configured');
+    }
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/refresh-all-google-tokens`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: new URLSearchParams({
-        client_id: 'YOUR_GOOGLE_CLIENT_ID',
-        client_secret: 'YOUR_GOOGLE_CLIENT_SECRET',
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
+      body: JSON.stringify({
+        batch_size: 1,
+        threshold_minutes: 1
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Google token refresh failed: ${response.status}`);
+      throw new Error(`Token refresh failed: ${response.status}`);
     }
 
-    const tokenData = await response.json();
-    
-    // Store new token data
-    await storeTokenData({
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token || refreshToken,
-      expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
-      timestamp: new Date().toISOString()
-    });
-
-    console.log('Google Fit token refreshed successfully');
+    const result = await response.json();
+    if (result.successful_refreshes > 0) {
+      console.log('Google Fit token refreshed successfully via Edge Function');
+    } else {
+      throw new Error('Token refresh returned no success');
+    }
   } catch (error) {
     console.error('Failed to refresh Google Fit token:', error);
     throw error;

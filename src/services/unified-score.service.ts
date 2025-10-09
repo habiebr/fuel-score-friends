@@ -52,9 +52,11 @@ export async function getDailyUnifiedScore(
   // Fetch user profile
   const { data: profile } = await supabase
     .from('profiles')
-    .select('weight, height, age, sex')
+    .select('weight_kg, height_cm, age, sex')
     .eq('user_id', userId)
     .maybeSingle();
+
+  console.log('Profile data:', profile);
 
   // Fetch meal plans for the day
   const { data: mealPlans } = await supabase
@@ -72,7 +74,7 @@ export async function getDailyUnifiedScore(
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
   // Add fueling windows for runners
-  const weight = profile?.weight || 70;
+  const weight = profile?.weight_kg || 70;
   const nutritionTargetsWithWindows = {
     ...nutritionTargets,
     preCho: Math.round(weight * 1.5),
@@ -81,6 +83,8 @@ export async function getDailyUnifiedScore(
     postPro: Math.round(weight * 0.3),
     fatMin: Math.round((nutritionTargets.calories * 0.2) / 9),
   };
+
+  console.log('Nutrition targets with windows:', nutritionTargetsWithWindows);
 
   // Fetch food logs for the day
   const { data: foodLogs } = await supabase
@@ -157,6 +161,53 @@ export async function getDailyUnifiedScore(
 
   // Calculate score
   const breakdown = calculateUnifiedScore(context);
+  console.log('Calculated score:', {
+    userId,
+    dateISO,
+    breakdown,
+    context,
+    nutritionTargets: nutritionTargetsWithWindows,
+    nutritionActuals,
+    trainingPlan,
+    trainingActual
+  });
+
+  // Persist score to database using direct table insert
+  try {
+    const { error } = await supabase
+      .from('nutrition_scores')
+      .upsert({
+        user_id: userId,
+        date: dateISO,
+        daily_score: breakdown.total,
+        calories_consumed: nutritionActuals.calories,
+        protein_grams: nutritionActuals.protein,
+        carbs_grams: nutritionActuals.carbs,
+        fat_grams: nutritionActuals.fat,
+        meals_logged: (foodLogs || []).length,
+        planned_calories: nutritionTargetsWithWindows.calories,
+        planned_protein_grams: nutritionTargetsWithWindows.protein,
+        planned_carbs_grams: nutritionTargetsWithWindows.carbs,
+        planned_fat_grams: nutritionTargetsWithWindows.fat,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,date'
+      });
+    
+    if (error) {
+      console.error('Failed to persist score:', error);
+    } else {
+      console.log('Score persisted successfully:', {
+        userId,
+        dateISO,
+        daily_score: breakdown.total,
+        nutrition: breakdown.nutrition.total,
+        training: breakdown.training.total
+      });
+    }
+  } catch (error) {
+    console.error('Failed to persist score:', error);
+  }
 
   return {
     score: breakdown.total,
@@ -201,28 +252,30 @@ export async function getMealScores(
 }
 
 /**
- * Get weekly score average
+ * Get weekly score from cached data (no recalculation)
  */
-export async function getWeeklyUnifiedScore(
+export async function getWeeklyScoreFromCache(
   userId: string,
-  weekStart: Date,
-  strategy: ScoringStrategy = 'runner-focused'
+  weekStart?: Date
 ): Promise<{ average: number; dailyScores: Array<{ date: string; score: number }> }> {
-  const dailyScores: Array<{ date: string; score: number }> = [];
+  const startDate = weekStart || new Date();
+  startDate.setDate(startDate.getDate() - startDate.getDay() + 1); // Start of week (Monday)
   
-  for (let i = 0; i < 7; i++) {
-    const date = new Date(weekStart);
-    date.setDate(date.getDate() + i);
-    const dateISO = format(date, 'yyyy-MM-dd');
-    
-    try {
-      const result = await getDailyUnifiedScore(userId, dateISO, strategy);
-      dailyScores.push({ date: dateISO, score: result.score });
-    } catch (error) {
-      console.error(`Failed to get score for ${dateISO}:`, error);
-      dailyScores.push({ date: dateISO, score: 0 });
-    }
-  }
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + 6); // End of week (Sunday)
+  
+  const { data: scores } = await supabase
+    .from('nutrition_scores')
+    .select('date, daily_score')
+    .eq('user_id', userId)
+    .gte('date', format(startDate, 'yyyy-MM-dd'))
+    .lte('date', format(endDate, 'yyyy-MM-dd'))
+    .order('date', { ascending: true });
+  
+  const dailyScores = (scores || []).map(score => ({
+    date: score.date,
+    score: score.daily_score
+  }));
   
   const validScores = dailyScores.filter(d => d.score > 0);
   const average = validScores.length > 0
@@ -231,6 +284,60 @@ export async function getWeeklyUnifiedScore(
   
   return { average, dailyScores };
 }
+
+/**
+ * Get all users' weekly scores from cache for leaderboard
+ */
+export async function getAllUsersWeeklyScoresFromCache(
+  weekStart?: Date
+): Promise<Array<{ user_id: string; weekly_score: number; daily_scores: Array<{ date: string; score: number }> }>> {
+  const startDate = weekStart || new Date();
+  startDate.setDate(startDate.getDate() - startDate.getDay() + 1); // Start of week (Monday)
+  
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + 6); // End of week (Sunday)
+  
+  // Get all users' scores for the week
+  const { data: scores } = await supabase
+    .from('nutrition_scores')
+    .select('user_id, date, daily_score')
+    .gte('date', format(startDate, 'yyyy-MM-dd'))
+    .lte('date', format(endDate, 'yyyy-MM-dd'))
+    .order('user_id, date', { ascending: true });
+  
+  // Group by user_id and calculate weekly averages
+  const userScores = new Map<string, Array<{ date: string; score: number }>>();
+  
+  (scores || []).forEach(score => {
+    if (!userScores.has(score.user_id)) {
+      userScores.set(score.user_id, []);
+    }
+    userScores.get(score.user_id)!.push({
+      date: score.date,
+      score: score.daily_score
+    });
+  });
+  
+  // Calculate weekly averages for each user
+  const result: Array<{ user_id: string; weekly_score: number; daily_scores: Array<{ date: string; score: number }> }> = [];
+  
+  userScores.forEach((dailyScores, userId) => {
+    const validScores = dailyScores.filter(d => d.score > 0);
+    const weeklyScore = validScores.length > 0
+      ? Math.round(validScores.reduce((sum, d) => sum + d.score, 0) / validScores.length)
+      : 0;
+    
+    result.push({
+      user_id: userId,
+      weekly_score: weeklyScore,
+      daily_scores: dailyScores
+    });
+  });
+  
+  return result;
+}
+
+/**
 
 /**
  * Legacy compatibility functions

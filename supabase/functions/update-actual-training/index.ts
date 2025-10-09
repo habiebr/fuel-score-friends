@@ -59,6 +59,43 @@ serve(async (req) => {
 
     console.log(`Updating actual training for user ${user.id} on ${date}`);
 
+    // First check if user has a Google Fit token
+    const { data: googleFitToken, error: tokenError } = await supabase
+      .from('google_tokens')
+      .select('user_id, expires_at, is_active')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (tokenError || !googleFitToken) {
+      console.log(`User ${user.id} does not have a Google Fit token connected`);
+      return new Response(JSON.stringify({ 
+        message: 'Google Fit not connected',
+        error: 'No valid Google Fit token found - please connect your Google Fit account in settings',
+        updated: false,
+        requires_google_fit_connection: true
+      }), {
+        status: 200, // Return 200 instead of error since this is expected for some users
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check if token is expired
+    const now = new Date();
+    const expiresAt = new Date(googleFitToken.expires_at);
+    if (expiresAt <= now) {
+      console.log(`User ${user.id} has expired Google Fit token`);
+      return new Response(JSON.stringify({ 
+        message: 'Google Fit token expired',
+        error: 'Google Fit token has expired - background token renewal should handle this',
+        updated: false,
+        token_expired: true
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Get Google Fit sessions for the date
     const { data: googleFitSessions, error: sessionsError } = await supabase
       .from('google_fit_sessions')
@@ -79,7 +116,8 @@ serve(async (req) => {
     if (!googleFitSessions || googleFitSessions.length === 0) {
       return new Response(JSON.stringify({ 
         message: 'No Google Fit sessions found for this date',
-        updated: false
+        updated: false,
+        has_token: true
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

@@ -91,9 +91,19 @@ serve(async (req) => {
     let userId: string;
     try {
       const parts = token.split(".");
+      if (parts.length !== 3) {
+        throw new Error("Invalid token format");
+      }
       const payload = JSON.parse(atob(parts[1]));
       userId = payload.sub;
+      
+      if (!userId) {
+        throw new Error("No user ID in token");
+      }
+      
+      console.log(`User ID extracted: ${userId}`);
     } catch (e) {
+      console.error("JWT decode error:", e);
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -104,12 +114,23 @@ serve(async (req) => {
     const requestDate = date || new Date().toISOString().split("T")[0];
 
     // Load profile, goals, and race date
+    console.log(`Loading profile for user: ${userId}`);
     const profileRes = await supabaseRequest(
       `/profiles?select=user_id,weight,weight_kg,height,height_cm,age,goal_type,fitness_level,target_date&user_id=eq.${userId}&limit=1`,
       { method: "GET" }
     );
     const profileData = await profileRes.json() as any[];
     const profileRow = Array.isArray(profileData) ? profileData[0] : null;
+    
+    if (!profileRow) {
+      console.error(`No profile found for user: ${userId}`);
+      return new Response(JSON.stringify({ error: "User profile not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    console.log(`Profile loaded: ${JSON.stringify(profileRow)}`);
 
     const userProfile: UserProfile = {
       weightKg: profileRow?.weight_kg || profileRow?.weight || 70,
@@ -176,32 +197,48 @@ Return ONLY strict JSON with keys breakfast, lunch, dinner${dayTarget.meals.find
     // Prefer header-provided key for flexibility; fallback to function secret
     const headerKey = req.headers.get("x-groq-key") || req.headers.get("groq-api-key") || undefined;
     const GROQ_API_KEY = headerKey || getGroqKey();
+    
+    console.log(`GROQ API Key available: ${!!GROQ_API_KEY}`);
+    
     if (GROQ_API_KEY) {
-      const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
-          messages: [
-            { role: "system", content: "You are an expert sports nutritionist. Return ONLY valid minified JSON." },
-            { role: "user", content: context },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.7,
-        }),
-      });
-      if (aiRes.ok) {
-        const aiData = await aiRes.json();
-        const content = aiData.choices?.[0]?.message?.content || "{}";
-        try {
-          suggestions = JSON.parse(content);
-        } catch (_) {
-          suggestions = {};
+      try {
+        console.log("Calling GROQ API...");
+        const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "llama-3.1-8b-instant",
+            messages: [
+              { role: "system", content: "You are an expert sports nutritionist specializing in Indonesian cuisine for runners. Return ONLY valid minified JSON." },
+              { role: "user", content: context },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.7,
+          }),
+        });
+        
+        if (aiRes.ok) {
+          const aiData = await aiRes.json();
+          const content = aiData.choices?.[0]?.message?.content || "{}";
+          console.log(`AI Response received: ${content.substring(0, 200)}...`);
+          try {
+            suggestions = JSON.parse(content);
+            console.log("AI suggestions parsed successfully");
+          } catch (parseError) {
+            console.error("Failed to parse AI response:", parseError);
+            suggestions = {};
+          }
+        } else {
+          console.error(`GROQ API error: ${aiRes.status} ${aiRes.statusText}`);
         }
+      } catch (apiError) {
+        console.error("GROQ API call failed:", apiError);
       }
+    } else {
+      console.log("No GROQ API key available, skipping AI generation");
     }
 
     // Fallback minimal structure

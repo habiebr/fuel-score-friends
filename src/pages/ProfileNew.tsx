@@ -12,6 +12,7 @@ import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Activity } from 'lucide-react';
 import { PageHeading } from '@/components/PageHeading';
 import { DebugMenu } from '@/components/DebugMenu';
+import { PWAInstallPrompt } from '@/components/PWAInstallButton';
 
 export default function ProfileNew() {
   const { user, signOut } = useAuth();
@@ -115,6 +116,11 @@ export default function ProfileNew() {
               </div>
             </CardContent>
           </Card>
+
+          {/* PWA Install Prompt */}
+          <div className="mb-6">
+            <PWAInstallPrompt />
+          </div>
 
           {/* Menu Items */}
           <div className="space-y-3 mb-6">

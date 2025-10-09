@@ -25,18 +25,7 @@ export function GoogleFitTokenRefresh() {
         return;
       }
 
-      // Check if token is expired by looking at localStorage
-      const expiresAtStr = localStorage.getItem('google_fit_token_expiry');
-      if (expiresAtStr) {
-        const expiresAt = parseInt(expiresAtStr, 10);
-        const now = Date.now();
-        const buffer = 5 * 60 * 1000; // 5 minutes buffer
-        
-        if (now > (expiresAt - buffer)) {
-          setTokenStatus('expired');
-          return;
-        }
-      }
+      // Check token validity by making an API call
 
       // Test the token by making a simple API call
       try {
@@ -47,11 +36,12 @@ export function GoogleFitTokenRefresh() {
           }
         });
 
-        if (response.status === 401) {
-          setTokenStatus('expired');
-        } else if (response.ok) {
+        if (response.ok) {
           setTokenStatus('valid');
+        } else if (response.status === 401) {
+          setTokenStatus('expired');
         } else {
+          console.error('Unexpected response:', response.status);
           setTokenStatus('expired');
         }
       } catch (error) {
@@ -115,6 +105,10 @@ export function GoogleFitTokenRefresh() {
   };
 
   useEffect(() => {
+    // Clear any stored token on mount
+    try {
+      localStorage.removeItem('google_fit_provider_token');
+    } catch {}
     checkTokenStatus();
   }, []);
 
@@ -232,9 +226,8 @@ export function GoogleFitTokenRefresh() {
           )}
         </div>
 
-        <div className="text-xs text-gray-500 space-y-1">
+        <div className="text-xs text-gray-500">
           <p><strong>Connection Status:</strong> {isConnected ? 'Connected' : 'Not Connected'}</p>
-          <p><strong>Token Storage:</strong> {localStorage.getItem('google_fit_connected') === 'true' ? 'Found' : 'Not Found'}</p>
         </div>
       </CardContent>
     </Card>

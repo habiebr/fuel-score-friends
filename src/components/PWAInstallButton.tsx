@@ -37,9 +37,10 @@ export function PWAInstallButton({
 export function PWAInstallPrompt() {
   const { canInstall, installPWA, isInstalled } = usePWA();
 
-  if (isInstalled || !canInstall) {
-    return null;
-  }
+  // For debugging - always show the prompt for now
+  // if (isInstalled || !canInstall) {
+  //   return null;
+  // }
 
   return (
     <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
@@ -50,12 +51,16 @@ export function PWAInstallPrompt() {
           <p className="text-sm text-blue-100">
             Get quick access and a better experience with our app
           </p>
+          <p className="text-xs text-blue-200 mt-1">
+            Debug: canInstall={canInstall ? 'true' : 'false'}, isInstalled={isInstalled ? 'true' : 'false'}
+          </p>
         </div>
         <Button
           onClick={installPWA}
           variant="secondary"
           size="sm"
           className="bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
+          disabled={!canInstall}
         >
           Install
         </Button>

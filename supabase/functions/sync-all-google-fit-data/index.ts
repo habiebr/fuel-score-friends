@@ -83,27 +83,38 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    );
-
-    // Resolve user either from Authorization or from body.userId
-    let resolvedUserId: string | null = null;
-    const auth = await supabaseClient.auth.getUser();
-    if (!auth.error && auth.data.user) {
-      resolvedUserId = auth.data.user.id;
-    }
-    const parsedBody = await req.clone().json().catch(() => ({} as any));
-    const { accessToken, days = 30, userId } = parsedBody;
-    if (!resolvedUserId && userId) resolvedUserId = String(userId);
-    if (!resolvedUserId) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+    // Get authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Initialize Supabase client with service role key
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get user from JWT token directly
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(
+      authHeader.replace('Bearer ', '')
+    );
+
+    if (userError || !user) {
+      return new Response(JSON.stringify({ 
+        error: 'Unauthorized - invalid token',
+        debug: { userError: userError?.message }
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const resolvedUserId = user.id;
+    const parsedBody = await req.clone().json().catch(() => ({} as any));
+    const { accessToken, days = 30, userId } = parsedBody;
     if (!accessToken) {
       return new Response(JSON.stringify({ error: 'Access token required' }), {
         status: 400,
@@ -113,48 +124,43 @@ serve(async (req) => {
 
     console.log(`Syncing Google Fit data for user ${resolvedUserId} for last ${days} days`);
 
-    // Function to refresh Google Fit token
+    // Function to refresh Google Fit token using the main refresh function
     const refreshGoogleFitToken = async () => {
       try {
-        const { data: tokenData, error: tokenError } = await supabaseClient
-          .from('google_tokens')
-          .select('refresh_token')
-          .eq('user_id', resolvedUserId)
-          .eq('is_active', true)
-          .single();
-
-        if (tokenError || !tokenData?.refresh_token) {
-          throw new Error('No refresh token found');
-        }
-
-        const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+        const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/refresh-all-google-tokens`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            client_id: Deno.env.get('GOOGLE_CLIENT_ID') || '',
-            refresh_token: tokenData.refresh_token,
-            grant_type: 'refresh_token'
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            batch_size: 1,
+            threshold_minutes: 1
           })
         });
 
-        if (!refreshResponse.ok) {
+        if (!response.ok) {
           throw new Error('Failed to refresh token');
         }
 
-        const refreshData = await refreshResponse.json();
-        
-        // Update token in database
-        await supabaseClient
-          .from('google_tokens')
-          .update({ 
-            access_token: refreshData.access_token,
-            expires_at: new Date(Date.now() + refreshData.expires_in * 1000).toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', user.id)
-          .eq('is_active', true);
+        const result = await response.json();
+        if (result.successful_refreshes > 0) {
+          // Get the refreshed token
+          const { data: tokenData, error: tokenError } = await supabaseClient
+            .from('google_tokens')
+            .select('access_token')
+            .eq('user_id', resolvedUserId)
+            .eq('is_active', true)
+            .single();
 
-        return refreshData.access_token;
+          if (tokenError || !tokenData?.access_token) {
+            throw new Error('Failed to get refreshed token');
+          }
+
+          return tokenData.access_token;
+        } else {
+          throw new Error('Token refresh returned no success');
+        }
       } catch (error) {
         console.error('Error refreshing token:', error);
         throw error;
@@ -181,8 +187,14 @@ serve(async (req) => {
       // If 401, try to refresh token and retry
       if (response.status === 401) {
         console.log('Token expired, refreshing...');
-        currentToken = await refreshGoogleFitToken();
-        response = await makeRequest(currentToken);
+        try {
+          currentToken = await refreshGoogleFitToken();
+          console.log('Token refreshed successfully');
+          response = await makeRequest(currentToken);
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          throw refreshError;
+        }
       }
       
       return response;
@@ -197,13 +209,18 @@ serve(async (req) => {
 
     // Fetch all sessions for the date range
     const sessionsResponse = await makeGoogleFitRequest(
-      `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startTimeMillis}&endTime=${endTimeMillis}`
+      `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`
     );
 
     if (!sessionsResponse.ok) {
       const errorText = await sessionsResponse.text();
       console.error('Google Fit sessions API error:', sessionsResponse.status, errorText);
-      return new Response(JSON.stringify({ error: `Google Fit API error: ${sessionsResponse.status}` }), {
+      console.error('Request URL:', `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`);
+      return new Response(JSON.stringify({ 
+        error: `Google Fit API error: ${sessionsResponse.status}`,
+        details: errorText,
+        url: `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`
+      }), {
         status: sessionsResponse.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

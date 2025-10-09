@@ -111,8 +111,9 @@ export default function MealPlans() {
       // Try to generate the week without clearing existing rows.
       const session = (await supabase.auth.getSession()).data.session;
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-      const { error } = await supabase.functions.invoke('generate-meal-plan-range', {
-        body: { startDate: startStr, weeks: 1 },
+      // Generate meal plans using the working generate-nutrition-suggestions function
+      const { error } = await supabase.functions.invoke('generate-nutrition-suggestions', {
+        body: { date: startStr },
         headers: {
           ...(apiKey ? { apikey: apiKey } : {}),
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),

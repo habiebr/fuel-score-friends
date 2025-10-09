@@ -1,0 +1,20 @@
+name: Morning AI Batch Generation
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 6:00 AM UTC daily
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  generate-ai-suggestions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate AI Suggestions
+        run: |
+          curl -X POST "https://eecdbddpzwedficnpenm.supabase.co/functions/v1/morning-ai-batch" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json"
+        
+      - name: Log Results
+        run: |
+          echo "Morning AI batch generation completed at $(date)"

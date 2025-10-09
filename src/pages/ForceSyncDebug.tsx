@@ -33,7 +33,7 @@ export default function ForceSyncDebug() {
 
     try {
       // Clear google_fit_data
-      const { error: dataError } = await supabase
+      const { error: dataError } = await (supabase as any)
         .from('google_fit_data')
         .delete()
         .eq('user_id', user.id);
@@ -41,7 +41,7 @@ export default function ForceSyncDebug() {
       if (dataError) throw dataError;
 
       // Clear google_fit_sessions
-      const { error: sessionsError } = await supabase
+      const { error: sessionsError } = await (supabase as any)
         .from('google_fit_sessions')
         .delete()
         .eq('user_id', user.id);
@@ -49,7 +49,7 @@ export default function ForceSyncDebug() {
       if (sessionsError) throw sessionsError;
 
       // Clear user preferences
-      const { error: prefsError } = await supabase
+      const { error: prefsError } = await (supabase as any)
         .from('user_preferences')
         .delete()
         .eq('user_id', user.id)
@@ -101,7 +101,17 @@ export default function ForceSyncDebug() {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        const status = (error as any)?.status || (error as any)?.code;
+        if (status === 401 || (error as any)?.message?.includes('401')) {
+          toast({
+            title: 'Unauthorized',
+            description: 'Admin key invalid or missing. Please set ADMIN_FORCE_SYNC_KEY.',
+            variant: 'destructive',
+          });
+        }
+        throw error;
+      }
 
       setSyncResult(data);
 
@@ -135,7 +145,7 @@ export default function ForceSyncDebug() {
 
     try {
       // Get current user's Google Fit token
-      const { data: tokenData, error: tokenError } = await supabase
+      const { data: tokenData, error: tokenError } = await (supabase as any)
         .from('google_tokens')
         .select('access_token, refresh_token, expires_at')
         .eq('user_id', user.id)
@@ -153,7 +163,17 @@ export default function ForceSyncDebug() {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        const status = (error as any)?.status || (error as any)?.code;
+        if (status === 401 || (error as any)?.message?.includes('401')) {
+          toast({
+            title: 'Re-authentication required',
+            description: 'Your Google Fit session expired. Please reconnect Google Fit.',
+            variant: 'destructive',
+          });
+        }
+        throw error;
+      }
 
       setSyncResult(data);
 

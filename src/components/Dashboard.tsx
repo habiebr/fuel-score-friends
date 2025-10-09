@@ -14,8 +14,7 @@ import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
 import { WeeklyScoreCard } from '@/components/WeeklyScoreCard';
-import { getTodayScore, getWeeklyScorePersisted } from '@/services/score.service';
-import { getTodayUnifiedScore } from '@/services/unified-score.service';
+import { getTodayUnifiedScore, getWeeklyScoreFromCache } from '@/services/unified-score.service';
 import { TodayMealScoreCard } from '@/components/TodayMealScoreCard';
 import { TodayNutritionCard } from '@/components/TodayNutritionCard';
 import { WeeklyKilometersCard } from '@/components/WeeklyMilesCard';
@@ -26,31 +25,9 @@ import { RecoverySuggestion } from '@/components/RecoverySuggestion';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 import { calculateBMR } from '@/lib/nutrition-engine';
 import { getWeeklyGoogleFitData, getWeeklyMileageTarget } from '@/lib/weekly-google-fit';
-import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
+import { useUnifiedSync } from '@/hooks/useUnifiedSync';
 
-// Per-user TTL cache for main dashboard
-const DASHBOARD_MAIN_CACHE_KEY = 'dashboard:main:v1';
-const DASHBOARD_MAIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function readMainDashboardCache(userId?: string) {
-  try {
-    const raw = localStorage.getItem(DASHBOARD_MAIN_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || parsed.userId !== userId) return null;
-    if (Date.now() - (parsed.ts || 0) > DASHBOARD_MAIN_CACHE_TTL_MS) return null;
-    return parsed.payload as {
-      data: DashboardData | null;
-      todayScore: number;
-      weeklyScore: number;
-      weeklyKm: { current: number; target: number };
-    };
-  } catch { return null; }
-}
-
-function writeMainDashboardCache(userId: string, payload: any) {
-  try { localStorage.setItem(DASHBOARD_MAIN_CACHE_KEY, JSON.stringify({ userId, ts: Date.now(), payload })); } catch {}
-}
+import { readDashboardCache, writeDashboardCache, clearDashboardCache } from '@/lib/dashboard-cache';
 
 interface MealSuggestion {
   name: string;
@@ -111,7 +88,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const { user, session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { getTodayData } = useGoogleFitSync();
+  const { syncNow, isRunning: isSyncing, lastSync, error: syncError } = useUnifiedSync();
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,6 +100,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [newActivity, setNewActivity] = useState<null | { planned?: string; actual?: string; sessionId: string }>(null);
   const [weeklyGoogleFitData, setWeeklyGoogleFitData] = useState<{ current: number; target: number }>({ current: 0, target: 30 });
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
+
+  // Debug authentication state
+  console.log('Dashboard render - user:', user?.id, 'session:', session?.access_token ? 'has_token' : 'no_token', 'loading:', loading);
 
   // Function to determine current meal based on time and Google Fit activity patterns
   const getCurrentMealType = () => {
@@ -345,12 +325,13 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   useEffect(() => {
     if (user) {
       // Fast initial paint from cache
-      const cached = readMainDashboardCache(user.id);
-      if (cached) {
-        setData(cached.data || null);
-        setTodayScore(cached.todayScore || 0);
-        setWeeklyScore(cached.weeklyScore || 0);
-        setWeeklyGoogleFitData(cached.weeklyKm || { current: 0, target: 30 });
+      const cached = readDashboardCache(user.id);
+      if (cached?.data) {
+        const { daily, weekly } = cached.data;
+        setData(daily?.data || null);
+        setTodayScore(daily?.todayScore || 0);
+        setWeeklyScore(weekly?.weeklyScore || 0);
+        setWeeklyGoogleFitData(weekly?.weeklyKm || { current: 0, target: 30 });
         setLoading(false);
       }
       loadDashboardData();
@@ -358,112 +339,257 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   }, [user]);
 
 
-  // Realtime: refresh when profile or meal plans change
-  useEffect(() => {
-    if (!user) return;
+  // Helper function to wait for session confirmation
+  const waitForSessionConfirmation = async (): Promise<boolean> => {
+    if (!user || !session) {
+      console.log('Dashboard: No user or session available');
+      return false;
+    }
 
-    const channel = supabase
-      .channel('dashboard-realtime')
-      // profiles changes previously drove race goal widget; removed
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_meal_plans', filter: `user_id=eq.${user.id}` }, () => {
-        loadDashboardData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'food_logs', filter: `user_id=eq.${user.id}` }, () => {
-        loadDashboardData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wearable_data', filter: `user_id=eq.${user.id}` }, () => {
-        loadDashboardData();
-      })
-      .subscribe();
+    try {
+      // Test the session by making a simple authenticated request
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Dashboard: Session validation failed:', error);
+        return false;
+      }
+
+      if (!data.session || !data.session.access_token) {
+        console.log('Dashboard: No valid session token found');
+        return false;
+      }
+
+      // Test the session by making a simple database query
+      const { error: testError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (testError) {
+        console.error('Dashboard: Session test query failed:', testError);
+        return false;
+      }
+
+      console.log('Dashboard: Session confirmed and validated');
+      return true;
+    } catch (error) {
+      console.error('Dashboard: Session confirmation error:', error);
+      return false;
+    }
+  };
+
+  // Realtime: debounced refresh when data changes
+  useEffect(() => {
+    if (!user || !session) {
+      console.log('Dashboard: Skipping realtime subscription - no authenticated user');
+      return;
+    }
+
+    let isSubscribed = false;
+    let channel: any = null;
+
+    const setupRealtimeSubscription = async () => {
+      // Wait for session confirmation before connecting
+      const sessionConfirmed = await waitForSessionConfirmation();
+      
+      if (!sessionConfirmed) {
+        console.log('Dashboard: Session not confirmed, skipping realtime subscription');
+        return;
+      }
+
+      if (isSubscribed) {
+        console.log('Dashboard: Already subscribed, skipping');
+        return;
+      }
+
+      let debounceTimer: ReturnType<typeof setTimeout>;
+      const debouncedRefresh = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          loadDashboardData();
+        }, 2000); // 2 second debounce
+      };
+
+      console.log('Dashboard: Setting up realtime subscription for user:', user.id);
+      
+      channel = supabase
+        .channel('dashboard-realtime')
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'daily_meal_plans', 
+          filter: `user_id=eq.${user.id}` 
+        }, debouncedRefresh)
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'food_logs', 
+          filter: `user_id=eq.${user.id}` 
+        }, debouncedRefresh)
+        .subscribe((status) => {
+          console.log('Dashboard realtime subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('Dashboard: Successfully subscribed to realtime updates');
+            isSubscribed = true;
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn('Dashboard: Realtime subscription failed with status:', status);
+            isSubscribed = false;
+            // Don't treat this as a critical error - app can work without realtime
+          }
+        });
+    };
+
+    // Add a small delay to ensure session is fully established
+    const timer = setTimeout(setupRealtimeSubscription, 1000);
 
     return () => {
-      try { supabase.removeChannel(channel); } catch {}
+      clearTimeout(timer);
+      if (channel) {
+        try { 
+          console.log('Dashboard: Cleaning up realtime subscription');
+          supabase.removeChannel(channel); 
+          isSubscribed = false;
+        } catch (error) {
+          console.warn('Dashboard: Error removing realtime channel:', error);
+        }
+      }
     };
-  }, [user]);
+  }, [user, session]);
 
   // race goal widget removed
 
   // Manual plan generation removed
 
   const loadDashboardData = async () => {
-    if (!user) return;
+    if (!user || !session) {
+      console.warn('Dashboard: No authenticated user or session available');
+      return;
+    }
 
     setLoading((prev) => prev || !data);
 
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
 
-      const scoringPromise = Promise.allSettled([
-        getTodayUnifiedScore(user.id, 'runner-focused'),
-        getWeeklyScorePersisted(user.id)
-      ]);
-
-      const weeklyGoogleFitPromise = Promise.all([
-        getWeeklyGoogleFitData(user.id),
-        getWeeklyMileageTarget(user.id)
-      ]);
-
-      const [
-        nutritionScoreResult,
-        mealPlansResult,
-        foodLogsResult,
-        profileResult,
-        googleFitData
-      ] = await Promise.all([
+      // Batch weekly data fetching - use direct queries instead of RPC
+      const weeklyDataPromise = Promise.all([
         supabase
           .from('nutrition_scores')
+          .select('date, daily_score, calories_consumed, protein_grams, carbs_grams, fat_grams, meals_logged')
+          .eq('user_id', user.id)
+          .gte('date', format(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'))
+          .lte('date', today)
+          .order('date', { ascending: false }),
+        supabase
+          .from('google_fit_data')
+          .select('date, distance_meters, steps, calories_burned, active_minutes')
+          .eq('user_id', user.id)
+          .gte('date', format(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'))
+          .lte('date', today)
+          .order('date', { ascending: false })
+      ]);
+
+      // Batch all Supabase queries with direct table access
+      const [foodLogsData, mealPlansData, profileData, googleFitDataResult] = await Promise.all([
+        supabase
+          .from('food_logs')
           .select('*')
           .eq('user_id', user.id)
-          .eq('date', today)
-          .maybeSingle(),
+          .gte('logged_at', `${today}T00:00:00`)
+          .lt('logged_at', `${today}T23:59:59.999`)
+          .order('logged_at', { ascending: false }),
         supabase
           .from('daily_meal_plans')
           .select('*')
           .eq('user_id', user.id)
           .eq('date', today),
         supabase
-          .from('food_logs')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('logged_at', `${today}T00:00:00`)
-          .lte('logged_at', `${today}T23:59:59`),
-        (supabase as any)
           .from('profiles')
           .select('age, sex, weight_kg, height_cm, activity_level')
           .eq('user_id', user.id)
           .maybeSingle(),
-        getTodayData()
+        supabase
+          .from('google_fit_data')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .maybeSingle()
       ]);
 
-      const nutritionScore = nutritionScoreResult?.data;
-      const rawMealPlans = Array.isArray(mealPlansResult?.data) ? mealPlansResult.data : [];
+      // Check for authentication errors
+      if (foodLogsData.error && foodLogsData.error.message.includes('access control')) {
+        console.error('Authentication error in food_logs:', foodLogsData.error);
+        throw new Error('Authentication required. Please sign in again.');
+      }
+      if (mealPlansData.error && mealPlansData.error.message.includes('access control')) {
+        console.error('Authentication error in daily_meal_plans:', mealPlansData.error);
+        throw new Error('Authentication required. Please sign in again.');
+      }
+      if (profileData.error && profileData.error.message.includes('access control')) {
+        console.error('Authentication error in profiles:', profileData.error);
+        throw new Error('Authentication required. Please sign in again.');
+      }
+
+      const foodLogs = foodLogsData.data || [];
+      const rawMealPlans = mealPlansData.data || [];
+      const profile = profileData.data;
+      const todayGoogleFitData = googleFitDataResult.data;
       const normalizedMealPlans: MealPlan[] = rawMealPlans.map((plan) => ({
         ...plan,
         meal_suggestions: Array.isArray(plan.meal_suggestions)
           ? (plan.meal_suggestions as unknown as MealSuggestion[])
           : []
       }));
-      const foodLogs = Array.isArray(foodLogsResult?.data) ? foodLogsResult.data : [];
-      const profile = profileResult?.data;
 
       setMealPlans(normalizedMealPlans);
 
       const exerciseData = {
-        steps: googleFitData?.steps || 0,
-        calories_burned: googleFitData?.caloriesBurned || 0,
-        active_minutes: googleFitData?.activeMinutes || 0,
-        heart_rate_avg: googleFitData?.heartRateAvg || null,
-        distance_meters: googleFitData?.distanceMeters || 0,
-        sessions: googleFitData?.sessions || []
+        steps: todayGoogleFitData?.steps || 0,
+        calories_burned: todayGoogleFitData?.caloriesBurned || 0,
+        active_minutes: todayGoogleFitData?.activeMinutes || 0,
+        heart_rate_avg: todayGoogleFitData?.heartRateAvg || null,
+        distance_meters: todayGoogleFitData?.distanceMeters || 0,
+        sessions: todayGoogleFitData?.sessions || []
       };
 
       const plannedNutrition = accumulatePlannedFromMealPlans(rawMealPlans);
       const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs);
       
-      // Use unified scoring system for more accurate scoring
-      const unifiedScoreResult = await getTodayUnifiedScore(user.id, 'runner-focused');
-      const dailyScore = unifiedScoreResult.score;
+      // Get today's unified score with error handling
+      let unifiedScoreResult = null;
+      try {
+        unifiedScoreResult = await getTodayUnifiedScore(user.id, 'runner-focused');
+        console.log('Today unified score:', unifiedScoreResult);
+      } catch (scoreError) {
+        console.error('Error getting today unified score:', scoreError);
+        unifiedScoreResult = null;
+      }
+      
+      setTodayScore(unifiedScoreResult?.score || 0);
+      setTodayBreakdown({
+        nutrition: unifiedScoreResult?.breakdown?.nutrition?.total || 0,
+        training: unifiedScoreResult?.breakdown?.training?.total || 0,
+        bonuses: unifiedScoreResult?.breakdown?.bonuses || 0,
+        penalties: unifiedScoreResult?.breakdown?.penalties || 0
+      });
 
+      // Get weekly unified score with error handling
+      let weeklyScoreResult = null;
+      try {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Start of week (Monday)
+        weeklyScoreResult = await getWeeklyScoreFromCache(user.id, weekStart);
+        console.log('Weekly unified score:', weeklyScoreResult);
+      } catch (weeklyScoreError) {
+        console.error('Error getting weekly unified score:', weeklyScoreError);
+        weeklyScoreResult = null;
+      }
+      
+      setWeeklyScore(weeklyScoreResult?.average || 0);
+
+      // Calculate BMR and targets
       const bmr = profile ? calculateBMR({
         age: profile.age || 30,
         sex: profile.sex || 'male',
@@ -478,6 +604,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       const calorieTarget = Math.round(bmr * activityMultiplier);
       const macroTargets = deriveMacrosFromCalories(calorieTarget);
 
+      // Process activity data
       try {
         const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
         const weekPlan = profile?.activity_level ? JSON.parse(profile.activity_level) : null;
@@ -500,8 +627,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         }
       } catch (_) {}
 
-      setData({
-        dailyScore,
+      // Update dashboard data
+      const dashboardData = {
+        dailyScore: unifiedScoreResult?.score || 0,
         caloriesConsumed: consumedNutrition.calories,
         proteinGrams: consumedNutrition.protein,
         carbsGrams: consumedNutrition.carbs,
@@ -515,9 +643,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         plannedProtein: plannedNutrition.protein,
         plannedCarbs: plannedNutrition.carbs,
         plannedFat: plannedNutrition.fat,
-        breakfastScore: nutritionScore?.breakfast_score || null,
-        lunchScore: nutritionScore?.lunch_score || null,
-        dinnerScore: nutritionScore?.dinner_score || null,
+        breakfastScore: unifiedScoreResult?.breakdown?.nutrition?.breakfast_score || null,
+        lunchScore: unifiedScoreResult?.breakdown?.nutrition?.lunch_score || null,
+        dinnerScore: unifiedScoreResult?.breakdown?.nutrition?.dinner_score || null,
         calories: {
           consumed: consumedNutrition.calories,
           target: calorieTarget
@@ -536,89 +664,62 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             target: macroTargets.fat
           }
         }
-      });
+      };
 
-      // Write partial cache early (without scores yet) to speed up subsequent loads
+      setData(dashboardData);
+
+      // Process weekly data for Google Fit
+      const [weeklyNutritionData, weeklyGoogleFitDataResult] = await weeklyDataPromise;
+      let weeklyGoogleFitData = { current: 0, target: 30 }; // Default values
+      
+      if (weeklyNutritionData.error || weeklyGoogleFitDataResult.error) {
+        console.error('Failed to fetch weekly data:', weeklyNutritionData.error || weeklyGoogleFitDataResult.error);
+      } else {
+        // Calculate weekly distance
+        const weeklyGoogleFit = weeklyGoogleFitDataResult.data || [];
+        const totalDistance = weeklyGoogleFit.reduce((sum, d) => sum + (d.distance_meters || 0), 0) / 1000;
+        const weeklyTarget = 30; // Default target
+
+        weeklyGoogleFitData = {
+          current: totalDistance,
+          target: weeklyTarget
+        };
+        
+        setWeeklyGoogleFitData(weeklyGoogleFitData);
+      }
+
+      // Write cache with error handling
       try {
         if (user?.id) {
-          writeMainDashboardCache(user.id, {
-            data: {
-              dailyScore,
-              caloriesConsumed: consumedNutrition.calories,
-              proteinGrams: consumedNutrition.protein,
-              carbsGrams: consumedNutrition.carbs,
-              fatGrams: consumedNutrition.fat,
-              mealsLogged: foodLogs.length,
-              steps: exerciseData.steps,
-              caloriesBurned: exerciseData.calories_burned,
-              activeMinutes: exerciseData.active_minutes,
-              heartRateAvg: exerciseData.heart_rate_avg,
-              plannedCalories: plannedNutrition.calories,
-              plannedProtein: plannedNutrition.protein,
-              plannedCarbs: plannedNutrition.carbs,
-              plannedFat: plannedNutrition.fat,
-              breakfastScore: nutritionScore?.breakfast_score || null,
-              lunchScore: nutritionScore?.lunch_score || null,
-              dinnerScore: nutritionScore?.dinner_score || null,
-              calories: { consumed: consumedNutrition.calories, target: calorieTarget },
-              macros: {
-                protein: { consumed: consumedNutrition.protein, target: macroTargets.protein },
-                carbs: { consumed: consumedNutrition.carbs, target: macroTargets.carbs },
-                fat: { consumed: consumedNutrition.fat, target: macroTargets.fat },
-              },
+          writeDashboardCache(user.id, {
+            daily: {
+              data: dashboardData,
+              todayScore: unifiedScoreResult?.score || 0,
             },
-            todayScore: todayScore, // will be updated below when resolved
-            weeklyScore: weeklyScore,
-            weeklyKm: weeklyGoogleFitData,
-          });
-        }
-      } catch {}
-
-      const [todayScoreOutcome, weeklyScoreOutcome] = await scoringPromise;
-      if (todayScoreOutcome.status === 'fulfilled') {
-        setTodayScore(todayScoreOutcome.value.score);
-        setTodayBreakdown(todayScoreOutcome.value.breakdown);
-      } else {
-        setTodayScore(0);
-        setTodayBreakdown({ nutrition: 0, training: 0 });
-      }
-
-      if (weeklyScoreOutcome.status === 'fulfilled') {
-        setWeeklyScore(weeklyScoreOutcome.value);
-      } else {
-        setWeeklyScore(0);
-      }
-
-      try {
-        const [weeklyData, target] = await weeklyGoogleFitPromise;
-        setWeeklyGoogleFitData({
-          current: weeklyData.totalDistanceKm,
-          target
-        });
-      } catch (e) {
-        console.error('Error loading weekly Google Fit data:', e);
-      }
-
-      // Finalize cache with computed scores and weekly KM
-      try {
-        if (user?.id) {
-          writeMainDashboardCache(user.id, {
-            data: {
-              ...(data as any),
+            weekly: {
+              weeklyScore: weeklyScoreResult?.average || 0,
+              weeklyKm: weeklyGoogleFitData,
             },
-            todayScore: (todayScoreOutcome.status === 'fulfilled') ? todayScoreOutcome.value.score : 0,
-            weeklyScore: (weeklyScoreOutcome.status === 'fulfilled') ? (weeklyScoreOutcome.value as number) : 0,
-            weeklyKm: (await (async () => {
-              try {
-                const [weeklyData, target] = await weeklyGoogleFitPromise;
-                return { current: weeklyData.totalDistanceKm, target };
-              } catch { return { current: 0, target: 30 }; }
-            })()),
           });
+          console.log('Dashboard cache written successfully');
         }
-      } catch {}
+      } catch (cacheError) {
+        console.warn('Failed to write dashboard cache:', cacheError);
+        // Non-critical error, continue
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
+      
+      // If it's an authentication error, redirect to auth page
+      if (error instanceof Error && error.message.includes('Authentication required')) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to continue.",
+          variant: "destructive",
+        });
+        navigate('/auth', { replace: true });
+        return;
+      }
     } finally {
       setLoading(false);
     }
@@ -634,28 +735,15 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     );
   }
 
-  // Calculate meal score and timing
-  const calculateMealScore = () => {
-    // Mock calculation based on actual nutrition data
-    const safePct = (consumed?: number, target?: number) => {
-      if (!target || target <= 0) return 0;
-      const pct = ((consumed || 0) / target) * 100;
-      if (!isFinite(pct) || isNaN(pct)) return 0;
-      return Math.min(pct, 100);
-    };
-    const proteinScore = safePct(data?.macros?.protein?.consumed, data?.macros?.protein?.target);
-    const carbsScore = safePct(data?.macros?.carbs?.consumed, data?.macros?.carbs?.target);
-    const fatScore = safePct(data?.macros?.fat?.consumed, data?.macros?.fat?.target);
-    
-    const avgScore = Math.round((proteinScore + carbsScore + fatScore) / 3);
-    
-    if (avgScore >= 80) return { score: avgScore, rating: 'Excellent' as const };
-    if (avgScore >= 65) return { score: avgScore, rating: 'Good' as const };
-    if (avgScore >= 50) return { score: avgScore, rating: 'Fair' as const };
-    return { score: avgScore, rating: 'Needs Improvement' as const };
+  // Use unified scoring system for meal score
+  const nutritionScore = todayBreakdown.nutrition || 0;
+  const mealScore = {
+    score: nutritionScore,
+    rating: nutritionScore >= 80 ? 'Excellent' as const :
+            nutritionScore >= 65 ? 'Good' as const :
+            nutritionScore >= 50 ? 'Fair' as const :
+            'Needs Improvement' as const
   };
-
-  const mealScore = calculateMealScore();
 
   // Get upcoming workouts from user data
   const nextWorkout = data?.nextRun ? {
@@ -742,7 +830,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         <div className="mb-4 grid grid-cols-2 gap-4">
           <ScoreCard 
             title="Daily Score" 
-            score={todayScore} 
+            score={todayScore || 0} 
             subtitle="Today" 
             variant="success" 
             tooltip={
@@ -755,7 +843,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
           <ScoreCard 
             title="Weekly Score" 
-            score={weeklyScore} 
+            score={weeklyScore || 0} 
             subtitle="Mon–Sun avg" 
             variant="warning"
             tooltip={
@@ -773,11 +861,11 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           <RaceGoalWidget />
         </div>
 
-        {/* 3. Today's Meal Score */}
+        {/* 3. Today's Nutrition Score */}
         <div className="mb-5">
           <TodayMealScoreCard
-            score={mealScore.score}
-            rating={mealScore.rating}
+            score={mealScore.score || 0}
+            rating={mealScore.rating || 'Needs Improvement'}
           />
         </div>
 
@@ -810,8 +898,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         {/* 5. Weekly Kilometers */}
         <div className="mb-5">
           <WeeklyKilometersCard
-            current={weeklyGoogleFitData.current}
-            target={weeklyGoogleFitData.target}
+            current={weeklyGoogleFitData.current || 0}
+            target={weeklyGoogleFitData.target || 30}
           />
         </div>
 
@@ -827,7 +915,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
         {/* 7. Today's Insights */}
         <div className="mb-5">
-          <TodayInsightsCard insights={insights} />
+          <TodayInsightsCard insights={insights || []} />
         </div>
 
         {/* Today's Nutrition Plan removed */}

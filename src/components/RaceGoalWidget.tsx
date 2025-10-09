@@ -15,7 +15,7 @@ interface ProfileGoal {
 }
 
 export function RaceGoalWidget() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const navigate = useNavigate();
   const [goalLabel, setGoalLabel] = useState<string>('');
   const [raceDate, setRaceDate] = useState<Date | null>(null);
@@ -27,7 +27,10 @@ export function RaceGoalWidget() {
   } | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !session) {
+      console.log('RaceGoalWidget: Skipping - no authenticated user');
+      return;
+    }
     const load = async () => {
       // Try selecting new columns; if missing (42703), retry with legacy columns
       let profile: ProfileGoal | null = null;
@@ -76,18 +79,100 @@ export function RaceGoalWidget() {
     };
     load();
 
+    // Helper function to wait for session confirmation
+    const waitForSessionConfirmation = async (): Promise<boolean> => {
+      if (!user || !session) {
+        console.log('RaceGoalWidget: No user or session available');
+        return false;
+      }
+
+      try {
+        // Test the session by making a simple authenticated request
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('RaceGoalWidget: Session validation failed:', error);
+          return false;
+        }
+
+        if (!data.session || !data.session.access_token) {
+          console.log('RaceGoalWidget: No valid session token found');
+          return false;
+        }
+
+        // Test the session by making a simple database query
+        const { error: testError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1);
+
+        if (testError) {
+          console.error('RaceGoalWidget: Session test query failed:', testError);
+          return false;
+        }
+
+        console.log('RaceGoalWidget: Session confirmed and validated');
+        return true;
+      } catch (error) {
+        console.error('RaceGoalWidget: Session confirmation error:', error);
+        return false;
+      }
+    };
+
     // Realtime updates when profile changes
-    const channel = supabase
-      .channel('race-goal-widget')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `user_id=eq.${user.id}` }, () => {
-        load();
-      })
-      .subscribe();
+    let isSubscribed = false;
+    let channel: any = null;
+
+    const setupRealtimeSubscription = async () => {
+      // Wait for session confirmation before connecting
+      const sessionConfirmed = await waitForSessionConfirmation();
+      
+      if (!sessionConfirmed) {
+        console.log('RaceGoalWidget: Session not confirmed, skipping realtime subscription');
+        return;
+      }
+
+      if (isSubscribed) {
+        console.log('RaceGoalWidget: Already subscribed, skipping');
+        return;
+      }
+
+      console.log('RaceGoalWidget: Setting up realtime subscription for user:', user.id);
+      channel = supabase
+        .channel('race-goal-widget')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `user_id=eq.${user.id}` }, () => {
+          load();
+        })
+        .subscribe((status) => {
+          console.log('RaceGoalWidget realtime subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('RaceGoalWidget: Successfully subscribed to realtime updates');
+            isSubscribed = true;
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn('RaceGoalWidget: Realtime subscription failed with status:', status);
+            isSubscribed = false;
+            // Don't treat this as a critical error - app can work without realtime
+          }
+        });
+    };
+
+    // Add a small delay to ensure session is fully established
+    const timer = setTimeout(setupRealtimeSubscription, 1000);
 
     return () => {
-      try { supabase.removeChannel(channel); } catch {}
+      clearTimeout(timer);
+      if (channel) {
+        try { 
+          console.log('RaceGoalWidget: Cleaning up realtime subscription');
+          supabase.removeChannel(channel); 
+          isSubscribed = false;
+        } catch (error) {
+          console.warn('RaceGoalWidget: Error removing realtime channel:', error);
+        }
+      }
     };
-  }, [user]);
+  }, [user, session]);
 
   useEffect(() => {
     if (!raceDate) return;

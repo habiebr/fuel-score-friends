@@ -16,13 +16,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Only store active session token in localStorage
 const GOOGLE_TOKEN_KEY = "google_fit_provider_token";
-const GOOGLE_REFRESH_KEY = "google_fit_provider_refresh_token";
-const GOOGLE_TOKEN_EXPIRY_KEY = "google_fit_provider_token_expires_at";
-const TOKEN_REFRESH_BUFFER_MS = 15 * 60 * 1000; // 15 minutes buffer - refresh when 15 min left
-const BACKGROUND_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
-const DEFAULT_ACCESS_TOKEN_TTL = 50 * 60 * 1000; // 50 minutes buffer
-const TOKEN_EXPIRY_WARNING_MS = 20 * 60 * 1000; // Warn when 20 minutes left
 
 type ProviderSession = Session & {
   provider_token?: string;
@@ -37,22 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const persistTokensToStorage = useCallback((token?: string | null, refreshToken?: string | null, expiresAt?: number | null) => {
+  const persistTokensToStorage = useCallback((token?: string | null) => {
     try {
       if (token) {
         localStorage.setItem(GOOGLE_TOKEN_KEY, token);
-        localStorage.setItem("google_fit_connected", "true");
-      }
-      if (refreshToken) {
-        localStorage.setItem(GOOGLE_REFRESH_KEY, refreshToken);
-      }
-      if (expiresAt) {
-        localStorage.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(expiresAt));
-      } else if (token && !localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY)) {
-        localStorage.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(Date.now() + DEFAULT_ACCESS_TOKEN_TTL));
       }
     } catch (error) {
-      console.warn("Failed to persist Google Fit tokens", error);
+      console.warn("Failed to persist Google Fit token", error);
     }
   }, []);
 
@@ -60,24 +46,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!sessionLike) return;
     try {
       const providerToken = sessionLike.provider_token || sessionLike.provider_access_token || null;
-      const providerRefreshToken =
-        sessionLike.provider_refresh_token ||
-        ((sessionLike.user as any)?.user_metadata?.provider_refresh_token ?? null);
-      let expiresAt: number | null = null;
+      const providerRefreshToken = sessionLike.provider_refresh_token || ((sessionLike.user as any)?.user_metadata?.provider_refresh_token ?? null);
+      let expiresIn = 3600; // Default 1 hour
 
       if (typeof sessionLike.provider_token_expires_at === "number") {
-        // Supabase returns seconds; convert to ms
-        expiresAt = sessionLike.provider_token_expires_at * 1000;
+        expiresIn = sessionLike.provider_token_expires_at - Math.floor(Date.now() / 1000);
       } else if (typeof sessionLike.provider_token_expires_in === "number") {
-        expiresAt = Date.now() + sessionLike.provider_token_expires_in * 1000;
+        expiresIn = sessionLike.provider_token_expires_in;
       }
 
-      persistTokensToStorage(providerToken, providerRefreshToken, expiresAt);
+      persistTokensToStorage(providerToken);
 
       if (sessionLike.user?.id && providerToken && providerRefreshToken) {
         // Store token in database for better management
         try {
-          const expiresIn = expiresAt ? Math.floor((expiresAt - Date.now()) / 1000) : 3600;
+          // expiresIn already calculated above
           await (supabase as any).functions.invoke('store-google-token', {
             method: 'POST',
             body: {
@@ -94,23 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn('Failed to store Google token in database:', dbError);
         }
 
-        // Also update user preferences for backward compatibility
-        const connected = Boolean(providerToken || providerRefreshToken);
-        const payload = {
-          user_id: sessionLike.user.id,
-          key: "googleFitStatus",
-          value: {
-            connected,
-            updatedAt: new Date().toISOString(),
-            expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-          },
-          updated_at: new Date().toISOString(),
-        };
-        (supabase as any)
-          .from("user_preferences")
-          .upsert(payload, { onConflict: "user_id,key" })
-          .then(() => {})
-          .catch(() => {});
+        // No longer need to update user_preferences - using google_tokens table only
       }
     } catch (error) {
       console.warn("Failed to persist Google Fit session tokens", error);
@@ -121,31 +88,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log('Auth state change:', event, session?.user?.id, session?.access_token ? 'has_token' : 'no_token');
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
 
         persistGoogleTokens(session as ProviderSession);
 
-        // Attempt to prompt OS notification permission shortly after login
-        try {
-          if (session?.user && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-            setTimeout(async () => {
-              try {
-                // Ensure SW is ready to make the permission meaningful for PWA
-                if ('serviceWorker' in navigator) {
-                  try { await navigator.serviceWorker.ready; } catch {}
-                }
-                await Notification.requestPermission();
-              } catch {}
-            }, 1000);
-          }
-        } catch {}
+        // Note: Notification permission should only be requested on user interaction
+        // We'll handle this in components that have user gestures
       }
     );
 
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    console.log('Checking for existing session...');
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('Initial session check:', session?.user?.id, session?.access_token ? 'has_token' : 'no_token', error);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -160,7 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (envUrl && envUrl.trim().length > 0) return envUrl;
     // Force cursor branch deployments to use Pages cursor alias
     const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const isCursorHost = host.includes('cursor.nutrisync.pages.dev');
+    const isBetaHost = host.includes('beta.nutrisync.pages.dev') || host.endsWith('beta.nutrisync.id');
     const isProdNutrisync = host.endsWith('nutrisync.id') || host.includes('nutrisync.pages.dev') || host.includes('app.nutrisync.id');
 
     if (isCursorHost) {
@@ -168,20 +128,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const back = localStorage.getItem('oauth_return_to');
         if (back) return `https://cursor.nutrisync.pages.dev${back}`;
       } catch {}
-      return 'https://cursor.nutrisync.pages.dev/';
+      return 'https://cursor.nutrisync.pages.dev/auth/callback';
+    }
+    if (isBetaHost) {
+      try {
+        const back = typeof window !== 'undefined' ? localStorage.getItem('oauth_return_to') : null;
+        if (back) return `https://beta.nutrisync.id${back}`;
+      } catch {}
+      return 'https://beta.nutrisync.id/auth/callback';
     }
     if (isProdNutrisync) {
       try {
         const back = typeof window !== 'undefined' ? localStorage.getItem('oauth_return_to') : null;
         if (back) return `https://app.nutrisync.id${back}`;
       } catch {}
-      return 'https://app.nutrisync.id/';
+      return 'https://app.nutrisync.id/auth/callback';
     }
     try {
       const back = typeof window !== 'undefined' ? localStorage.getItem('oauth_return_to') : null;
-      if (back) return `${window.location.origin}${back}`;
+      if (back) return `${origin}${back}`;
     } catch {}
-    return `${window.location.origin}/`;
+    return `${origin}/auth/callback`;
   };
 
   const signUp = async (email: string, password: string) => {
@@ -216,9 +183,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Try database refresh first
       try {
-        const { data, error } = await (supabase as any).functions.invoke('refresh-google-fit-token-v2', {
+        const { data, error } = await (supabase as any).functions.invoke('refresh-all-google-tokens', {
           method: 'POST',
-          body: { user_id: user.id },
+          body: { 
+            batch_size: 1,
+            threshold_minutes: 60,
+            user_id: user.id  // Optional: will be used in future to target specific user
+          },
         });
 
         if (error) {
@@ -226,14 +197,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error(error.message || 'Database refresh failed');
         }
 
-        const accessToken = data?.access_token as string | undefined;
-        const expiresAt = data?.expires_at as string | undefined;
-
-        if (accessToken && expiresAt) {
-          const expiresAtMs = new Date(expiresAt).getTime();
-          persistTokensToStorage(accessToken, null, expiresAtMs);
-          console.log(`Google Fit token refreshed successfully via database, expires at: ${expiresAt}`);
-          return accessToken;
+        // Check if any tokens were successfully refreshed
+        if (data?.successful_refreshes > 0 && data?.results?.length > 0) {
+          const result = data.results[0];
+          if (result.success) {
+            persistTokensToStorage(result.access_token);
+            console.log(`Google Fit token refreshed successfully via database, expires at: ${result.expires_at}`);
+            return result.access_token;
+          }
         }
       } catch (dbError) {
         console.warn('Database refresh failed (no custom local OAuth fallback).', dbError);
@@ -253,9 +224,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('Permanent auth failure detected, clearing tokens');
         try {
           localStorage.removeItem(GOOGLE_TOKEN_KEY);
-          localStorage.removeItem(GOOGLE_REFRESH_KEY);
-          localStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
-          localStorage.removeItem("google_fit_connected");
         } catch {}
       }
       
@@ -286,16 +254,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const getGoogleAccessToken = async (): Promise<string | null> => {
+  const getGoogleAccessToken = async (options?: { forceRefresh?: boolean }): Promise<string | null> => {
     try {
+      // First try to get token from database
+      const { data: tokenData, error: tokenError } = await (supabase as any)
+        .from('google_tokens')
+        .select('access_token, expires_at')
+        .eq('user_id', user?.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      // If token exists and not expired (or force refresh not requested), use it
+      if (!tokenError && tokenData?.access_token && !options?.forceRefresh) {
+        const expiresAt = new Date(tokenData.expires_at);
+        if (expiresAt > new Date()) {
+          return tokenData.access_token;
+        }
+      }
+
+      // If we need a refresh, try server-side refresh
+      const refreshed = await refreshGoogleAccessToken();
+      if (refreshed) return refreshed;
+
+      // If refresh failed, try session token as fallback
       const { data } = await supabase.auth.getSession();
       const sessionLike = data?.session as ProviderSession | null;
       if (!sessionLike) return null;
-      // Supabase auto-refreshes the provider access token; just read it from session
+
+      // Store session token in database
       persistGoogleTokens(sessionLike);
       return sessionLike.provider_token || sessionLike.provider_access_token || null;
     } catch (e) {
-      console.warn('Failed to read provider token from session', e);
+      console.warn('Failed to get Google Fit token', e);
       return null;
     }
   };
@@ -304,9 +296,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     try {
       localStorage.removeItem(GOOGLE_TOKEN_KEY);
-      localStorage.removeItem(GOOGLE_REFRESH_KEY);
-      localStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
-      localStorage.removeItem('google_fit_connected');
     } catch {}
   };
 

@@ -184,6 +184,32 @@ export default function FoodPreferences() {
               </p>
             </div>
 
+            {/* Meal Preferences Button */}
+            <Card className="shadow-card mb-4">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center">
+                      <Settings className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-green-700 dark:text-green-300">Meal Planning Mode</h3>
+                      <p className="text-sm text-green-600 dark:text-green-400">Configure Flexi vs Strict meal planning</p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => navigate('/profile/meal-preferences')}
+                    variant="outline"
+                    size="sm"
+                    className="border-green-500/20 text-green-600 hover:bg-green-500/10"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Configure
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Dietary Restrictions */}
             <Card className="shadow-card mb-4">
               <CardContent className="p-6">
