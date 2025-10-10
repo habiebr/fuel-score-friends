@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
         mode: 'development',
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webp}'],
         additionalManifestEntries: [
-          { url: '/sw-health-sync.js', revision: '1' }
+          { url: '/sw-health-sync.js', revision: '2' }
         ],
         runtimeCaching: [
           {
@@ -128,6 +128,7 @@ export default defineConfig(({ mode }) => ({
         id: '/',
         lang: 'en',
         dir: 'ltr',
+        version: '1.0.1',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -244,6 +245,7 @@ export default defineConfig(({ mode }) => ({
   },
   define: {
     // Ensure environment variables are available at build time
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.1'),
+    __BUILD_TIMESTAMP__: JSON.stringify(Date.now()),
   },
 }));

@@ -25,6 +25,17 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     timeout: 10000,
     heartbeatIntervalMs: 30000,
     reconnectAfterMs: (tries: number) => Math.min(tries * 1000, 30000)
+  },
+  // Add cache-busting headers and query params to prevent stale data issues
+  global: {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  },
+  db: {
+    schema: 'public'
   }
 });
 
