@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import { TodayNutritionCard } from '@/components/TodayNutritionCard';
 import { WeeklyKilometersCard } from '@/components/WeeklyMilesCard';
 import { UpcomingWorkouts } from '@/components/UpcomingWorkouts';
 import { TodayInsightsCard } from '@/components/TodayInsightsCard';
-import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
+import { format, startOfWeek, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { RecoverySuggestion } from '@/components/RecoverySuggestion';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 import { calculateBMR } from '@/lib/nutrition-engine';
@@ -87,6 +87,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const { user, session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const realtimeErrorLogged = useRef(false);
   const { syncGoogleFit, isSyncing, lastSync, syncStatus } = useGoogleFitSync();
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
@@ -424,14 +425,42 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           table: 'food_logs', 
           filter: `user_id=eq.${user.id}` 
         }, debouncedRefresh)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'google_fit_data',
+          filter: `user_id=eq.${user.id}`
+        }, async (payload) => {
+          try {
+            // Only aggregate when a session-linked row changes
+            const sessions = (payload?.new as any)?.sessions;
+            const hasLinkedSessions = Array.isArray(sessions) && sessions.length > 0;
+            if (!hasLinkedSessions) return;
+            const dateISO = (payload?.new as any)?.date;
+            await supabase.functions.invoke('aggregate-weekly-activity', {
+              body: { userId: user.id, dateISO }
+            });
+          } catch (e) {
+            console.warn('Aggregator invoke failed:', e);
+          } finally {
+            debouncedRefresh();
+          }
+        })
         .subscribe((status) => {
           console.log('Dashboard realtime subscription status:', status);
           if (status === 'SUBSCRIBED') {
             console.log('Dashboard: Successfully subscribed to realtime updates');
             isSubscribed = true;
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.warn('Dashboard: Realtime subscription failed with status:', status);
+            if (!realtimeErrorLogged.current) {
+              console.warn('Dashboard: Realtime subscription failed with status:', status);
+              realtimeErrorLogged.current = true;
+            }
             isSubscribed = false;
+            if (channel) {
+              supabase.removeChannel(channel);
+              channel = null;
+            }
             // Don't treat this as a critical error - app can work without realtime
           }
         });
@@ -664,25 +693,30 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
       setData(dashboardData);
 
-      // Process weekly data for Google Fit
-      const [weeklyNutritionData, weeklyGoogleFitDataResult] = await weeklyDataPromise;
-      let weeklyGoogleFitData = { current: 0, target: 30 }; // Default values
-      
-      if (weeklyNutritionData.error || weeklyGoogleFitDataResult.error) {
-        console.error('Failed to fetch weekly data:', weeklyNutritionData.error || weeklyGoogleFitDataResult.error);
-      } else {
-        // Calculate weekly distance
-        const weeklyGoogleFit = weeklyGoogleFitDataResult.data || [];
-        const totalDistance = weeklyGoogleFit.reduce((sum, d) => sum + (d.distance_meters || 0), 0) / 1000;
-        const weeklyTarget = 30; // Default target
-
-        weeklyGoogleFitData = {
-          current: totalDistance,
-          target: weeklyTarget
-        };
-        
-        setWeeklyGoogleFitData(weeklyGoogleFitData);
+      // Process weekly running distance directly from Google Fit sessions
+      const [_weeklyNutritionData, _weeklyGoogleFitDataResult] = await weeklyDataPromise;
+      let weeklyKm = 0;
+      try {
+        const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+        const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+        const { data: weeklyRunningData, error: weeklyRunningError } = await supabase.functions.invoke('weekly-running-leaderboard', {
+          body: { weekStart: weekStartStr, userId: user.id },
+        });
+        if (weeklyRunningError) {
+          console.error('Error loading weekly running distance for dashboard:', weeklyRunningError);
+        } else {
+          const entry = (weeklyRunningData as any)?.entries?.find((e: any) => e?.user_id === user.id);
+          if (entry) {
+            weeklyKm = (Number(entry?.distance_meters) || 0) / 1000;
+          }
+        }
+      } catch (runningError) {
+        console.error('Error calculating weekly running distance:', runningError);
       }
+
+      const weeklyTarget = 30; // Default target
+      const weeklyGoogle = { current: weeklyKm, target: weeklyTarget };
+      setWeeklyGoogleFitData(weeklyGoogle);
 
       // Write cache with error handling
       try {
@@ -694,7 +728,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             },
             weekly: {
               weeklyScore: weeklyScoreResult?.average || 0,
-              weeklyKm: weeklyGoogleFitData,
+              weeklyKm: weeklyGoogle,
             },
           });
           console.log('Dashboard cache written successfully');

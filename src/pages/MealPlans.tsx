@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { format, addDays } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { PageHeading } from '@/components/PageHeading';
+import { Utensils } from 'lucide-react';
 
 type PlanRow = {
   id: string;
@@ -177,9 +178,10 @@ export default function MealPlans() {
           </Button>
         </div>
         <PageHeading
-          title="7-Day Meal Plans"
+          title="Meal Plans"
           description="Generated plans for the next 7 days"
           className="mt-3"
+          icon={Utensils}
         />
 
         {/* Week navigation + Generate */}

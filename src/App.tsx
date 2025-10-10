@@ -21,6 +21,7 @@ import Goals from "./pages/Goals";
 import Training from "./pages/Training.tsx";
 import TrainingCalendar from "./pages/TrainingCalendar";
 import Community from "./pages/Community";
+import ScoreExplainerPage from "./pages/ScoreExplainer";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import { CachedWidgetsDemo } from "./pages/CachedWidgetsDemo";
@@ -35,7 +36,7 @@ import NotFound from "./pages/NotFound";
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 import { PWAUpdateNotification } from "@/components/PWAUpdateNotification";
 import OnboardingWizard from "./pages/OnboardingWizard";
-import HistoricalScoresPage from "./pages/HistoricalScoresPage";
+// import HistoricalScoresPage from "./pages/HistoricalScoresPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -171,6 +172,11 @@ function App() {
                       <Community />
                     </ProtectedRoute>
                   } />
+                  <Route path="/scores" element={
+                    <ProtectedRoute>
+                      <ScoreExplainerPage />
+                    </ProtectedRoute>
+                  } />
                            <Route path="/import" element={
                              <ProtectedRoute>
                                <Import />
@@ -201,11 +207,12 @@ function App() {
                       <MealHistory />
                     </ProtectedRoute>
                   } />
-                  <Route path="/historical-scores" element={
+                  {/* Historical Scores page not available on this commit */}
+                  {/* <Route path="/historical-scores" element={
                     <ProtectedRoute>
                       <HistoricalScoresPage />
                     </ProtectedRoute>
-                  } />
+                  } /> */}
 
                   {/* Onboarding Route - Protected but accessible to all users */}
                   <Route path="/onboarding" element={

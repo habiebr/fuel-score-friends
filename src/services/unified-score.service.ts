@@ -102,28 +102,50 @@ export async function getDailyUnifiedScore(
     fat: acc.fat + (log.fat_grams || 0),
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-  // Fetch training activities
+  // Fetch planned training activities (plan)
   const { data: activities } = await supabase
     .from('training_activities')
     .select('activity_type, duration_minutes, intensity, start_time')
     .eq('user_id', userId)
     .eq('date', dateISO);
 
-  // Determine training load
-  const load = determineTrainingLoad(activities || []);
+  // Fetch actual session-linked activity for the day
+  // We only consider google_fit_data rows that have sessions (true exercise sessions)
+  const { data: fitData } = await (supabase as any)
+    .from('google_fit_data')
+    .select('sessions, calories_burned, active_minutes, distance_meters, heart_rate_avg')
+    .eq('user_id', userId)
+    .eq('date', dateISO)
+    .not('sessions', 'is', null);
 
-  // Create training plan and actual
-  const totalDuration = (activities || []).reduce((sum, act) => sum + (act.duration_minutes || 0), 0);
-  const trainingPlan = totalDuration > 0 ? {
-    durationMin: totalDuration,
+  // Aggregate actuals across sessions
+  const actualDurationMin = (fitData || []).reduce((s: number, r: any) => s + (r.active_minutes || 0), 0);
+  const actualCalories = (fitData || []).reduce((s: number, r: any) => s + (r.calories_burned || 0), 0);
+  const actualDistance = (fitData || []).reduce((s: number, r: any) => s + (Number(r.distance_meters) || 0), 0);
+  const avgHr = (() => {
+    const hrs = (fitData || []).map((r: any) => r.heart_rate_avg).filter((v: any) => typeof v === 'number');
+    if (!hrs.length) return undefined;
+    return Math.round(hrs.reduce((a: number, b: number) => a + b, 0) / hrs.length);
+  })();
+
+  // Determine training load: prefer planned load if plan exists, otherwise infer from actual duration
+  const load = (activities && activities.length > 0)
+    ? determineTrainingLoad(activities)
+    : (actualDurationMin > 60 ? 'quality' : actualDurationMin > 30 ? 'easy' : 'rest');
+
+  // Build training plan summary
+  const planDuration = (activities || []).reduce((sum, act) => sum + (act.duration_minutes || 0), 0);
+  const trainingPlan = planDuration > 0 ? {
+    durationMin: planDuration,
     type: activities?.[0]?.activity_type,
     intensity: activities?.[0]?.intensity as 'low' | 'moderate' | 'high',
   } : undefined;
 
-  const trainingActual = totalDuration > 0 ? {
-    durationMin: totalDuration,
-    type: activities?.[0]?.activity_type,
-    avgHr: undefined, // Not available in current data
+  // Build training actual summary from session-linked data
+  const trainingActual = actualDurationMin > 0 ? {
+    durationMin: actualDurationMin,
+    type: trainingPlan?.type, // best effort; detailed type matching can be added via sessions join
+    avgHr: avgHr,
   } : undefined;
 
   // Determine meals present

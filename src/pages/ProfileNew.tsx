@@ -12,6 +12,7 @@ import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Activity } from 'lucide-react';
 import { PageHeading } from '@/components/PageHeading';
 import { PWAInstallPrompt } from '@/components/PWAInstallButton';
+import { usePWA } from '@/hooks/usePWA';
 
 export default function ProfileNew() {
   const { user, signOut } = useAuth();
@@ -19,6 +20,7 @@ export default function ProfileNew() {
   const [profile, setProfile] = useState<any>(null);
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
+  const { isIOS, isInstalled } = usePWA();
 
   const handleLogout = async () => {
     await signOut();
@@ -90,6 +92,7 @@ export default function ProfileNew() {
             title="Profile"
             description="Manage your account and preferences."
             className="pt-2"
+            icon={UserIcon}
           />
 
           {/* User Card */}
@@ -119,6 +122,16 @@ export default function ProfileNew() {
           {/* PWA Install Prompt */}
           <div className="mb-6">
             <PWAInstallPrompt />
+            {isIOS && !isInstalled && (
+              <div className="mt-3 p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 text-sm">
+                <div className="font-semibold mb-1">Install on iOS</div>
+                <ol className="list-decimal list-inside space-y-1 text-blue-900 dark:text-blue-100">
+                  <li>Tap the Share button in Safari</li>
+                  <li>Scroll down and tap "Add to Home Screen"</li>
+                  <li>Tap "Add" to confirm</li>
+                </ol>
+              </div>
+            )}
           </div>
 
           {/* Menu Items */}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronLeft, Activity, Download } from 'lucide-react';
+import { ChevronLeft, Activity, Download, History } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
@@ -11,11 +11,12 @@ import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { PageHeading } from '@/components/PageHeading';
+import { PWAInstallButton } from '@/components/PWAInstallButton';
 
 export default function AppIntegrations() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { syncGoogleFit, isSyncing, lastSync, connectGoogleFit } = useGoogleFitSync();
+  const { syncGoogleFit, isSyncing, lastSync, connectGoogleFit, syncHistoricalData, isHistoricalSyncing, historicalSyncProgress } = useGoogleFitSync();
   const { signInWithGoogle, getGoogleAccessToken } = useAuth();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
@@ -98,7 +99,7 @@ export default function AppIntegrations() {
 
               {/* Google Fit */}
               <Card className="shadow-card">
-                <CardContent className="p-6">
+                <CardContent className="p-6 space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
                       <Activity className="w-6 h-6" />
@@ -117,6 +118,40 @@ export default function AppIntegrations() {
                     >
                       {isSyncing ? 'Syncing...' : isConnected ? 'Disconnect' : 'Connect'}
                     </Button>
+                  </div>
+
+                  {/* Historical Sync */}
+                  {isConnected && (
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                      <div className="text-sm">
+                        <div className="font-medium">Sync historical data</div>
+                        <div className="text-xs text-muted-foreground">Fetch the last 30 days of activity</div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isHistoricalSyncing}
+                        onClick={() => syncHistoricalData(30)}
+                        className="flex items-center gap-2"
+                      >
+                        <History className="w-4 h-4" />
+                        {isHistoricalSyncing ? 'Syncing…' : 'Sync 30 days'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {isHistoricalSyncing && historicalSyncProgress && (
+                    <div className="text-xs text-muted-foreground">
+                      Synced {historicalSyncProgress.syncedDays}/{historicalSyncProgress.totalDays} days…
+                    </div>
+                  )}
+
+                  {/* PWA Install - placed under integrations */}
+                  <div className="pt-2 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">Install NutriSync as an app</div>
+                      <PWAInstallButton size="sm" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>

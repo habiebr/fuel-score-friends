@@ -28,7 +28,7 @@ verify_jwt = false
 [functions.refresh-expiring-google-tokens]
 verify_jwt = false
 
-[functions.force-sync-all-users]
+[functions.sync-all-users-direct]
 verify_jwt = false
 
 [functions.sync-all-google-fit-data]

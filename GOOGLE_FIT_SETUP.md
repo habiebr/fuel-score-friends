@@ -168,7 +168,7 @@ This guide will help you set up Google Fit API integration for your PWA and mirr
 
 1. **Deploy edge functions**
    ```bash
-   supabase functions deploy store-google-token refresh-google-fit-token-v2 refresh-expiring-google-tokens force-sync-all-users sync-all-google-fit-data
+   supabase functions deploy store-google-token refresh-google-fit-token-v2 refresh-expiring-google-tokens sync-all-users-direct sync-all-google-fit-data
    ```
    - Requires `SUPABASE_ACCESS_TOKEN` and the CLI logged into the `qiwndzsrmtxmgngnupml` project.
 
@@ -181,7 +181,7 @@ This guide will help you set up Google Fit API integration for your PWA and mirr
      GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
    ```
    - `GOOGLE_TOKEN_REFRESH_SECRET` authorizes the token refresh cron worker.
-   - `ADMIN_FORCE_SYNC_KEY` gates the daily force-sync job (`force-sync-all-users`).
+   - `ADMIN_FORCE_SYNC_KEY` gates the legacy force-sync job (deprecated).
    - Client ID/secret allow refreshes without user interaction.
 
 3. **Expose the shared secrets to Postgres cron jobs**
@@ -210,7 +210,7 @@ This guide will help you set up Google Fit API integration for your PWA and mirr
    curl -X POST \
      -H "Content-Type: application/json" \
      -d '{"admin_key":"force_sync_2025","days":30}' \
-     https://qiwndzsrmtxmgngnupml.supabase.co/functions/v1/force-sync-all-users
+    https://qiwndzsrmtxmgngnupml.supabase.co/functions/v1/sync-all-users-direct
    ```
    - Verify the Supabase logs show successful refresh and sync activity.
 

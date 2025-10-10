@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useRegisterSW } from 'vite-plugin-pwa/dist/client/dev/react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 export function usePWA() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -7,6 +7,8 @@ export function usePWA() {
   const [canInstall, setCanInstall] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   // Register service worker with auto-update
   const {
@@ -35,8 +37,13 @@ export function usePWA() {
     };
   }, []);
 
-  // Handle PWA install prompt
+  // Handle PWA install prompt and platform detection
   useEffect(() => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    setIsIOS(/iPad|iPhone|iPod/.test(ua));
+    const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window as any).navigator?.standalone === true;
+    setIsStandalone(!!standalone);
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -84,11 +91,31 @@ export function usePWA() {
   const enablePushNotifications = async () => {
     try {
       if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return false;
+
+      // For iOS 26+, we need to check for devicemotion permission first
+      if (isIOS && typeof DeviceMotionEvent !== 'undefined' && (DeviceMotionEvent as any).requestPermission) {
+        try {
+          const motionPermission = await (DeviceMotionEvent as any).requestPermission();
+          if (motionPermission !== 'granted') return false;
+        } catch (e) {
+          console.warn('DeviceMotion permission request failed:', e);
+        }
+      }
+
       // Ensure SW is registered (vite-plugin-pwa registers automatically in prod)
       const reg = await navigator.serviceWorker.ready;
+      
       // Trigger OS permission prompt if needed
       let permission: NotificationPermission = Notification.permission;
       if (permission === 'default') {
+        // For iOS, show a pre-prompt explaining why we need notifications
+        if (isIOS) {
+          // You might want to show a custom UI here explaining notifications
+          const userWantsNotifications = window.confirm(
+            'Enable notifications to get updates about your training and nutrition goals?'
+          );
+          if (!userWantsNotifications) return false;
+        }
         permission = await Notification.requestPermission();
       }
       if (permission !== 'granted') return false;
@@ -154,5 +181,8 @@ export function usePWA() {
     setNeedRefresh,
     notificationsEnabled,
     enablePushNotifications,
+    isIOS,
+    isStandalone,
+    isPushSupported: (typeof window !== 'undefined') && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
   };
 }

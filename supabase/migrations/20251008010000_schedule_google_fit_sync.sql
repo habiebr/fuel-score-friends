@@ -25,13 +25,12 @@ SELECT cron.schedule(
   $$
     SELECT
       net.http_post(
-        url := 'https://qiwndzsrmtxmgngnupml.supabase.co/functions/v1/force-sync-all-users',
+        url := 'https://qiwndzsrmtxmgngnupml.supabase.co/functions/v1/sync-all-users-direct',
         headers := jsonb_build_object(
           'Content-Type', 'application/json'
         ),
         body := jsonb_build_object(
-          'admin_key', coalesce(current_setting('app.settings.admin_force_sync_key', true), ''),
-          'days', 30
+          'daysBack', 30
         )
       ) AS request_id;
   $$

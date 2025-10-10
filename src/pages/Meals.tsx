@@ -6,9 +6,11 @@ import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
-import { 
-  BookOpen, 
-  Utensils, 
+import { PageHeading } from '@/components/PageHeading';
+import { cn } from '@/lib/utils';
+import {
+  BookOpen,
+  Utensils,
   Activity,
   Coffee,
   Moon,
@@ -16,21 +18,22 @@ import {
   Zap,
   Award,
   Clock,
-  Calendar
+  Calendar,
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import AppHeader from '@/components/AppHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
-import { 
+import { format, startOfWeek, addDays, subDays } from 'date-fns';
+import {
   Recipe,
   RecipeScore,
   UserPreferences,
   recommendRecipesForMeal,
-  calculateBMR,
-  getActivityFactor
+  calculateBMR
 } from '@/lib/nutrition-engine';
 import { getActivityMultiplier, deriveMacrosFromCalories, accumulateConsumedFromFoodLogs } from '@/lib/nutrition';
 
@@ -45,7 +48,7 @@ interface FoodLog {
   logged_at: string;
 }
 
-type Tab = 'diary' | 'week' | 'suggestions' | 'training' | 'history';
+type Tab = 'diary' | 'history' | 'suggestions';
 type MealFilter = 'all' | 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'pre-run' | 'post-run' | 'race-day';
 
 export default function Meals() {
@@ -70,6 +73,8 @@ export default function Meals() {
   const [weekLogs, setWeekLogs] = useState<Record<string, FoodLog[]>>({});
   const [weekTotals, setWeekTotals] = useState<Record<string, { calories: number; protein: number; carbs: number; fat: number }>>({});
   const [weekDays, setWeekDays] = useState<string[]>([]);
+  const [historyWeekStart, setHistoryWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [targets, setTargets] = useState({
     calories: 2400,
     protein: 120,
@@ -90,6 +95,14 @@ export default function Meals() {
     eating_behaviors: [],
     time_budget_min: 60
   });
+  const tabOptions = [
+    { value: 'diary' as Tab, label: 'Today', icon: BookOpen },
+    { value: 'history' as Tab, label: 'History', icon: Calendar },
+    { value: 'suggestions' as Tab, label: 'Suggestions', icon: Utensils }
+  ];
+  const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const isCurrentWeek = historyWeekStart >= currentWeekStart;
+  const historyWeekRangeLabel = `${format(historyWeekStart, 'MMM dd')} - ${format(addDays(historyWeekStart, 6), 'MMM dd')}`;
 
   useEffect(() => {
     if (user) {
@@ -97,6 +110,12 @@ export default function Meals() {
       loadUserPreferences();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadWeekData(historyWeekStart);
+    }
+  }, [user, historyWeekStart]);
 
   // Recalculate recommendations when filter or preferences change
   useEffect(() => {
@@ -131,47 +150,8 @@ export default function Meals() {
       const totals = accumulateConsumedFromFoodLogs(todayLogs || []);
       setTodayTotals(totals);
 
-      // For weekly view, we still need to fetch the last 7 days
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-      const start = `${format(sevenDaysAgo, 'yyyy-MM-dd')}T00:00:00`;
-      const end = `${today}T23:59:59`;
-      
-      const { data: last7 } = await supabase
-        .from('food_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('logged_at', start)
-        .lte('logged_at', end)
-        .order('logged_at', { ascending: false });
-
-      // Group weekly logs by yyyy-MM-dd
-      const grouped: Record<string, FoodLog[]> = {};
-      const totalsByDay: Record<string, { calories: number; protein: number; carbs: number; fat: number }> = {};
-      (last7 || []).forEach((log) => {
-        const day = (log.logged_at || '').slice(0, 10);
-        if (!grouped[day]) grouped[day] = [];
-        grouped[day].push(log);
-      });
-      Object.keys(grouped).forEach((day) => {
-        totalsByDay[day] = accumulateConsumedFromFoodLogs(grouped[day]);
-      });
-      // Ensure all 7 days exist in order
-      const days: string[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const ds = format(d, 'yyyy-MM-dd');
-        days.push(ds);
-        if (!grouped[ds]) grouped[ds] = [];
-        if (!totalsByDay[ds]) totalsByDay[ds] = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-      }
-      setWeekDays(days);
-      setWeekLogs(grouped);
-      setWeekTotals(totalsByDay);
-
       // Load user's nutrition targets from profile
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile, error: profileError } = await (supabase as any)
         .from('profiles')
         .select('weight_kg, height_cm, age, sex, activity_level')
         .eq('user_id', user.id)
@@ -185,14 +165,14 @@ export default function Meals() {
       if (profile) {
         // Use the same accurate calculation as Dashboard
         const bmr = calculateBMR({
-          age: profile.age || 30,
-          sex: profile.sex || 'male',
-          weightKg: profile.weight_kg || 70,
-          heightCm: profile.height_cm || 170
+          age: (profile as any).age || 30,
+          sex: (profile as any).sex || 'male',
+          weightKg: (profile as any).weight_kg || 70,
+          heightCm: (profile as any).height_cm || 170
         });
         
-        const activityMultiplier = profile?.activity_level 
-          ? getActivityMultiplier(profile.activity_level)
+        const activityMultiplier = (profile as any)?.activity_level 
+          ? getActivityMultiplier((profile as any).activity_level)
           : 1.5;
         
         const calorieTarget = Math.round(bmr * activityMultiplier);
@@ -209,6 +189,60 @@ export default function Meals() {
       console.error('Error loading diary data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadWeekData = async (weekStartDate: Date) => {
+    if (!user) return;
+    setHistoryLoading(true);
+    try {
+      const startISO = format(weekStartDate, 'yyyy-MM-dd');
+      const endISO = format(addDays(weekStartDate, 6), 'yyyy-MM-dd');
+
+      const { data: logs, error } = await supabase
+        .from('food_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('logged_at', `${startISO}T00:00:00`)
+        .lte('logged_at', `${endISO}T23:59:59`)
+        .order('logged_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching week logs:', error);
+        throw error;
+      }
+
+      const grouped: Record<string, FoodLog[]> = {};
+      const totalsByDay: Record<string, { calories: number; protein: number; carbs: number; fat: number }> = {};
+
+      (logs || []).forEach((log) => {
+        const day = (log.logged_at || '').slice(0, 10);
+        if (!grouped[day]) grouped[day] = [];
+        grouped[day].push(log);
+      });
+
+      Object.keys(grouped).forEach((day) => {
+        totalsByDay[day] = accumulateConsumedFromFoodLogs(grouped[day]);
+      });
+
+      const days: string[] = [];
+      for (let i = 0; i < 7; i++) {
+        const date = addDays(weekStartDate, i);
+        const dateStr = format(date, 'yyyy-MM-dd');
+        days.push(dateStr);
+        if (!grouped[dateStr]) grouped[dateStr] = [];
+        if (!totalsByDay[dateStr]) {
+          totalsByDay[dateStr] = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+        }
+      }
+
+      setWeekDays(days);
+      setWeekLogs(grouped);
+      setWeekTotals(totalsByDay);
+    } catch (error) {
+      console.error('Error loading weekly data:', error);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -318,21 +352,14 @@ export default function Meals() {
       setGeneratingPlan(true);
       const today = format(new Date(), 'yyyy-MM-dd');
 
-      // First, trigger training update with proper auth
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        try {
-          await supabase.functions.invoke('update-actual-training', {
-            body: { date: today },
-            headers: { 
-              Authorization: `Bearer ${session.access_token}`,
-              apikey: ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string)
-            }
-          });
-          console.log('Training data updated');
-        } catch (e) {
-          console.warn('Failed to update training data:', e);
-        }
+      // First, trigger training update (supabase client injects auth headers)
+      try {
+        await supabase.functions.invoke('update-actual-training', {
+          body: { date: today }
+        });
+        console.log('Training data updated');
+      } catch (e) {
+        console.warn('Failed to update training data:', e);
       }
 
       const cacheKey = `nutritionSuggestions:${today}:${planKey || 'default'}`;
@@ -482,73 +509,144 @@ export default function Meals() {
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
-          {/* Header */}
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
-          <AppHeader className="mb-4" />
+        <div className="max-w-none mx-auto p-4">
+          <PageHeading
+            title="Meals"
+            description="Track, review and plan your nutrition"
+            icon={Utensils}
+            actions={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/goals')}
+                className="rounded-full"
+              >
+                <Activity className="mr-2 h-4 w-4" />
+                Training
+              </Button>
+            }
+          />
 
-          <div>
-            <h2 className="text-2xl font-bold mb-1">Food & Nutrition</h2>
-            <p className="text-sm text-muted-foreground">Track, calculate, and discover your optimal nutrition</p>
+          <div className="mb-6 overflow-x-auto">
+            <div className="inline-flex min-w-max items-center gap-1 rounded-full border border-white/10 bg-black/10 p-1 shadow-inner backdrop-blur-sm dark:border-white/20 dark:bg-white/10">
+              {tabOptions.map(({ value, label, icon: Icon }) => (
+                <Button
+                  key={value}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTab(value)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-full px-4 text-sm font-medium transition-all",
+                    activeTab === value
+                      ? "bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(49,255,176,0.35)]"
+                      : "text-muted-foreground hover:bg-white/20 hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Button>
+              ))}
+            </div>
           </div>
-
-          {/* Tab Navigation */}
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
-            <Button
-              variant={activeTab === 'diary' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setActiveTab('diary')}
-              className="flex-shrink-0"
-            >
-              <BookOpen className="w-4 h-4 mr-2" />
-              Today
-            </Button>
-            <Button
-              variant={activeTab === 'history' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setActiveTab('history')}
-              className="flex-shrink-0"
-            >
-              <Calendar className="w-4 h-4 mr-2" />
-              History
-            </Button>
-            <Button
-              variant={activeTab === 'suggestions' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setActiveTab('suggestions')}
-              className="flex-shrink-0"
-            >
-              <Utensils className="w-4 h-4 mr-2" />
-              Suggestions
-            </Button>
-            <Button
-              variant={activeTab === 'training' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setActiveTab('training');
-                navigate('/goals');
-              }}
-              className="flex-shrink-0"
-            >
-              <Activity className="w-4 h-4 mr-2" />
-              Training
-            </Button>
-          </div>
-        </div>
 
           {/* Content */}
-        <div className="p-4 space-y-4">
-          {/* History Tab */}
-          {activeTab === 'history' && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Food history coming soon...</p>
-            </div>
-          )}
+          <div className="space-y-4">
+            {/* History Tab */}
+            {activeTab === 'history' && (
+              <Card className="shadow-card">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold">Weekly Food Diary</h3>
+                      <p className="text-sm text-muted-foreground">Review your logged meals for the selected week.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHistoryWeekStart(subDays(historyWeekStart, 7))}
+                        className="rounded-full"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Prev
+                      </Button>
+                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:border-white/20 dark:bg-white/10 sm:text-sm">
+                        {historyWeekRangeLabel}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHistoryWeekStart(addDays(historyWeekStart, 7))}
+                        className="rounded-full"
+                        disabled={isCurrentWeek}
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {historyLoading ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-7 gap-2">
+                        {weekDays.map((day) => (
+                          <div key={day} className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
+                            <div className="text-xs font-medium mb-1">{format(new Date(day), 'EEE')}</div>
+                            <div className="text-sm font-semibold">{weekTotals[day]?.calories || 0} kcal</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              P {weekTotals[day]?.protein || 0} • C {weekTotals[day]?.carbs || 0} • F {weekTotals[day]?.fat || 0}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        {weekDays.map((day) => (
+                          <Card key={`d-${day}`} className="border">
+                            <CardContent className="p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="font-semibold text-sm">{format(new Date(day), 'EEE, MMM d')}</div>
+                                <div className="text-sm text-muted-foreground">{weekTotals[day]?.calories || 0} kcal</div>
+                              </div>
+                              {(weekLogs[day] || []).length > 0 ? (
+                                <div className="space-y-2">
+                                  {(weekLogs[day] || []).map((log) => (
+                                    <div key={log.id} className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 rounded-md p-2">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium truncate">{log.food_name}</div>
+                                        <div className="text-xs text-muted-foreground">{format(new Date(log.logged_at), 'hh:mm a')} • {log.meal_type}</div>
+                                      </div>
+                                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                        <span>P {log.protein_grams}g</span>
+                                        <span>C {log.carbs_grams}g</span>
+                                        <span>F {log.fat_grams}g</span>
+                                        <span className="font-semibold text-foreground">{log.calories} kcal</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-muted-foreground">No entries</div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
           {/* Diary Tab */}
           {activeTab === 'diary' && (
             <>
               {/* Today's Nutrition Card */}
-          <Card className="shadow-card">
+              <Card className="shadow-card">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-1">Today's Nutrition</h3>
                   <p className="text-sm text-muted-foreground mb-4">
@@ -565,8 +663,8 @@ export default function Meals() {
                           className="h-full bg-gradient-to-r from-orange-500 to-pink-500"
                           style={{ width: `${Math.min(100, (todayTotals.calories / targets.calories) * 100)}%` }}
                         />
-              </div>
-                        </div>
+                      </div>
+                    </div>
 
                     {/* Protein */}
                     <div>
@@ -589,8 +687,8 @@ export default function Meals() {
                           className="h-full bg-green-500"
                           style={{ width: `${Math.min(100, (todayTotals.carbs / targets.carbs) * 100)}%` }}
                         />
-                              </div>
-                            </div>
+                      </div>
+                    </div>
 
                     {/* Fat */}
                     <div>
@@ -601,9 +699,9 @@ export default function Meals() {
                           className="h-full bg-yellow-500"
                           style={{ width: `${Math.min(100, (todayTotals.fat / targets.fat) * 100)}%` }}
                         />
-                        </div>
+                      </div>
                     </div>
-                </div>
+                  </div>
             </CardContent>
           </Card>
 
@@ -668,65 +766,10 @@ export default function Meals() {
             </>
           )}
 
-          {/* Weekly Diary Tab */}
-          {activeTab === 'week' && (
-            <>
-              <Card className="shadow-card">
-                <CardContent className="p-4">
-                  <h3 className="text-lg font-semibold mb-2">Weekly Food Diary</h3>
-                  <div className="grid grid-cols-7 gap-2">
-                    {weekDays.map((day) => (
-                      <div key={day} className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                        <div className="text-xs font-medium mb-1">{format(new Date(day), 'EEE')}</div>
-                        <div className="text-sm font-semibold">{weekTotals[day]?.calories || 0} kcal</div>
-                        <div className="text-[10px] text-muted-foreground">
-                          P {weekTotals[day]?.protein || 0} • C {weekTotals[day]?.carbs || 0} • F {weekTotals[day]?.fat || 0}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {weekDays.map((day) => (
-                      <Card key={`d-${day}`} className="border">
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="font-semibold text-sm">{format(new Date(day), 'EEE, MMM d')}</div>
-                            <div className="text-sm text-muted-foreground">{weekTotals[day]?.calories || 0} kcal</div>
-                          </div>
-                          {(weekLogs[day] || []).length > 0 ? (
-                            <div className="space-y-2">
-                              {(weekLogs[day] || []).map((log) => (
-                                <div key={log.id} className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 rounded-md p-2">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium truncate">{log.food_name}</div>
-                                    <div className="text-xs text-muted-foreground">{format(new Date(log.logged_at), 'hh:mm a')} • {log.meal_type}</div>
-                                  </div>
-                                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                    <span>P {log.protein_grams}g</span>
-                                    <span>C {log.carbs_grams}g</span>
-                                    <span>F {log.fat_grams}g</span>
-                                    <span className="font-semibold text-foreground">{log.calories} kcal</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-xs text-muted-foreground">No entries</div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
           {/* Suggestions Tab */}
           {activeTab === 'suggestions' && (
             <>
-          <Card className="shadow-card">
+              <Card className="shadow-card">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-1">Smart Food Suggestions</h3>
                   <p className="text-sm text-muted-foreground mb-4">
@@ -748,11 +791,11 @@ export default function Meals() {
                       </Button>
                     ))}
                   </div>
-              {lastUpdated && (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Last updated {new Date(lastUpdated).toLocaleTimeString()}
-                </div>
-              )}
+                  {lastUpdated && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Last updated {new Date(lastUpdated).toLocaleTimeString()}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -852,8 +895,8 @@ export default function Meals() {
                         <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded-lg py-2">
                           <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{recipe.nutrients_per_serving.fat_g}g</div>
                           <div className="text-xs text-muted-foreground">Fat</div>
-            </div>
-          </div>
+                        </div>
+                      </div>
 
                       {recipe.ingredients && recipe.ingredients.length > 0 && (
                         <div className="mb-3 text-xs text-muted-foreground">
@@ -877,6 +920,7 @@ export default function Meals() {
             </>
           )}
         </div>
+      </div>
       </div>
 
       <BottomNav />

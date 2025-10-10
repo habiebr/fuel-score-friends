@@ -52,6 +52,122 @@ const excludedActivities = [
   'commuting', 'transportation', 'travel'
 ];
 
+// Numeric Google Fit activity codes that should always be treated as runs / workouts we care about
+const includedActivityCodes = new Set([
+  '8', // Running
+  '9', // Jogging
+  '10', // Sprinting
+  '57', // Running on sand
+  '58', // Running on stairs
+  '59', // Running on treadmill
+  '70', // Mountain biking
+  '71', // Road biking
+  '72', // Trail running
+  '108', // Nordic walking (treat as run)
+  '112', // CrossFit
+  '113', // Functional training
+  '116', // High-intensity interval training
+  '117', // Spinning
+  '118', // Stair climbing
+  '119', // Indoor cycling
+  '120', // Aquabiking
+  '122', // Treadmill running
+  '123', // Bicycle racing
+  '124', // Jumping rope
+  '129', // Roller skiing
+  '134', // Trail biking
+  '135', // High-intensity interval training
+  '136', // Jumping rope
+  '138', // Mountain biking
+  '157', // Hiking (count as run equivalent)
+  '169', // Swimming
+  '170', // Swimming (open water)
+  '171', // Swimming (pool)
+  '173', // Running (general)
+  '174', // Running on treadmill
+  '175', // Running outdoors
+  '176', // Running - high intensity
+  '177', // Running - sprint
+  '178', // Running - intervals
+  '179', // Running - long distance
+  '180', // Running - recovery
+  '181', // Running - tempo
+  '182', // Running - track
+  '183', // Running - cross country
+  '184', // Running - hill
+  '185', // Running - race
+  '186', // Running - warmup
+  '187', // Running - cooldown
+  '188', // Running - fartlek
+  '3000', // Custom running activity
+  '3001'
+]);
+
+const excludedActivityCodes = new Set([
+  '7', // Walking
+  '93', // Leisure walking
+  '94', // Walking (fitness) - treat as excluded unless keyword says otherwise
+  '143', // Wheelchair
+  '145'  // Fitness walking
+]);
+
+const activityTypeNames: Record<number, string> = {
+  7: 'Walking',
+  8: 'Running',
+  9: 'Jogging',
+  10: 'Sprinting',
+  57: 'Beach Run',
+  58: 'Stair Run',
+  59: 'Treadmill Run',
+  70: 'Extreme Biking',
+  71: 'Road Biking',
+  72: 'Trail Run',
+  108: 'Nordic Walking',
+  112: 'CrossFit',
+  113: 'Functional Training',
+  116: 'HIIT',
+  117: 'Spinning',
+  118: 'Stair Climb',
+  119: 'Indoor Cycling',
+  122: 'Treadmill Run',
+  123: 'Cycle Race',
+  124: 'Jump Rope',
+  134: 'Trail Bike',
+  135: 'HIIT',
+  138: 'Mountain Biking',
+  157: 'Hiking',
+  169: 'Swimming',
+  170: 'Open Water Swim',
+  171: 'Pool Swim',
+  173: 'Running',
+  174: 'Treadmill Running',
+  175: 'Outdoor Running',
+  176: 'High Intensity Run',
+  177: 'Sprint',
+  178: 'Interval Run',
+  179: 'Long Run',
+  180: 'Recovery Run',
+  181: 'Tempo Run',
+  182: 'Track Run',
+  183: 'Cross Country Run',
+  184: 'Hill Run',
+  185: 'Race',
+  186: 'Warmup Run',
+  187: 'Cooldown Run',
+  188: 'Fartlek Run',
+};
+
+function normalizeActivityName(session: any): string | null {
+  if (!session) return null;
+  const existing = String(session.name || session.description || '').trim();
+  if (existing) return existing;
+  const numericType = Number(session.activityType ?? session.activityTypeId ?? session.activity);
+  if (!Number.isNaN(numericType) && activityTypeNames[numericType]) {
+    return activityTypeNames[numericType];
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -311,22 +427,32 @@ serve(async (req) => {
       }
     }
 
-    // Filter sessions to only include exercise activities
+    // Filter sessions to only include exercise activities (with numeric code fallback)
     const filteredSessions = sessions.filter((session: any) => {
-      const activityType = String(session.activityType || session.activityTypeId || session.activity || '').toLowerCase();
+      const activityTypeRaw = session.activityType ?? session.activityTypeId ?? session.activity ?? '';
+      const activityType = String(activityTypeRaw || '').toLowerCase();
       const sessionName = String(session.name || '').toLowerCase();
       const sessionDescription = String(session.description || '').toLowerCase();
-      
-      // Check if it's explicitly excluded
-      const isExcluded = excludedActivities.some(excluded => 
+      const numericType = Number(activityTypeRaw);
+
+      const numericKey = Number.isFinite(numericType) ? String(numericType) : null;
+      if (numericKey && excludedActivityCodes.has(numericKey)) {
+        return false;
+      }
+
+      const isExplicitlyExcluded = excludedActivities.some(excluded => 
         activityType.includes(excluded) || 
         sessionName.includes(excluded) || 
         sessionDescription.includes(excluded)
       );
-      
-      if (isExcluded) return false;
-      
-      // Check if it's an exercise activity
+      if (isExplicitlyExcluded && !(numericKey && includedActivityCodes.has(numericKey))) {
+        return false;
+      }
+
+      if (numericKey && includedActivityCodes.has(numericKey)) {
+        return true;
+      }
+
       return exerciseActivities.some(activity => 
         activityType.includes(activity) || 
         sessionName.includes(activity) || 
@@ -334,10 +460,29 @@ serve(async (req) => {
       );
     });
 
+    const normalizedSessions = filteredSessions.map((session: any) => {
+      const copy = { ...session };
+      const numericType = Number(copy.activityType ?? copy.activityTypeId ?? copy.activity);
+      if (!Number.isNaN(numericType)) {
+        copy._activityTypeNumeric = numericType;
+        if (!copy.activityType) {
+          copy.activityType = numericType;
+        }
+      }
+      const friendlyName = normalizeActivityName(copy);
+      if (friendlyName) {
+        copy.name = friendlyName;
+        if (!copy.description) {
+          copy.description = friendlyName;
+        }
+      }
+      return copy;
+    });
+
     // Calculate distance for exercise sessions
     let exerciseDistanceMeters = 0;
-    if (filteredSessions.length > 0) {
-      for (const session of filteredSessions) {
+    if (normalizedSessions.length > 0) {
+      for (const session of normalizedSessions) {
         try {
           const sessionStartTime = new Date(Number(session.startTimeMillis));
           const sessionEndTime = new Date(Number(session.endTimeMillis));
@@ -388,7 +533,7 @@ serve(async (req) => {
         active_minutes: activeMinutes,
         distance_meters: exerciseDistanceMeters,
         heart_rate_avg: heartRateAvg,
-        sessions: filteredSessions,
+        sessions: normalizedSessions,
         last_synced_at: new Date().toISOString(),
         sync_source: 'google_fit'
       }, { onConflict: 'user_id,date' });
@@ -396,18 +541,27 @@ serve(async (req) => {
     if (upsertErr) throw upsertErr;
 
     // Store sessions
-    if (Array.isArray(filteredSessions) && filteredSessions.length > 0) {
-      const mapped = filteredSessions.map((s: any) => ({
-        user_id: user.id,
-        session_id: String(s.id || `${s.startTimeMillis}-${s.endTimeMillis}`),
-        start_time: s.startTimeMillis ? new Date(Number(s.startTimeMillis)).toISOString() : new Date().toISOString(),
-        end_time: s.endTimeMillis ? new Date(Number(s.endTimeMillis)).toISOString() : new Date().toISOString(),
-        activity_type: s.activityType || s.activityTypeId || s.activity || null,
-        name: s.name || null,
-        description: s.description || null,
-        source: 'google_fit',
-        raw: { ...s, distance_meters: (s as any)._computed_distance_meters }
-      }));
+    if (Array.isArray(normalizedSessions) && normalizedSessions.length > 0) {
+      const mapped = normalizedSessions.map((s: any) => {
+        const sessionId = s.id || s.session_id || `${s.startTimeMillis}-${s.endTimeMillis}`;
+        const numericType = Number(s._activityTypeNumeric);
+        const activityLabel =
+          s.name ||
+          s.description ||
+          (Number.isFinite(numericType) && activityTypeNames[numericType]) ||
+          String(s.activity_type || s.activityType || s.activity || 'run');
+        return {
+          user_id: user.id,
+          session_id: String(sessionId),
+          start_time: s.startTimeMillis ? new Date(Number(s.startTimeMillis)).toISOString() : new Date().toISOString(),
+          end_time: s.endTimeMillis ? new Date(Number(s.endTimeMillis)).toISOString() : new Date().toISOString(),
+          activity_type: activityLabel,
+          name: s.name || activityLabel || null,
+          description: s.description || activityLabel || null,
+          source: 'google_fit',
+          raw: { ...s, distance_meters: (s as any)._computed_distance_meters }
+        };
+      });
 
       const batchSize = 50;
       for (let i = 0; i < mapped.length; i += batchSize) {
@@ -425,7 +579,7 @@ serve(async (req) => {
       activeMinutes,
       distanceMeters: exerciseDistanceMeters,
       heartRateAvg,
-      sessions: filteredSessions
+      sessions: normalizedSessions
     };
 
     return new Response(JSON.stringify({

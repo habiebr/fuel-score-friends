@@ -6,6 +6,83 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const includedActivityCodes = new Set([
+  '8', '9', '10', '57', '58', '59', '70', '71', '72', '108',
+  '112', '113', '116', '117', '118', '119', '122', '123', '124',
+  '134', '135', '138', '157', '169', '170', '171', '173', '174',
+  '175', '176', '177', '178', '179', '180', '181', '182', '183',
+  '184', '185', '186', '187', '188', '3000', '3001'
+]);
+
+const excludedActivityCodes = new Set([
+  '7', '93', '94', '143', '145'
+]);
+
+const activityTypeNames: Record<number, string> = {
+  7: 'Walking',
+  8: 'Running',
+  9: 'Jogging',
+  10: 'Sprinting',
+  57: 'Beach Run',
+  58: 'Stair Run',
+  59: 'Treadmill Run',
+  70: 'Extreme Biking',
+  71: 'Road Biking',
+  72: 'Trail Run',
+  108: 'Nordic Walking',
+  112: 'CrossFit',
+  113: 'Functional Training',
+  116: 'HIIT',
+  117: 'Spinning',
+  118: 'Stair Climb',
+  119: 'Indoor Cycling',
+  122: 'Treadmill Run',
+  123: 'Cycle Race',
+  124: 'Jump Rope',
+  134: 'Trail Bike',
+  135: 'HIIT',
+  138: 'Mountain Biking',
+  157: 'Hiking',
+  169: 'Swimming',
+  170: 'Open Water Swim',
+  171: 'Pool Swim',
+  173: 'Running',
+  174: 'Treadmill Running',
+  175: 'Outdoor Running',
+  176: 'High Intensity Run',
+  177: 'Sprint',
+  178: 'Interval Run',
+  179: 'Long Run',
+  180: 'Recovery Run',
+  181: 'Tempo Run',
+  182: 'Track Run',
+  183: 'Cross Country Run',
+  184: 'Hill Run',
+  185: 'Race',
+  186: 'Warmup Run',
+  187: 'Cooldown Run',
+  188: 'Fartlek Run',
+};
+
+function normalizeSession(session: any) {
+  const copy = { ...session };
+  const activityTypeRaw = copy.activityType ?? copy.activityTypeId ?? copy.activity ?? '';
+  const numericType = Number(activityTypeRaw);
+  if (!Number.isNaN(numericType)) {
+    copy._activityTypeNumeric = numericType;
+  }
+  if (!copy.name || !String(copy.name).trim()) {
+    const friendly = !Number.isNaN(numericType) ? activityTypeNames[numericType] : null;
+    if (friendly) {
+      copy.name = friendly;
+      if (!copy.description) {
+        copy.description = friendly;
+      }
+    }
+  }
+  return copy;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -14,12 +91,21 @@ serve(async (req) => {
   }
 
   try {
+    let daysBack = 30;
+    try {
+      if (req.method !== 'OPTIONS') {
+        const body = await req.json();
+        if (body && typeof body.daysBack === 'number' && body.daysBack > 0) {
+          daysBack = Math.min(60, Math.floor(body.daysBack)); // cap to 60 to avoid abuse
+        }
+      }
+    } catch {}
     // Initialize Supabase client with service role key
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('Starting comprehensive Google Fit sync for all users...');
+    console.log(`Starting comprehensive Google Fit sync for all users (last ${daysBack} days)...`);
 
     // Get all users with active Google Fit tokens
     const { data: tokens, error: tokensError } = await supabaseClient
@@ -71,17 +157,25 @@ serve(async (req) => {
         // Make direct Google Fit API calls for this user
         const endDate = new Date();
         const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30); // Last 30 days
+        startDate.setDate(startDate.getDate() - daysBack);
 
-        // Fetch sessions
-        const sessionsResponse = await fetch(`https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`, {
-          headers: {
-            'Authorization': `Bearer ${token.access_token}`,
-            'Content-Type': 'application/json'
+T        // Fetch sessions (handle pagination)
+        let exerciseSessions: any[] = [];
+        let pageToken: string | undefined = undefined;
+        do {
+          const url = new URL('https://www.googleapis.com/fitness/v1/users/me/sessions');
+          url.searchParams.set('startTime', startDate.toISOString());
+          url.searchParams.set('endTime', endDate.toISOString());
+          if (pageToken) url.searchParams.set('pageToken', pageToken);
+          const sessionsResponse = await fetch(url.toString(), {
+            headers: {
+              'Authorization': `Bearer ${token.access_token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (!sessionsResponse.ok) {
+            break;
           }
-        });
-
-        if (sessionsResponse.ok) {
           const sessionsData = await sessionsResponse.json();
           const sessions = sessionsData.session || [];
           
@@ -117,21 +211,24 @@ serve(async (req) => {
             'transportation', 'travel'
           ];
 
-          const exerciseSessions = sessions.filter((session: any) => {
-            const activityType = String(session.activityType || '').toLowerCase();
+          const filtered = sessions.filter((session: any) => {
+            const activityTypeRaw = session.activityType ?? session.activityTypeId ?? session.activity ?? '';
+            const activityType = String(activityTypeRaw || '').toLowerCase();
             const sessionName = String(session.name || '').toLowerCase();
             const sessionDescription = String(session.description || '').toLowerCase();
             const applicationName = String(session.application?.packageName || '').toLowerCase();
+            const numericType = Number(activityTypeRaw);
+            const numericKey = Number.isFinite(numericType) ? String(numericType) : null;
 
             // Check if it's explicitly excluded
-            const isExcluded = excludedActivities.some(excluded => 
+            const isExcludedByText = excludedActivities.some(excluded => 
               activityType.includes(excluded) || 
               sessionName.includes(excluded) || 
               sessionDescription.includes(excluded) || 
               applicationName.includes(excluded)
             );
 
-            if (isExcluded) {
+            if (numericKey && excludedActivityCodes.has(numericKey)) {
               return false;
             }
 
@@ -143,43 +240,36 @@ serve(async (req) => {
               applicationName.includes(activity)
             );
 
-            // Also check Google Fit activity type numbers for running (8, 9, 10)
-            const isRunningByType = [8, 9, 10].includes(session.activityType);
+            if (numericKey && includedActivityCodes.has(numericKey)) {
+              return true;
+            }
 
-            return isExercise || isRunningByType;
+            if (isExcludedByText) {
+              return false;
+            }
+
+            return isExercise;
           });
+          const normalizedBatch = filtered.map(normalizeSession);
+          exerciseSessions.push(...normalizedBatch);
+          console.log(`Accumulated ${exerciseSessions.length} exercise sessions for user ${token.user_id}`);
+          pageToken = sessionsData.nextPageToken;
+        } while (pageToken);
 
-          console.log(`Filtered to ${exerciseSessions.length} exercise sessions for user ${token.user_id}`);
-
-          // Store sessions in database
-          if (exerciseSessions.length > 0) {
+        // Store sessions in database
+        if (exerciseSessions.length > 0) {
             const sessionInserts = exerciseSessions.map((session: any) => {
-              let activityTypeName = 'unknown';
-              if (session.name && session.name.trim()) {
-                activityTypeName = session.name;
-              } else if (session.activityType) {
-                const activityTypeMap: Record<number, string> = {
-                  8: 'Running',
-                  9: 'Jogging', 
-                  10: 'Sprinting',
-                  1: 'Aerobics',
-                  93: 'Swimming',
-                  13: 'Weightlifting',
-                  112: 'CrossFit',
-                  113: 'Functional Training',
-                  119: 'Cycling'
-                };
-                activityTypeName = activityTypeMap[session.activityType] || `Activity ${session.activityType}`;
-              }
-
+              const numericType = Number(session._activityTypeNumeric ?? session.activityType ?? session.activity);
+              const friendlyName = (!Number.isNaN(numericType) && activityTypeNames[numericType]) || null;
+              const activityTypeName = String(session.name || session.description || friendlyName || 'Workout').trim();
               return {
                 user_id: token.user_id,
                 session_id: session.id,
                 start_time: new Date(parseInt(session.startTimeMillis)).toISOString(),
                 end_time: new Date(parseInt(session.endTimeMillis)).toISOString(),
                 activity_type: activityTypeName,
-                name: session.name || '',
-                description: session.description || '',
+                name: session.name || activityTypeName,
+                description: session.description || activityTypeName,
                 source: 'google_fit',
                 raw: session
               };
@@ -198,24 +288,102 @@ serve(async (req) => {
               results.errors.push(`User ${token.user_id}: Failed to save sessions`);
               continue;
             }
+        }
+
+        // Fetch daily aggregates for last N days and upsert into google_fit_data
+        try {
+          const aggBody = {
+            aggregateBy: [
+              { dataTypeName: 'com.google.step_count.delta' },
+              { dataTypeName: 'com.google.distance.delta' },
+              { dataTypeName: 'com.google.calories.expended' },
+              { dataTypeName: 'com.google.active_minutes' },
+              { dataTypeName: 'com.google.heart_rate.bpm' }
+            ],
+            bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
+            startTimeMillis: startDate.getTime(),
+            endTimeMillis: endDate.getTime()
+          } as any;
+
+          const aggResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token.access_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(aggBody)
+          });
+
+          if (aggResp.ok) {
+            const aggData = await aggResp.json();
+            const buckets = aggData.bucket || [];
+            for (const b of buckets) {
+              const startMs = parseInt(b.startTimeMillis || '0');
+              if (!startMs) continue;
+              const day = new Date(startMs).toISOString().slice(0, 10);
+              let steps = 0, distance = 0, calories = 0, activeMinutes = 0;
+              let hrSum = 0, hrCount = 0;
+              for (const ds of b.dataset || []) {
+                for (const p of ds.point || []) {
+                  const val = (p.value && p.value[0]) || {};
+                  const fp = val.fpVal ?? val.fpval ?? val.fp ?? val.intVal ?? val.intval ?? 0;
+                  const dt = p.dataTypeName || ds.dataSourceId || '';
+                  if (dt.includes('step_count')) steps += Number(fp) || 0;
+                  if (dt.includes('distance')) distance += Number(fp) || 0;
+                  if (dt.includes('calories')) calories += Number(fp) || 0;
+                  if (dt.includes('active_minutes')) activeMinutes += Number(fp) || 0;
+                  if (dt.includes('heart_rate')) { hrSum += Number(fp) || 0; hrCount += 1; }
+                }
+              }
+              const heartRateAvg = hrCount > 0 ? Math.round(hrSum / hrCount) : null;
+              // Attach sessions that overlap this day (simple by date)
+              const daySessions = (exerciseSessions || []).filter((s: any) => {
+                const sDate = new Date(parseInt(s.startTimeMillis)).toISOString().slice(0, 10);
+                return sDate === day;
+              }).map((s: any) => {
+                const numericType = Number(s._activityTypeNumeric ?? s.activityType ?? s.activity);
+                const friendly = (!Number.isNaN(numericType) && activityTypeNames[numericType]) || null;
+                return {
+                  id: s.id,
+                  name: s.name || friendly || s.description || 'Workout',
+                  activityType: s.activityType || friendly || s.description || 'Workout',
+                  _activityTypeNumeric: Number.isNaN(numericType) ? null : numericType
+                };
+              });
+
+              const { error: upErr } = await supabaseClient
+                .from('google_fit_data')
+                .upsert({
+                  user_id: token.user_id,
+                  date: day,
+                  steps,
+                  distance_meters: distance,
+                  calories_burned: calories,
+                  active_minutes: activeMinutes || null,
+                  heart_rate_avg: heartRateAvg,
+                  sessions: daySessions
+                }, { onConflict: 'user_id,date' });
+              if (upErr) {
+                console.warn('Upsert google_fit_data failed', upErr);
+              }
+            }
+          } else {
+            console.warn('Aggregate fetch failed:', await aggResp.text());
           }
-
-          results.successful_syncs++;
-          console.log(`Successfully synced user ${token.user_id}`);
-
-        } else {
-          const errorText = await sessionsResponse.text();
-          console.error(`Failed to fetch sessions for user ${token.user_id}:`, errorText);
-          results.failed_syncs++;
-          results.errors.push(`User ${token.user_id}: ${errorText}`);
+        } catch (e) {
+          console.warn('Aggregate fetch error:', e);
         }
 
         // Add a small delay between users to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 1000));
 
+        results.successful_syncs++;
+        console.log(`Successfully synced user ${token.user_id}`);
+
       } catch (error) {
         console.error(`Error processing user ${token.user_id}:`, error);
         results.failed_syncs++;
+        // @ts-ignore
         results.errors.push(`User ${token.user_id}: ${error.message}`);
       }
     }
@@ -237,6 +405,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in comprehensive sync function:', error);
     return new Response(JSON.stringify({
+      // @ts-ignore
       error: error?.message || String(error)
     }), {
       status: 500,

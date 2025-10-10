@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, Activity, User } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BottomNav } from '@/components/BottomNav';
@@ -111,14 +111,10 @@ export default function ProfileInformation() {
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
-            <div className="mt-4 flex items-center gap-3">
-              <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
-                <Activity className="w-6 h-6 text-white dark:text-black" />
-              </div>
+            <div className="mt-4">
               <PageHeading
                 title="Profile Information"
                 description="Personal details and body metrics"
-                icon={User}
               />
             </div>
           </div>

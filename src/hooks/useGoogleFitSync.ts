@@ -232,16 +232,15 @@ export function useGoogleFitSync() {
       }
 
       // Trigger automatic training activity update
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        await (supabase as any).functions.invoke('update-actual-training', {
-          body: { date: today },
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
-        console.log('Triggered automatic training activity update');
-      } catch (updateError) {
-        console.error('Error triggering training update:', updateError);
-      }
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          await supabase.functions.invoke('update-actual-training', {
+            body: { date: today }
+          });
+          console.log('Triggered automatic training activity update');
+        } catch (updateError) {
+          console.error('Error triggering training update:', updateError);
+        }
 
       toast({
         title: "Google Fit synced",

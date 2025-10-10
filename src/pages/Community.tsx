@@ -10,6 +10,7 @@ import { getAllUsersWeeklyScoresFromCache } from '@/services/unified-score.servi
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeading } from '@/components/PageHeading';
+import { startOfWeek, format } from 'date-fns';
 
 interface LeaderboardEntry {
   user_id: string;
@@ -21,6 +22,11 @@ interface LeaderboardEntry {
   rank: number;
   email?: string;
 }
+
+const formatKilometers = (value: number): string => {
+  const normalized = Number.isFinite(value) ? value : 0;
+  return Number.isInteger(normalized) ? normalized.toString() : normalized.toFixed(1);
+};
 
 export default function Community() {
   const { user } = useAuth();
@@ -67,46 +73,64 @@ export default function Community() {
       const weeklyScores = await getAllUsersWeeklyScoresFromCache();
       console.log(`Found ${weeklyScores.length} users with weekly scores from cache`);
 
-      // Get Google Fit data for weekly miles
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      // Get Google Fit data for current week (Mon-Sun)
+      const today = new Date();
+      const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
 
-      const { data: fitData, error: fitError } = await (supabase as any)
-        .from('google_fit_data')
-        .select('user_id, distance_meters, date')
-        .gte('date', sevenDaysAgo.toISOString().split('T')[0]);
-
-      if (fitError) {
-        console.error('Error loading Google Fit data:', fitError);
+      // Weekly running totals via service-backed edge function
+      const { data: weeklyRunningData, error: weeklyRunningError } = await supabase.functions.invoke('weekly-running-leaderboard', {
+        body: { weekStart: weekStartStr },
+      });
+      if (weeklyRunningError) {
+        console.error('Error loading weekly running totals:', weeklyRunningError);
       }
+
+      // Build quick lookup map for weekly meters by user
+      const weeklyByUser: Record<string, number> = {};
+      const weeklyEntries = (weeklyRunningData as any)?.entries;
+      if (Array.isArray(weeklyEntries)) {
+        for (const entry of weeklyEntries as any[]) {
+          const userId = entry?.user_id;
+          const meters = Number(entry?.distance_meters) || 0;
+          if (!userId) continue;
+          weeklyByUser[userId] = meters;
+        }
+      }
+
+      // No live per-day fetch beyond sessions; rely on aggregated session totals
 
       // Also fetch longer-range data for total miles (past 365 days)
       const oneYearAgo = new Date();
       oneYearAgo.setDate(oneYearAgo.getDate() - 365);
       const { data: fitYear, error: fitYearErr } = await (supabase as any)
         .from('google_fit_data')
-        .select('user_id, distance_meters, date')
+        .select('user_id, distance_meters')
         .gte('date', oneYearAgo.toISOString().split('T')[0]);
       if (fitYearErr) {
         console.error('Error loading yearly Google Fit data:', fitYearErr);
       }
 
       // Calculate stats per user - include ALL users even with no data
-      const userStats = profiles.map(profile => {
-        const userId = profile.user_id || profile.id;
+      const userStats = profiles
+        .map(profile => {
+        const userId = profile.user_id; // require auth user_id for joins
+        if (!userId) return null;
         
         // Get weekly score from cached unified scoring system
         const userWeeklyData = weeklyScores.find(ws => ws.user_id === userId);
         const weeklyScore = userWeeklyData?.weekly_score || 0;
 
-        const fitDataArr = (fitData as any[]) || [];
-        const userFitData = fitDataArr.filter(f => f.user_id === userId);
-        const weeklyMeters = userFitData.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
-        const weeklyKilometers = Math.round(weeklyMeters / 1000);
+        // Use running session totals for current week
+        const weeklyMeters = weeklyByUser[userId] || 0;
+        const weeklyKilometers = Number((weeklyMeters / 1000).toFixed(1));
         const fitYearArr = (fitYear as any[]) || [];
         const userFitYear = fitYearArr.filter(f => f.user_id === userId);
-        const yearMeters = userFitYear.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
-        const totalKilometers = Math.round(yearMeters / 1000);
+        const yearMeters = userFitYear.reduce((sum, f) => {
+          const dm = parseFloat(String(f.distance_meters ?? 0));
+          return sum + (Number.isFinite(dm) ? dm : 0);
+        }, 0);
+        const totalKilometers = Number((yearMeters / 1000).toFixed(1));
 
         // Generate display name: use full_name or show as "Anonymous Runner"
         const displayName = profile.full_name || `Runner ${userId.substring(0, 4)}`;
@@ -120,7 +144,7 @@ export default function Community() {
           weekly_score: weeklyScore,
           rank: 0
         };
-      });
+      }).filter(Boolean) as LeaderboardEntry[];
 
       console.log(`Processed ${userStats.length} user stats`);
 
@@ -221,35 +245,37 @@ export default function Community() {
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-              <Button
-                variant={activeTab === 'leaderboard' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setActiveTab('leaderboard')}
-                className="flex-1"
-              >
-                <Trophy className="w-4 h-4 mr-2" />
-                Leaderboard
-              </Button>
-              <Button
-                variant={activeTab === 'challenges' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setActiveTab('challenges')}
-                className="flex-1"
-              >
-                <Target className="w-4 h-4 mr-2" />
-                Challenges
-              </Button>
-              <Button
-                variant={activeTab === 'groups' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setActiveTab('groups')}
-                className="flex-1"
-              >
-                <Users className="w-4 h-4 mr-2" />
-                Groups
-              </Button>
+            {/* Tabs - horizontal scroll on small screens */}
+            <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto">
+              <div className="inline-flex gap-2 whitespace-nowrap">
+                <Button
+                  variant={activeTab === 'leaderboard' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('leaderboard')}
+                  className="flex-shrink-0"
+                >
+                  <Trophy className="w-4 h-4 mr-2" />
+                  Leaderboard
+                </Button>
+                <Button
+                  variant={activeTab === 'challenges' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('challenges')}
+                  className="flex-shrink-0"
+                >
+                  <Target className="w-4 h-4 mr-2" />
+                  Challenges
+                </Button>
+                <Button
+                  variant={activeTab === 'groups' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('groups')}
+                  className="flex-shrink-0"
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Groups
+                </Button>
+              </div>
             </div>
 
             {activeTab === 'leaderboard' && (
@@ -282,7 +308,7 @@ export default function Community() {
                       </div>
                       <div className="grid grid-cols-3 gap-4 text-center">
                         <div>
-                          <div className="text-2xl font-bold">{userRank.total_kilometers}</div>
+                          <div className="text-2xl font-bold">{formatKilometers(userRank.total_kilometers)}</div>
                           <div className="text-xs text-muted-foreground">Total Kilometers</div>
                         </div>
                         <div>
@@ -290,7 +316,7 @@ export default function Community() {
                           <div className="text-xs text-muted-foreground">Weekly Score</div>
                         </div>
                         <div>
-                          <div className="text-2xl font-bold">{userRank.weekly_kilometers}</div>
+                          <div className="text-2xl font-bold">{formatKilometers(userRank.weekly_kilometers)}</div>
                           <div className="text-xs text-muted-foreground">This Week</div>
                         </div>
                       </div>
@@ -307,6 +333,9 @@ export default function Community() {
                     </h3>
                     <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
                       Average of daily scores (nutrition + training + bonuses - penalties) from unified scoring system over the past 7 days.
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Curious how we grade each day? <a href="/scores" className="text-primary underline underline-offset-2">See the scoring explainer</a>.
                     </p>
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                       <p className="text-xs text-muted-foreground">
@@ -362,7 +391,7 @@ export default function Community() {
 
                           {/* User Info */}
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold truncate">{entry.full_name}</div>
+                            <div className="font-semibold">{entry.full_name}</div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
                               {entry.location}
@@ -371,11 +400,7 @@ export default function Community() {
 
                           {/* Stats */}
                           <div className="text-right flex-shrink-0">
-                            <div className="font-bold">{entry.total_kilometers} km</div>
-                            <div className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                              <ActivityIcon className="w-3 h-3" />
-                              {entry.weekly_kilometers} km this week
-                            </div>
+                            <div className="font-bold">{formatKilometers(entry.weekly_kilometers)} km</div>
                           </div>
 
                           {/* Score Badge */}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ interface ProfileGoal {
 export function RaceGoalWidget() {
   const { user, session } = useAuth();
   const navigate = useNavigate();
+  const realtimeErrorLogged = useRef(false);
   const [goalLabel, setGoalLabel] = useState<string>('');
   const [raceDate, setRaceDate] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState<{
@@ -150,8 +151,15 @@ export function RaceGoalWidget() {
             console.log('RaceGoalWidget: Successfully subscribed to realtime updates');
             isSubscribed = true;
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.warn('RaceGoalWidget: Realtime subscription failed with status:', status);
+            if (!realtimeErrorLogged.current) {
+              console.warn('RaceGoalWidget: Realtime subscription failed with status:', status);
+              realtimeErrorLogged.current = true;
+            }
             isSubscribed = false;
+            if (channel) {
+              supabase.removeChannel(channel);
+              channel = null;
+            }
             // Don't treat this as a critical error - app can work without realtime
           }
         });
@@ -224,5 +232,4 @@ export function RaceGoalWidget() {
     </Card>
   );
 }
-
 

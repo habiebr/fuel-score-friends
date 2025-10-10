@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { format, subDays } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
+import { getMealScores } from '@/services/unified-score.service';
 
 interface FoodLog {
   id: string;
@@ -28,6 +29,8 @@ interface DayData {
   totalProtein: number;
   totalCarbs: number;
   totalFat: number;
+  mealScores: Array<{ mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'; score: number; breakdown: { calories: number; protein: number; carbs: number; fat: number } }>;
+  mealAverage: number;
 }
 
 export default function MealHistory() {
@@ -64,12 +67,27 @@ export default function MealHistory() {
         .lte('logged_at', `${endDate}T23:59:59`)
         .order('logged_at', { ascending: false });
 
-      const days = [];
+      // Build 7 dates for the week
+      const dates: string[] = [];
       for (let i = 0; i < 7; i++) {
         const date = new Date(currentWeekStart);
         date.setDate(currentWeekStart.getDate() + i);
-        const dateStr = format(date, 'yyyy-MM-dd');
-        
+        dates.push(format(date, 'yyyy-MM-dd'));
+      }
+
+      // Fetch meal scores for each day in parallel
+      const mealScoresResults = await Promise.all(
+        dates.map(async (dateISO) => {
+          try {
+            const res = await getMealScores(user.id, dateISO);
+            return { dateISO, res };
+          } catch {
+            return { dateISO, res: { scores: [], average: 0 } } as any;
+          }
+        })
+      );
+
+      const days = dates.map((dateStr) => {
         const dayLogs = logs?.filter(log => 
           format(new Date(log.logged_at), 'yyyy-MM-dd') === dateStr
         ) || [];
@@ -79,15 +97,19 @@ export default function MealHistory() {
         const totalCarbs = dayLogs.reduce((sum, log) => sum + (log.carbs_grams || 0), 0);
         const totalFat = dayLogs.reduce((sum, log) => sum + (log.fat_grams || 0), 0);
 
-        days.push({
+        const ms = mealScoresResults.find(m => m.dateISO === dateStr)?.res;
+
+        return {
           date: dateStr,
           logs: dayLogs,
           totalCalories,
           totalProtein,
           totalCarbs,
           totalFat,
-        });
-      }
+          mealScores: ms?.scores || [],
+          mealAverage: ms?.average || 0,
+        } as DayData;
+      });
 
       setWeekData(days);
     } catch (error) {
@@ -160,8 +182,13 @@ export default function MealHistory() {
                     <CardTitle className="text-lg">
                       {format(new Date(day.date), 'EEEE, MMM dd')}
                     </CardTitle>
-                    <div className="text-sm font-semibold">
-                      {day.totalCalories} <span className="text-muted-foreground font-normal">cal</span>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold">
+                        {day.totalCalories} <span className="text-muted-foreground font-normal">cal</span>
+                      </div>
+                      {day.mealScores && day.mealScores.length > 0 && (
+                        <div className="text-xs text-muted-foreground">Meal avg: {day.mealAverage}</div>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -181,6 +208,26 @@ export default function MealHistory() {
                         <div className="font-semibold text-info">{day.totalFat}g</div>
                         <div className="text-muted-foreground">Fat</div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Meal Scores */}
+                  {day.mealScores && day.mealScores.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {day.mealScores.map((ms) => (
+                        <div key={ms.mealType} className="p-2 rounded-md border border-border bg-muted/20">
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs capitalize text-muted-foreground">{ms.mealType}</div>
+                            <div className="text-sm font-semibold">{ms.score}</div>
+                          </div>
+                          <div className="mt-1 grid grid-cols-4 gap-1 text-[10px] text-muted-foreground">
+                            <div>C {ms.breakdown.calories}</div>
+                            <div>P {ms.breakdown.protein}</div>
+                            <div>Cr {ms.breakdown.carbs}</div>
+                            <div>F {ms.breakdown.fat}</div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
