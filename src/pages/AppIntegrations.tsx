@@ -12,6 +12,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { PageHeading } from '@/components/PageHeading';
 import { PWAInstallButton } from '@/components/PWAInstallButton';
+import { StravaConnectButton, StravaDisconnectButton } from '@/components/StravaConnectButton';
+import { GoogleFitConnectButton, GoogleFitDisconnectButton } from '@/components/GoogleFitConnectButton';
+import { useStravaAuth } from '@/hooks/useStravaAuth';
+import { useStravaSync } from '@/hooks/useStravaSync';
 
 export default function AppIntegrations() {
   const navigate = useNavigate();
@@ -22,6 +26,38 @@ export default function AppIntegrations() {
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [syncLabel, setSyncLabel] = useState<string>('');
+  
+  // Strava integration
+  const { isConnected: isStravaConnected, connectStrava, disconnectStrava, checkConnectionStatus } = useStravaAuth();
+  const { syncActivities, isSyncing: isStravaSyncing, lastSync: stravaLastSync } = useStravaSync();
+
+  // Handle Strava OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stravaConnected = params.get('strava_connected');
+    const stravaError = params.get('strava_error');
+
+    if (stravaConnected === 'true') {
+      toast({
+        title: 'Strava Connected',
+        description: 'Your Strava account has been successfully connected!',
+      });
+      // Refresh connection status
+      checkConnectionStatus();
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    if (stravaError) {
+      toast({
+        title: 'Strava Connection Failed',
+        description: `Error: ${stravaError.replace(/_/g, ' ')}`,
+        variant: 'destructive',
+      });
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast, checkConnectionStatus]);
 
   useEffect(() => {
     (async () => {
@@ -39,7 +75,7 @@ export default function AppIntegrations() {
   const handleConnect = async () => {
     try {
       await signInWithGoogle();
-      await syncGoogleFit();
+      await syncGoogleFit(false); // Show toast for manual connection
       setIsConnected(true);
       toast({
         title: "Google Fit connected",
@@ -101,48 +137,113 @@ export default function AppIntegrations() {
               <Card className="shadow-card">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
-                      <Activity className="w-6 h-6" />
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200">
+                      {/* Google "G" Logo */}
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                      </svg>
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-lg font-semibold text-foreground">Google Fit</h3>
                       <p className="text-sm text-muted-foreground">
-                        {isConnected ? (syncLabel || 'Connected') : 'Not connected'}
+                        {isConnected ? (syncLabel || 'Connected') : 'Daily activity and workouts'}
                       </p>
                     </div>
-                    <Button
-                      onClick={isConnected ? handleDisconnect : handleConnect}
-                      disabled={isSyncing}
-                      variant={isConnected ? 'destructive' : 'default'}
-                      className="flex-shrink-0"
-                    >
-                      {isSyncing ? 'Syncing...' : isConnected ? 'Disconnect' : 'Connect'}
-                    </Button>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {isConnected ? (
+                      <>
+                        <Button
+                          onClick={() => syncGoogleFit(false)}
+                          disabled={isSyncing}
+                          variant="outline"
+                          className="flex-1"
+                        >
+                          {isSyncing ? 'Syncing...' : 'Sync Now'}
+                        </Button>
+                        <GoogleFitDisconnectButton
+                          onClick={handleDisconnect}
+                          disabled={isSyncing}
+                          size="default"
+                        />
+                      </>
+                    ) : (
+                      <GoogleFitConnectButton
+                        onClick={handleConnect}
+                        variant="blue"
+                        size="default"
+                        className="w-full"
+                      />
+                    )}
                   </div>
 
                   {/* Historical Sync */}
                   {isConnected && (
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                      <div className="text-sm">
-                        <div className="font-medium">Sync historical data</div>
-                        <div className="text-xs text-muted-foreground">Fetch the last 30 days of activity</div>
+                    <div className="space-y-3 p-4 rounded-lg bg-muted/30 border border-muted">
+                      <div className="flex items-center gap-2">
+                        <History className="w-5 h-5 text-primary" />
+                        <div className="text-sm">
+                          <div className="font-semibold text-foreground">Backfill Historical Data</div>
+                          <div className="text-xs text-muted-foreground">
+                            Sync past activity to see your full history
+                          </div>
+                        </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isHistoricalSyncing}
-                        onClick={() => syncHistoricalData(30)}
-                        className="flex items-center gap-2"
-                      >
-                        <History className="w-4 h-4" />
-                        {isHistoricalSyncing ? 'Syncing…' : 'Sync 30 days'}
-                      </Button>
-                    </div>
-                  )}
-
-                  {isHistoricalSyncing && historicalSyncProgress && (
-                    <div className="text-xs text-muted-foreground">
-                      Synced {historicalSyncProgress.syncedDays}/{historicalSyncProgress.totalDays} days…
+                      
+                      {isHistoricalSyncing && historicalSyncProgress ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              Syncing... {historicalSyncProgress.syncedDays}/{historicalSyncProgress.totalDays} days
+                            </span>
+                            <span className="text-primary font-medium">
+                              {Math.round((historicalSyncProgress.syncedDays / historicalSyncProgress.totalDays) * 100)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                            <div 
+                              className="bg-primary h-full transition-all duration-300"
+                              style={{ 
+                                width: `${(historicalSyncProgress.syncedDays / historicalSyncProgress.totalDays) * 100}%` 
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isHistoricalSyncing}
+                            onClick={() => syncHistoricalData(7)}
+                            className="flex-1"
+                          >
+                            7 days
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={isHistoricalSyncing}
+                            onClick={() => syncHistoricalData(30)}
+                            className="flex-1"
+                          >
+                            30 days
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isHistoricalSyncing}
+                            onClick={() => syncHistoricalData(90)}
+                            className="flex-1"
+                          >
+                            90 days
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -153,6 +254,77 @@ export default function AppIntegrations() {
                       <PWAInstallButton size="sm" />
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Strava */}
+              <Card className="shadow-card mt-4">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-[#FC5200] rounded-full flex items-center justify-center flex-shrink-0">
+                      {/* Strava Logo */}
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path 
+                          d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" 
+                          fill="white"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-foreground">Strava</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {isStravaConnected 
+                          ? (stravaLastSync ? `Last sync ${new Date(stravaLastSync).toLocaleTimeString()}` : 'Connected') 
+                          : 'Track runs, rides, and workouts'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {isStravaConnected ? (
+                      <>
+                        <Button
+                          onClick={() => syncActivities()}
+                          disabled={isStravaSyncing}
+                          variant="outline"
+                          className="flex-1"
+                        >
+                          {isStravaSyncing ? 'Syncing...' : 'Sync Now'}
+                        </Button>
+                        <StravaDisconnectButton
+                          onClick={async () => {
+                            await disconnectStrava();
+                            toast({
+                              title: "Strava disconnected",
+                              description: "Your Strava activities will no longer sync",
+                            });
+                          }}
+                          disabled={isStravaSyncing}
+                          size="default"
+                        />
+                      </>
+                    ) : (
+                      <StravaConnectButton
+                        onClick={() => {
+                          connectStrava();
+                        }}
+                        variant="orange"
+                        size="default"
+                        className="w-full"
+                      />
+                    )}
+                  </div>
+
+                  {isStravaConnected && (
+                    <div className="pt-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <Activity className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div>
+                          Strava provides detailed activity data including GPS tracks, heart rate zones, power metrics, and elevation profiles for comprehensive training analysis.
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
