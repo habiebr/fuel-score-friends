@@ -55,7 +55,10 @@ export default function TrainingCalendar() {
         const grouped: Record<string, TrainingActivity[]> = {};
         for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = [];
         
-        // Process activities and prioritize actual over planned
+        // First pass: Separate actual and planned activities by date
+        const actualByDate: Record<string, TrainingActivity[]> = {};
+        const plannedByDate: Record<string, TrainingActivity[]> = {};
+        
         (data || []).forEach((row: any) => {
           const key = row.date;
           const act: TrainingActivity = {
@@ -68,21 +71,29 @@ export default function TrainingCalendar() {
             intensity: row.intensity,
             estimated_calories: row.estimated_calories,
             notes: row.notes,
-            is_actual: row.is_actual || false, // Add is_actual flag
+            is_actual: row.is_actual || false,
           };
           
-          // If there's already an actual activity for this date, replace planned activities
           if (act.is_actual) {
-            // Remove any existing planned activities for this date
-            grouped[key] = [act];
+            if (!actualByDate[key]) actualByDate[key] = [];
+            actualByDate[key].push(act);
           } else {
-            // Only add planned activity if no actual activity exists for this date
-            if (!grouped[key] || grouped[key].length === 0 || !grouped[key][0].is_actual) {
-              if (!grouped[key]) grouped[key] = [];
-              grouped[key].push(act);
-            }
+            if (!plannedByDate[key]) plannedByDate[key] = [];
+            plannedByDate[key].push(act);
           }
         });
+        
+        // Second pass: Prioritize actual activities, show only one activity per day
+        for (const date of Object.keys(grouped)) {
+          if (actualByDate[date] && actualByDate[date].length > 0) {
+            // If there are actual activities, show only the first actual activity
+            grouped[date] = [actualByDate[date][0]];
+          } else if (plannedByDate[date] && plannedByDate[date].length > 0) {
+            // If no actual activities, show only the first planned activity
+            grouped[date] = [plannedByDate[date][0]];
+          }
+        }
+        
         setActivitiesByDate(grouped);
       } finally {
         setLoading(false);

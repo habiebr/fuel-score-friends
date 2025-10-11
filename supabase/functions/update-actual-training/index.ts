@@ -175,10 +175,20 @@ serve(async (req: Request) => {
 
     let updatedActivities;
     
-    // If there's a planned activity, update it with actual data
+    // Delete any existing actual activities for this date to prevent duplicates
+    if (existingActualActivities && existingActualActivities.length > 0) {
+      await supabase
+        .from('training_activities')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('date', date)
+        .eq('is_actual', true);
+    }
+    
+    // If there's a planned activity, update it with actual data (use first Google Fit session only)
     if (plannedActivities && plannedActivities.length > 0) {
       const plannedActivity = plannedActivities[0]; // Take the first planned activity
-      const googleFitData = googleFitActivities[0]; // Take the first Google Fit session
+      const googleFitData = googleFitActivities[0]; // Take the first Google Fit session only
       
       if (googleFitData) {
         // Update the planned activity with actual data
@@ -208,21 +218,24 @@ serve(async (req: Request) => {
         updatedActivities = updated;
       }
     } else {
-      // No planned activity exists, insert new actual activities
-      const { data: inserted, error: insertError } = await supabase
-        .from('training_activities')
-        .insert(googleFitActivities)
-        .select();
+      // No planned activity exists, insert only the first actual activity
+      const firstActivity = googleFitActivities[0];
+      if (firstActivity) {
+        const { data: inserted, error: insertError } = await supabase
+          .from('training_activities')
+          .insert([firstActivity]) // Insert only the first activity
+          .select();
 
-      if (insertError) {
-        console.error('Error inserting actual activities:', insertError);
-        return new Response(JSON.stringify({ error: 'Failed to insert actual activities' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        if (insertError) {
+          console.error('Error inserting actual activity:', insertError);
+          return new Response(JSON.stringify({ error: 'Failed to insert actual activity' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        updatedActivities = inserted;
       }
-      
-      updatedActivities = inserted;
     }
 
     // Check if actual activities differ significantly from planned
