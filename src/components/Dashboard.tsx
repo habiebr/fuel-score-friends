@@ -708,15 +708,21 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       try {
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
         const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+        console.log('🏃 Fetching weekly running distance for week:', weekStartStr, 'user:', user.id);
         const { data: weeklyRunningData, error: weeklyRunningError } = await supabase.functions.invoke('weekly-running-leaderboard', {
           body: { weekStart: weekStartStr, userId: user.id },
         });
+        console.log('🏃 Weekly running API response:', weeklyRunningData);
         if (weeklyRunningError) {
           console.error('Error loading weekly running distance for dashboard:', weeklyRunningError);
         } else {
           const entry = (weeklyRunningData as any)?.entries?.find((e: any) => e?.user_id === user.id);
+          console.log('🏃 Found entry for user:', entry);
           if (entry) {
             weeklyKm = (Number(entry?.distance_meters) || 0) / 1000;
+            console.log('🏃 Weekly kilometers calculated:', weeklyKm);
+          } else {
+            console.log('🏃 No entry found for user in weekly data');
           }
         }
       } catch (runningError) {
