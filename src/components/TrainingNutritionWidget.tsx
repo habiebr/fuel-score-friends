@@ -524,10 +524,12 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
           <div className="flex items-center gap-2 mb-2">
             <Activity className="h-4 w-4 text-primary" />
             <span className="font-medium text-primary">
-              {Array.isArray(actualTrainingData) ? 'Actual Training' : (actualTrainingData ? 'Actual Training' : 'Planned Training')}
+              {hasActual || todayAggregate ? 'Actual Training' : 'Planned Training'}
             </span>
-            { (Array.isArray(actualTrainingData) ? actualTrainingData.length>0 : !!actualTrainingData) && (
-              <Badge variant="secondary" className="text-xs">Live Data</Badge>
+            {(hasActual || todayAggregate) && (
+              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                ✓ Completed
+              </Badge>
             )}
           </div>
           {/* Old-widget summary using aggregates when available */
@@ -546,7 +548,7 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
                   <div className="flex items-center gap-1"><span className="font-semibold text-foreground">{Math.round(todayAggregate.caloriesBurned)}</span><span>kcal</span></div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">moderate intensity <span className="text-green-600 ml-2">✓ Completed</span></p>
+              <p className="text-xs text-muted-foreground mt-1">moderate intensity</p>
             </div>
           ) : Array.isArray(actualTrainingData) && actualTrainingData.length >= 2 ? (
             <div className="relative">
@@ -559,7 +561,6 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
                         {renderSessionMetrics(s)}
                         <p className="text-xs text-muted-foreground mt-1">
                           {(s.intensity || 'moderate')} intensity
-                          <span className="text-green-600 ml-2">✓ Completed</span>
                         </p>
                       </div>
                     </CarouselItem>
@@ -576,7 +577,6 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
                 {renderSessionMetrics(s)}
                 <p className="text-xs text-muted-foreground mt-1">
                   {(s.intensity || 'moderate')} intensity
-                  <span className="text-green-600 ml-2">✓ Completed</span>
                 </p>
               </div>
             ))
@@ -587,9 +587,6 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
                 <p className="text-muted-foreground">
                   {activity.duration_minutes} min • {activity.intensity} intensity
                   {activity.distance_km && ` • ${activity.distance_km}km`}
-                  {(Array.isArray(actualTrainingData) ? actualTrainingData.length>0 : !!actualTrainingData) && (
-                    <span className="text-green-600 ml-2">✓ Completed</span>
-                  )}
                 </p>
               </div>
             ))
