@@ -391,11 +391,9 @@ export default function Meals() {
       if (!session?.access_token) {
         throw new Error('Missing authorization header');
       }
-      const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       const res = await supabase.functions.invoke('generate-nutrition-suggestions', {
         body: { date: today },
         headers: {
-          ...(apiKey ? { apikey: apiKey } : {}),
           Authorization: `Bearer ${session.access_token}`,
           ...(import.meta as any).env?.VITE_GROQ_API_KEY ? { 'x-groq-key': (import.meta as any).env?.VITE_GROQ_API_KEY } : {}
         }

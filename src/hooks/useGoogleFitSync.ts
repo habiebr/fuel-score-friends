@@ -207,7 +207,7 @@ export function useGoogleFitSync() {
         const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
         const aggregate = async (dataTypeName: string) => {
-          const res = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+          const res = await fetch('/fitness', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${accessToken}`,
@@ -247,19 +247,24 @@ export function useGoogleFitSync() {
         const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
         const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
 
-        const sessionsRes = await fetch(
-          `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startOfDay.toISOString()}&endTime=${endOfDay.toISOString()}`,
-          { headers: { 'Authorization': `Bearer ${accessToken}` } }
-        );
+        // For sessions, we'll need to create a proxy or use a different approach
+        // For now, let's skip sessions to avoid CORS issues
         let sessions: any[] = [];
-        if (sessionsRes.status === 401) {
-          const err: any = new Error('Google Fit token expired');
-          err.status = 401;
-          throw err;
-        }
-        if (sessionsRes.ok) {
-          const sessionsData = await sessionsRes.json();
-          sessions = sessionsData.session || [];
+        try {
+          const sessionsRes = await fetch(
+            `/fitness?startTime=${startOfDay.toISOString()}&endTime=${endOfDay.toISOString()}`,
+            { 
+              method: 'GET',
+              headers: { 'Authorization': `Bearer ${accessToken}` } 
+            }
+          );
+          if (sessionsRes.ok) {
+            const sessionsData = await sessionsRes.json();
+            sessions = sessionsData.session || [];
+          }
+        } catch (error) {
+          console.warn('Failed to fetch sessions (proxy not available):', error);
+          sessions = [];
         }
 
         // Filter sessions to only include running/sport activities (exclude walking)

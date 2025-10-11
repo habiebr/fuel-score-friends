@@ -236,14 +236,8 @@ export function Dashboard3({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     if (!user) return;
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       const { data, error } = await supabase.functions.invoke('dashboard3-data', {
-        body: { user_id: user.id },
-        headers: {
-          ...(apiKey ? { apikey: apiKey } : {}),
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        }
+        body: { user_id: user.id }
       });
       if (error) throw error;
       setData({
