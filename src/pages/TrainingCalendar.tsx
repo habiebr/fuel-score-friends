@@ -6,10 +6,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
-import { ChevronDown, ChevronUp, Activity, Calendar } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrainingNutritionWidget } from '@/components/TrainingNutritionWidget';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -36,7 +35,6 @@ export default function TrainingCalendar() {
   const datesOfWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const [activitiesByDate, setActivitiesByDate] = useState<Record<string, TrainingActivity[]>>({});
   const [loading, setLoading] = useState(true);
-  const [isNutritionExpanded, setIsNutritionExpanded] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -112,47 +110,13 @@ export default function TrainingCalendar() {
             </Button>
           </div>
 
-          {/* Actual/Planned Training widget */}
+          {/* Today's Training Widget */}
           <div className="mb-6">
-            <Collapsible open={isNutritionExpanded} onOpenChange={setIsNutritionExpanded}>
-              <Card className="shadow-card">
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                          <Activity className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <CardTitle className="text-lg">Training</CardTitle>
-                          <CardDescription>
-                            {isNutritionExpanded 
-                              ? 'Click to hide training summary'
-                              : 'Click to view today\'s actual/planned training'}
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isNutritionExpanded ? (
-                          <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                        )}
-                      </div>
-                    </div>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="pt-0">
-                    <TrainingNutritionWidget
-                      selectedDate={new Date()}
-                      activities={Object.values(activitiesByDate).flat()}
-                      tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
-                    />
-                  </CardContent>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
+            <TrainingNutritionWidget
+              selectedDate={new Date()}
+              activities={Object.values(activitiesByDate).flat()}
+              tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
+            />
           </div>
 
           <Card className="shadow-card">
