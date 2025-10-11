@@ -26,13 +26,17 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     heartbeatIntervalMs: 30000,
     reconnectAfterMs: (tries: number) => Math.min(tries * 1000, 30000)
   },
-  // Add cache-busting headers and CORS support
+  // Add cache-busting headers and API key
   global: {
     headers: {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
-      'Expires': '0'
+      'Expires': '0',
+      'apikey': SUPABASE_ANON_KEY
     }
+  },
+  db: {
+    schema: 'public'
   }
 });
 

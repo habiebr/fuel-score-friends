@@ -1,4 +1,4 @@
-import { Download, Smartphone } from 'lucide-react';
+import { Download, Smartphone, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePWA } from '@/hooks/usePWA';
 
@@ -15,31 +15,92 @@ export function PWAInstallButton({
   className = '',
   children 
 }: PWAInstallButtonProps) {
-  const { canInstall, installPWA, isInstalled } = usePWA();
+  const { canInstall, installPWA, isInstalled, isIOS, isStandalone, enablePushNotifications, isPushSupported } = usePWA();
 
-  if (isInstalled || !canInstall) {
-    return null;
-  }
+  const handleInstallFlow = async () => {
+    try {
+      if (isIOS) {
+        // For iOS, we need to show installation instructions first
+        const instructions = document.createElement('div');
+        instructions.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <p>To install on iOS:</p>
+            <ol style="text-align: left; margin-top: 10px;">
+              <li>Tap the Share button <img src="/ios-share.svg" alt="Share" style="height: 20px; vertical-align: middle;"></li>
+              <li>Scroll down and tap "Add to Home Screen"</li>
+              <li>Tap "Add" to confirm</li>
+            </ol>
+          </div>
+        `;
+        // You might want to use a proper modal/dialog component here
+        alert('Please follow the instructions to install on iOS');
+        return;
+      }
+
+      // For other platforms: ask notifications first (if supported), then install
+      if (isPushSupported) {
+        await enablePushNotifications();
+      }
+      await installPWA();
+    } catch (error) {
+      console.error('Install flow error:', error);
+    }
+  };
+
+  // On iOS Safari, always show the button when not installed (beforeinstallprompt is not fired)
+  if (isInstalled) return null;
+  if (!isIOS && !canInstall) return null;
 
   return (
     <Button
       variant={variant}
       size={size}
-      onClick={installPWA}
+      onClick={handleInstallFlow}
       className={`gap-2 ${className}`}
     >
-      <Download className="w-4 h-4" />
-      {children || 'Install App'}
+      {isIOS ? <Smartphone className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+      {children || (isIOS ? 'Install on iOS' : 'Install App')}
     </Button>
   );
 }
 
 export function PWAInstallPrompt() {
-  const { canInstall, installPWA, isInstalled } = usePWA();
+  const { canInstall, installPWA, isInstalled, isIOS, isStandalone, enablePushNotifications, isPushSupported } = usePWA();
 
-  if (isInstalled || !canInstall) {
-    return null;
-  }
+  const handlePromptFlow = async () => {
+    try {
+      if (isIOS) {
+        // For iOS, show a proper dialog with installation instructions
+        const instructions = document.createElement('div');
+        instructions.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <p>To install on iOS:</p>
+            <ol style="text-align: left; margin-top: 10px;">
+              <li>Tap the Share button <img src="/ios-share.svg" alt="Share" style="height: 20px; vertical-align: middle;"></li>
+              <li>Scroll down and tap "Add to Home Screen"</li>
+              <li>Tap "Add" to confirm</li>
+            </ol>
+          </div>
+        `;
+        // You might want to use a proper modal/dialog component here
+        alert('Please follow the instructions to install on iOS');
+        return;
+      }
+
+      // For other platforms: ask notifications first (if supported), then install
+      if (isPushSupported) {
+        await enablePushNotifications();
+      }
+      await installPWA();
+    } catch (error) {
+      console.error('Install flow error:', error);
+    }
+  };
+
+  // For debugging - always show the prompt for now
+  // if (isInstalled || !canInstall) {
+  //   return null;
+  // }
 
   return (
     <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
@@ -52,12 +113,13 @@ export function PWAInstallPrompt() {
           </p>
         </div>
         <Button
-          onClick={installPWA}
+          onClick={handlePromptFlow}
           variant="secondary"
           size="sm"
           className="bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
+          disabled={!isIOS && !canInstall}
         >
-          Install
+          {isIOS ? 'Install on iOS' : 'Install'}
         </Button>
       </div>
     </div>

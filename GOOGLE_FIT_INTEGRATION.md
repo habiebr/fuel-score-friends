@@ -332,6 +332,15 @@ For issues or questions:
 - Check browser console for errors
 - Verify network requests in DevTools
 
+## Token Management & Refresh
+
+- Google access and refresh tokens are persisted in the `google_tokens` table with `is_active`, `expires_at`, and `refresh_count` metadata so the backend can manage rotation centrally.
+- A Supabase edge function (`refresh-expiring-google-tokens`) refreshes batches of tokens server-side; it requires the shared secret `GOOGLE_TOKEN_REFRESH_SECRET` (set via `supabase secrets set GOOGLE_TOKEN_REFRESH_SECRET=...`) for manual invocation.
+- A `pg_cron` job now calls the refresh function every 10 minutes with `batch_size: 25` and `threshold_minutes: 20`, keeping tokens warm before the one-hour Google expiry window closes.
+- In Postgres, expose the same secret to cron with `ALTER DATABASE postgres SET app.settings.refresh_google_token_secret = 'your-secret';` so the scheduled job can pass the authorization header safely.
+- The function deactivates tokens when Google returns `invalid_grant`/`invalid_token`, which aligns with Google’s OAuth guidance on detecting revoked refresh tokens and prompting the user to re-consent.
+- Per [Google OAuth 2.0 best practices](https://developers.google.com/identity/protocols/oauth2/web-server#offline), always request offline access, store refresh tokens securely server-side, rotate access tokens ahead of expiry, and implement exponential backoff plus revocation handling.
+
 ## Security
 
 - ✅ RLS policies protect user data
@@ -339,4 +348,3 @@ For issues or questions:
 - ✅ HTTPS only for API calls
 - ✅ No sensitive data in logs
 - ✅ Token refresh handled by Supabase
-

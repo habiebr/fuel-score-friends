@@ -46,11 +46,27 @@ const DialogContent = React.forwardRef<
         "sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]",
         className,
       )}
+      // Add safe-area padding for PWA fullscreen and devices with notches
+      style={{
+        paddingTop: `calc(env(safe-area-inset-top, 0px) + 1rem)`,
+        paddingRight: `calc(env(safe-area-inset-right, 0px) + 1rem)`,
+        paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + 1rem)`,
+        paddingLeft: `calc(env(safe-area-inset-left, 0px) + 1rem)`
+      }}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-        <X className="h-4 w-4" />
+      <DialogPrimitive.Close
+        className="absolute rounded-full opacity-90 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none flex items-center justify-center"
+        style={{
+          top: `calc(env(safe-area-inset-top, 0px) + 0.75rem)`,
+          right: `calc(env(safe-area-inset-right, 0px) + 0.75rem)`,
+          width: '44px',
+          height: '44px'
+        }}
+        aria-label="Close"
+      >
+        <X className="h-5 w-5" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>

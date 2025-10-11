@@ -1,6 +1,6 @@
 # Google Fit API Setup Guide
 
-This guide will help you set up Google Fit API integration for your PWA.
+This guide will help you set up Google Fit API integration for your PWA and mirror Supabase’s [Google OAuth best practices](https://supabase.com/docs/guides/auth/social-login/auth-google?platform=web).
 
 ## Step 1: Create Google Cloud Project
 
@@ -47,19 +47,30 @@ This guide will help you set up Google Fit API integration for your PWA.
    - Add test users (your email) in "Test users"
    - Click "Save and Continue"
 
-3. **Create OAuth Client ID**
+3. **Create OAuth Client ID (Services ID)**
    - Application type: "Web application"
    - Name: "Fuel Score Friends Web Client"
    - Authorized JavaScript origins:
-     - `http://localhost:8080` (for development)
-     - `https://your-domain.com` (for production)
+     - `http://localhost:5173` (Vite dev server)
+     - `https://app.nutrisync.id`
+     - `https://cursor.nutrisync.pages.dev`
    - Authorized redirect URIs:
-     - `http://localhost:8080` (for development)
-     - `https://your-domain.com` (for production)
+     - `http://localhost:54321/auth/v1/callback` (Supabase local dev)
+     - `https://qiwndzsrmtxmgngnupml.supabase.co/auth/v1/callback` (Supabase Hosted)
+     - `https://app.nutrisync.id/auth/callback`
+     - `https://cursor.nutrisync.pages.dev/auth/callback`
    - Click "Create"
+   - Copy the generated **Services ID / Client ID** and **Client Secret** for Supabase
 
 4. **Copy Credentials**
    - Copy the "Client ID" (you'll need this for `VITE_GOOGLE_CLIENT_ID`)
+
+5. **Set Required Scopes**
+   - In the OAuth consent screen ➝ Scopes, add:
+     - `https://www.googleapis.com/auth/fitness.activity.read`
+     - `https://www.googleapis.com/auth/fitness.body.read`
+     - `https://www.googleapis.com/auth/fitness.location.read`
+   - Keep `email` and `profile` selected so Supabase can map user identities
 
 ## Step 4: Create API Key
 
@@ -77,7 +88,28 @@ This guide will help you set up Google Fit API integration for your PWA.
      - `https://your-domain.com/*`
    - Click "Save"
 
-## Step 5: Configure Environment Variables
+## Step 5: Configure Supabase Google Provider
+
+1. **Open Supabase Dashboard** → **Authentication** → **Providers** → **Google**
+2. Paste the Client ID and Secret you copied from Google Cloud
+3. Set **Additional OAuth Scopes** to the same three Google Fit scopes above (space separated)
+4. Under **Settings**:
+   - Prompt = `consent`
+   - Access type = `offline` (required for refresh tokens)
+   - Include granted scopes = `true`
+5. Save the provider configuration
+
+## Step 6: Configure Supabase Auth URLs
+
+1. Go to **Authentication** → **URL Configuration**
+2. Add Site URL entries:
+   - `http://localhost:5173`
+   - `https://app.nutrisync.id`
+   - `https://cursor.nutrisync.pages.dev`
+3. Add Additional Redirect URLs for the hosted callback pages listed in Step 3
+4. Save changes
+
+## Step 7: Configure Environment Variables
 
 1. **Create .env.local file**
    ```bash
@@ -93,13 +125,14 @@ This guide will help you set up Google Fit API integration for your PWA.
    # Optional: Needed for token refresh Edge Function
    GOOGLE_FIT_CLIENT_ID=your-client-id-here
    GOOGLE_FIT_CLIENT_SECRET=your-client-secret-if-required
+   GOOGLE_TOKEN_REFRESH_SECRET=your-shared-cron-secret
    ```
 
 3. **Update for production**
    - Add the same variables to your Cloudflare Pages environment
    - Or update your deployment configuration
 
-## Step 6: Test the Integration
+## Step 8: Test the Integration
 
 1. **Start Development Server**
    ```bash
@@ -115,7 +148,7 @@ This guide will help you set up Google Fit API integration for your PWA.
    - Complete OAuth flow
    - Verify data loads correctly
 
-## Step 7: Production Deployment
+## Step 9: Production Deployment
 
 1. **Update OAuth Settings**
    - Go back to Google Cloud Console
@@ -130,6 +163,56 @@ This guide will help you set up Google Fit API integration for your PWA.
 3. **Deploy with Environment Variables**
    - Add environment variables to your deployment platform
    - Redeploy your application
+
+## Step 10: Schedule Token Refresh & Daily Sync (Supabase)
+
+1. **Deploy edge functions**
+   ```bash
+   supabase functions deploy store-google-token refresh-google-fit-token-v2 refresh-expiring-google-tokens sync-all-users-direct sync-all-google-fit-data
+   ```
+   - Requires `SUPABASE_ACCESS_TOKEN` and the CLI logged into the `qiwndzsrmtxmgngnupml` project.
+
+2. **Set Supabase secrets for background jobs**
+   ```bash
+   supabase secrets set \
+     GOOGLE_TOKEN_REFRESH_SECRET=choose-a-long-random-string \
+     ADMIN_FORCE_SYNC_KEY=force_sync_2025 \
+     GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
+     GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+   ```
+   - `GOOGLE_TOKEN_REFRESH_SECRET` authorizes the token refresh cron worker.
+   - `ADMIN_FORCE_SYNC_KEY` gates the legacy force-sync job (deprecated).
+   - Client ID/secret allow refreshes without user interaction.
+
+3. **Expose the shared secrets to Postgres cron jobs**
+   ```bash
+   supabase db remote connect
+   -- Inside psql:
+   ALTER DATABASE postgres SET app.settings.refresh_google_token_secret = 'choose-a-long-random-string';
+   ALTER DATABASE postgres SET app.settings.admin_force_sync_key = 'force_sync_2025';
+   \q
+   ```
+   - These GUCs let scheduled jobs inject the same secrets without hard-coding them in SQL.
+
+4. **Apply the latest migrations to install scheduler jobs**
+   ```bash
+   supabase db push
+   ```
+   - This installs a single consolidated `refresh-google-fit-tokens` job (every 15 minutes, batch size 50, 25-min threshold) and `sync-google-fit-daily` at 01:15 UTC.
+
+5. **Trigger an initial background run (optional sanity check)**
+   ```bash
+   curl -X POST \
+     -H "Authorization: Bearer $GOOGLE_TOKEN_REFRESH_SECRET" \
+     -H "Content-Type: application/json" \
+     https://qiwndzsrmtxmgngnupml.supabase.co/functions/v1/refresh-expiring-google-tokens
+
+   curl -X POST \
+     -H "Content-Type: application/json" \
+     -d '{"admin_key":"force_sync_2025","days":30}' \
+    https://qiwndzsrmtxmgngnupml.supabase.co/functions/v1/sync-all-users-direct
+   ```
+   - Verify the Supabase logs show successful refresh and sync activity.
 
 ## Troubleshooting
 
@@ -182,9 +265,9 @@ This guide will help you set up Google Fit API integration for your PWA.
    - Implement data retention policies
    - Provide clear privacy notices
 
-## API Scopes Used
+## API Scopes Used (Align with Supabase Provider)
 
-The integration uses these Google Fit API scopes:
+The integration uses these Google Fit API scopes (paste the same value into Supabase → Providers → Google → Additional scopes):
 - `https://www.googleapis.com/auth/fitness.activity.read` - Read activity data
 - `https://www.googleapis.com/auth/fitness.body.read` - Read body metrics
 - `https://www.googleapis.com/auth/fitness.location.read` - Read location data

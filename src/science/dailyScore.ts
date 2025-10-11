@@ -1,5 +1,11 @@
 export type Load = 'rest'|'easy'|'moderate'|'long'|'quality';
 
+/**
+ * @deprecated This function returns a SUM of scores (0-700 range), which is incorrect.
+ * Use getWeeklyScoreFromCache() or getWeeklyUnifiedScore() from unified-score.service.ts instead.
+ * Those functions correctly return the AVERAGE of daily scores (0-100 range).
+ * This function is kept only for backward compatibility with old tests.
+ */
 export function weeklyScore(scores: number[]): number {
   return scores.slice(0, 7).reduce((s, v) => s + Math.max(0, Math.min(100, Math.round(v))), 0);
 }

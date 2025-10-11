@@ -38,7 +38,7 @@ export function PageHeading({
               <Icon className="h-5 w-5 text-primary" />
             </div>
           )}
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             {title}
           </h1>
         </div>

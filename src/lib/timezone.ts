@@ -1,119 +1,50 @@
-import { format, startOfDay, endOfDay, subDays, addDays } from 'date-fns';
-import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+/**
+ * Timezone utilities for handling user-specific date/time operations
+ */
 
 /**
- * Get the user's timezone from browser or default to UTC
+ * Get the start and end of a date in the user's local timezone
+ * This returns UTC timestamps that represent the local day boundaries
  */
-export function getUserTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return 'UTC';
-  }
-}
-
-/**
- * Get today's date in user's timezone as YYYY-MM-DD string
- */
-export function getTodayInUserTimezone(): string {
-  const userTimezone = getUserTimezone();
-  const now = new Date();
-  const zonedDate = toZonedTime(now, userTimezone);
-  return format(zonedDate, 'yyyy-MM-dd');
-}
-
-/**
- * Get start of day in user's timezone as UTC ISO string
- * This ensures we capture all logs from the user's "today" regardless of timezone
- */
-export function getStartOfDayInUserTimezone(date?: Date): string {
-  const userTimezone = getUserTimezone();
-  const targetDate = date || new Date();
-  const zonedDate = toZonedTime(targetDate, userTimezone);
-  const startOfDayLocal = startOfDay(zonedDate);
-  const startOfDayUTC = fromZonedTime(startOfDayLocal, userTimezone);
-  return startOfDayUTC.toISOString();
-}
-
-/**
- * Get end of day in user's timezone as UTC ISO string
- * This ensures we capture all logs from the user's "today" regardless of timezone
- */
-export function getEndOfDayInUserTimezone(date?: Date): string {
-  const userTimezone = getUserTimezone();
-  const targetDate = date || new Date();
-  const zonedDate = toZonedTime(targetDate, userTimezone);
-  const endOfDayLocal = endOfDay(zonedDate);
-  const endOfDayUTC = fromZonedTime(endOfDayLocal, userTimezone);
-  return endOfDayUTC.toISOString();
-}
-
-/**
- * Get date range for a specific date in user's timezone
- * Returns { start: UTC ISO string, end: UTC ISO string, dateString: YYYY-MM-DD }
- */
-export function getDateRangeInUserTimezone(date?: Date) {
-  const userTimezone = getUserTimezone();
-  const targetDate = date || new Date();
-  const zonedDate = toZonedTime(targetDate, userTimezone);
-  const dateString = format(zonedDate, 'yyyy-MM-dd');
+export function getLocalDayBoundaries(date: Date): { start: string; end: string } {
+  // Create start of day in local timezone
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
   
-  const startOfDayLocal = startOfDay(zonedDate);
-  const endOfDayLocal = endOfDay(zonedDate);
-  
-  const startUTC = fromZonedTime(startOfDayLocal, userTimezone);
-  const endUTC = fromZonedTime(endOfDayLocal, userTimezone);
+  // Create end of day in local timezone
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
   
   return {
-    start: startUTC.toISOString(),
-    end: endUTC.toISOString(),
-    dateString
+    start: startOfDay.toISOString(),
+    end: endOfDay.toISOString()
   };
 }
 
 /**
- * Get date range for a specific date string (YYYY-MM-DD) in user's timezone
+ * Get the local date string in YYYY-MM-DD format
  */
-export function getDateRangeFromString(dateString: string) {
-  const userTimezone = getUserTimezone();
-  const date = new Date(dateString + 'T00:00:00');
-  return getDateRangeInUserTimezone(date);
+export function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**
- * Convert a UTC timestamp to user's timezone date string
+ * Convert a UTC timestamp to local date string
  */
-export function utcToUserTimezoneDateString(utcTimestamp: string): string {
-  const userTimezone = getUserTimezone();
-  const utcDate = new Date(utcTimestamp);
-  const zonedDate = toZonedTime(utcDate, userTimezone);
-  return format(zonedDate, 'yyyy-MM-dd');
+export function utcToLocalDateString(utcTimestamp: string): string {
+  const date = new Date(utcTimestamp);
+  return getLocalDateString(date);
 }
 
 /**
- * Get the last N days in user's timezone
+ * Get start and end ISO strings for a specific date string (YYYY-MM-DD)
+ * accounting for the user's local timezone
  */
-export function getLastNDaysInUserTimezone(days: number): Array<{ dateString: string; start: string; end: string }> {
-  const userTimezone = getUserTimezone();
-  const today = new Date();
-  const result = [];
-  
-  for (let i = days - 1; i >= 0; i--) {
-    const date = subDays(today, i);
-    const range = getDateRangeInUserTimezone(date);
-    result.push(range);
-  }
-  
-  return result;
-}
-
-/**
- * Check if a UTC timestamp falls within a user's "today"
- */
-export function isTimestampTodayInUserTimezone(timestamp: string): boolean {
-  const userTimezone = getUserTimezone();
-  const todayRange = getDateRangeInUserTimezone();
-  const timestampDate = new Date(timestamp);
-  
-  return timestampDate >= new Date(todayRange.start) && timestampDate <= new Date(todayRange.end);
+export function getDateRangeForQuery(dateString: string): { start: string; end: string } {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return getLocalDayBoundaries(date);
 }

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -103,27 +104,31 @@ export function TodayNutritionCard({
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Goal − Food + Exercise = Remaining</span>
             {showEducation && (
-              <button
-                aria-label="Calories info"
-                onClick={() => setOpenTip(openTip === "Calories" ? null : "Calories")}
-                className="rounded-full border border-border/50 bg-background/60 p-1 text-muted-foreground hover:text-foreground"
-              >
-                <Info className="h-3.5 w-3.5" />
-              </button>
+              <TooltipProvider>
+                <Tooltip delayDuration={150}>
+                  <TooltipTrigger asChild>
+                    <button
+                      aria-label="Calories info"
+                      className="rounded-full border border-border/50 bg-background/60 p-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="end" className="max-w-sm">
+                    <div className="text-sm font-semibold">Calorie math</div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {Math.round(calories.target)} − {Math.round(calories.current)} + 0 ={" "}
+                      <span className="font-semibold text-primary">
+                        {Math.max(0, Math.round(calories.target - calories.current))}
+                      </span>{" "}
+                      kcal remaining
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
-          {showEducation && openTip === "Calories" && (
-            <InfoPanel className="max-w-sm text-center">
-              <div className="text-sm font-semibold">Calorie math</div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {Math.round(calories.target)} − {Math.round(calories.current)} + 0 ={" "}
-                <span className="font-semibold text-primary">
-                  {Math.max(0, Math.round(calories.target - calories.current))}
-                </span>{" "}
-                kcal remaining
-              </p>
-            </InfoPanel>
-          )}
+          
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -152,32 +157,35 @@ export function TodayNutritionCard({
                     {label}
                   </span>
                   {showEducation && (
-                    <button
-                      aria-label={`${label} info`}
-                      onClick={() => setOpenTip(openTip === key ? null : key)}
-                      className="rounded-full border border-border/50 bg-background/60 p-1 text-muted-foreground hover:text-foreground"
-                    >
-                      <Info className="h-3.5 w-3.5" />
-                    </button>
+                    <TooltipProvider>
+                      <Tooltip delayDuration={150}>
+                        <TooltipTrigger asChild>
+                          <button
+                            aria-label={`${label} info`}
+                            className="rounded-full border border-border/50 bg-background/60 p-1 text-muted-foreground hover:text-foreground"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="center" className="w-72">
+                          <div className="text-sm font-semibold text-foreground">{tips[key].title}</div>
+                          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                            {tips[key].points.map((point) => (
+                              <li key={point}>• {point}</li>
+                            ))}
+                          </ul>
+                          <div className="mt-2 text-xs font-medium text-primary">{tips[key].target}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Intake today: <span className="font-semibold">{percent}%</span>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {Math.round(data.target)}{unit} target • {remaining}{unit} left
                 </div>
-                {showEducation && openTip === key && (
-                  <InfoPanel>
-                    <div className="text-sm font-semibold text-foreground">{tips[key].title}</div>
-                    <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                      {tips[key].points.map((point) => (
-                        <li key={point}>• {point}</li>
-                      ))}
-                    </ul>
-                    <div className="mt-2 text-xs font-medium text-primary">{tips[key].target}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      Intake today: <span className="font-semibold">{percent}%</span>
-                    </div>
-                  </InfoPanel>
-                )}
               </div>
             );
           })}

@@ -6,9 +6,11 @@ import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { Button } from '@/components/ui/button';
 import { Trophy, MapPin, Activity as ActivityIcon, Target, Users, Crown } from 'lucide-react';
+import { getAllUsersWeeklyScoresFromCache } from '@/services/unified-score.service';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeading } from '@/components/PageHeading';
+import { startOfWeek, format } from 'date-fns';
 
 interface LeaderboardEntry {
   user_id: string;
@@ -16,11 +18,15 @@ interface LeaderboardEntry {
   location: string;
   total_kilometers: number;
   weekly_kilometers: number;
-  nutrition_score: number;
+  weekly_score: number;
   rank: number;
-  composite_score: number;
   email?: string;
 }
+
+const formatKilometers = (value: number): string => {
+  const normalized = Number.isFinite(value) ? value : 0;
+  return Number.isInteger(normalized) ? normalized.toString() : normalized.toFixed(1);
+};
 
 export default function Community() {
   const { user } = useAuth();
@@ -49,78 +55,82 @@ export default function Community() {
 
       if (profilesError) {
         console.error('❌ Error loading profiles:', profilesError);
-        setLeaderboard([]); // Set empty to show "No users found" message
+        setLeaderboard([]);
         setLoading(false);
         return;
       }
 
       if (!profiles || profiles.length === 0) {
-        console.log('⚠️ No profiles found in database - users may need to complete onboarding');
-        setLeaderboard([]); // Set empty to show "No users found" message
+        console.log('⚠️ No profiles found in database');
+        setLeaderboard([]);
         setLoading(false);
         return;
       }
 
       console.log(`Found ${profiles.length} total profiles in database`);
-      
-      // Note: We can't use admin.listUsers() in client-side code
-      // Instead, we'll use full_name from profiles or show "Anonymous Runner"
-      console.log('Using profile data for display names (no admin access)');
 
-      // Get nutrition scores for the past 7 days
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      // Get weekly scores from cached unified scoring system
+      const weeklyScores = await getAllUsersWeeklyScoresFromCache();
+      console.log(`Found ${weeklyScores.length} users with weekly scores from cache`);
 
-      const { data: scores, error: scoresError } = await supabase
-        .from('nutrition_scores')
-        .select('user_id, daily_score, date')
-        .gte('date', sevenDaysAgo.toISOString().split('T')[0]);
+      // Get Google Fit data for current week (Mon-Sun)
+      const today = new Date();
+      const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
 
-      if (scoresError) {
-        console.error('Error loading nutrition scores:', scoresError);
+      // Weekly running totals via service-backed edge function
+      const { data: weeklyRunningData, error: weeklyRunningError } = await supabase.functions.invoke('weekly-running-leaderboard', {
+        body: { weekStart: weekStartStr },
+      });
+      if (weeklyRunningError) {
+        console.error('Error loading weekly running totals:', weeklyRunningError);
       }
-      console.log(`Found ${scores?.length || 0} nutrition score entries`);
 
-      // Get Google Fit data for weekly miles
-      const { data: fitData, error: fitError } = await (supabase as any)
-        .from('google_fit_data')
-        .select('user_id, distance_meters, date')
-        .gte('date', sevenDaysAgo.toISOString().split('T')[0]);
-
-      if (fitError) {
-        console.error('Error loading Google Fit data:', fitError);
+      // Build quick lookup map for weekly meters by user
+      const weeklyByUser: Record<string, number> = {};
+      const weeklyEntries = (weeklyRunningData as any)?.entries;
+      if (Array.isArray(weeklyEntries)) {
+        for (const entry of weeklyEntries as any[]) {
+          const userId = entry?.user_id;
+          const meters = Number(entry?.distance_meters) || 0;
+          if (!userId) continue;
+          weeklyByUser[userId] = meters;
+        }
       }
-      console.log(`Found ${fitData?.length || 0} Google Fit data entries`);
+
+      // No live per-day fetch beyond sessions; rely on aggregated session totals
 
       // Also fetch longer-range data for total miles (past 365 days)
       const oneYearAgo = new Date();
       oneYearAgo.setDate(oneYearAgo.getDate() - 365);
       const { data: fitYear, error: fitYearErr } = await (supabase as any)
         .from('google_fit_data')
-        .select('user_id, distance_meters, date')
+        .select('user_id, distance_meters')
         .gte('date', oneYearAgo.toISOString().split('T')[0]);
       if (fitYearErr) {
         console.error('Error loading yearly Google Fit data:', fitYearErr);
       }
 
       // Calculate stats per user - include ALL users even with no data
-      const userStats = profiles.map(profile => {
-        // Use user_id for matching scores/fit data (not profile.id)
-        const userId = profile.user_id || profile.id;
+      const userStats = profiles
+        .map(profile => {
+        const userId = profile.user_id; // require auth user_id for joins
+        if (!userId) return null;
         
-        const userScores = scores?.filter(s => s.user_id === userId) || [];
-        const avgScore = userScores.length > 0
-          ? Math.round(userScores.reduce((sum, s) => sum + s.daily_score, 0) / userScores.length)
-          : 0;
+        // Get weekly score from cached unified scoring system
+        const userWeeklyData = weeklyScores.find(ws => ws.user_id === userId);
+        const weeklyScore = userWeeklyData?.weekly_score || 0;
 
-        const fitDataArr = (fitData as any[]) || [];
-        const userFitData = fitDataArr.filter(f => f.user_id === userId);
-        const weeklyMeters = userFitData.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
-        const weeklyKilometers = Math.round(weeklyMeters / 1000);
+        // Use running session totals for current week
+        const weeklyMeters = weeklyByUser[userId] || 0;
+        const weeklyKilometers = Number((weeklyMeters / 1000).toFixed(1));
         const fitYearArr = (fitYear as any[]) || [];
         const userFitYear = fitYearArr.filter(f => f.user_id === userId);
-        const yearMeters = userFitYear.reduce((sum, f) => sum + (f.distance_meters || 0), 0);
-        const totalKilometers = Math.round(yearMeters / 1000); // cumulative kilometers over last year
+        const yearMeters = userFitYear.reduce((sum, f) => {
+          const dm = parseFloat(String(f.distance_meters ?? 0));
+          return sum + (Number.isFinite(dm) ? dm : 0);
+        }, 0);
+        const totalKilometers = Number((yearMeters / 1000).toFixed(1));
 
         // Generate display name: use full_name or show as "Anonymous Runner"
         const displayName = profile.full_name || `Runner ${userId.substring(0, 4)}`;
@@ -131,37 +141,20 @@ export default function Community() {
           location: 'New York, NY', // Placeholder: should be from profile
           total_kilometers: totalKilometers,
           weekly_kilometers: weeklyKilometers,
-          nutrition_score: avgScore,
-          rank: 0,
-          composite_score: 0 // Will calculate next
+          weekly_score: weeklyScore,
+          rank: 0
         };
-      });
+      }).filter(Boolean) as LeaderboardEntry[];
 
       console.log(`Processed ${userStats.length} user stats`);
 
-      // Calculate composite score (60% nutrition, 40% kilometers-based)
-      // Normalize both metrics to 0-100 scale
-      const maxKilometers = Math.max(...userStats.map(u => u.total_kilometers), 1);
-      userStats.forEach(entry => {
-        const normalizedKilometers = (entry.total_kilometers / maxKilometers) * 100;
-        const normalizedNutrition = entry.nutrition_score;
-        
-        // Composite score: 60% nutrition (more important) + 40% kilometers
-        // If both are 0, give a small base score to show in leaderboard
-        entry.composite_score = (normalizedNutrition * 0.6) + (normalizedKilometers * 0.4);
-      });
-
-      // Sort by composite score (both nutrition and miles) and assign ranks
+      // Sort by weekly score (from unified scoring system) and assign ranks
       userStats.sort((a, b) => {
-        // Sort by composite score descending
-        if (b.composite_score !== a.composite_score) {
-          return b.composite_score - a.composite_score;
+        // Sort by weekly score descending
+        if (b.weekly_score !== a.weekly_score) {
+          return b.weekly_score - a.weekly_score;
         }
-        // If tied, sort by nutrition score
-        if (b.nutrition_score !== a.nutrition_score) {
-          return b.nutrition_score - a.nutrition_score;
-        }
-        // If still tied, sort by kilometers
+        // If tied, sort by total kilometers
         return b.total_kilometers - a.total_kilometers;
       });
       
@@ -170,12 +163,12 @@ export default function Community() {
       });
 
       console.log(`✅ Processed ${userStats.length} users for leaderboard`);
-      console.log('Top 5 users:', userStats.slice(0, 5).map(u => ({
+      console.log('Top 5 users (cached weekly scores):', userStats.slice(0, 5).map(u => ({
         name: u.full_name,
         user_id: u.user_id.substring(0, 8),
-        score: u.nutrition_score,
+        weekly_score: u.weekly_score,
         kilometers: u.total_kilometers,
-        composite: u.composite_score.toFixed(2)
+        weekly_km: u.weekly_kilometers
       })));
 
       // Find current user's rank
@@ -252,35 +245,37 @@ export default function Community() {
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-              <Button
-                variant={activeTab === 'leaderboard' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setActiveTab('leaderboard')}
-                className="flex-1"
-              >
-                <Trophy className="w-4 h-4 mr-2" />
-                Leaderboard
-              </Button>
-              <Button
-                variant={activeTab === 'challenges' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setActiveTab('challenges')}
-                className="flex-1"
-              >
-                <Target className="w-4 h-4 mr-2" />
-                Challenges
-              </Button>
-              <Button
-                variant={activeTab === 'groups' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setActiveTab('groups')}
-                className="flex-1"
-              >
-                <Users className="w-4 h-4 mr-2" />
-                Groups
-              </Button>
+            {/* Tabs - horizontal scroll on small screens */}
+            <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto">
+              <div className="inline-flex gap-2 whitespace-nowrap">
+                <Button
+                  variant={activeTab === 'leaderboard' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('leaderboard')}
+                  className="flex-shrink-0"
+                >
+                  <Trophy className="w-4 h-4 mr-2" />
+                  Leaderboard
+                </Button>
+                <Button
+                  variant={activeTab === 'challenges' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('challenges')}
+                  className="flex-shrink-0"
+                >
+                  <Target className="w-4 h-4 mr-2" />
+                  Challenges
+                </Button>
+                <Button
+                  variant={activeTab === 'groups' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveTab('groups')}
+                  className="flex-shrink-0"
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Groups
+                </Button>
+              </div>
             </div>
 
             {activeTab === 'leaderboard' && (
@@ -305,24 +300,23 @@ export default function Community() {
                         <div className="text-right">
                           <div className="flex items-center gap-2">
                             <span className="text-2xl font-bold">#{userRank.rank}</span>
-                            <span className="text-2xl font-bold">#{userRank.rank}</span>
                           </div>
-                          <div className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getScoreBadge(userRank.nutrition_score).color}`}>
-                            {getScoreBadge(userRank.nutrition_score).text}
+                          <div className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getScoreBadge(userRank.weekly_score).color}`}>
+                            {getScoreBadge(userRank.weekly_score).text}
                           </div>
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-4 text-center">
                         <div>
-                          <div className="text-2xl font-bold">{userRank.total_kilometers}</div>
+                          <div className="text-2xl font-bold">{formatKilometers(userRank.total_kilometers)}</div>
                           <div className="text-xs text-muted-foreground">Total Kilometers</div>
                         </div>
                         <div>
-                          <div className="text-2xl font-bold text-orange-500">{userRank.nutrition_score}</div>
-                          <div className="text-xs text-muted-foreground">Nutrition Score</div>
+                          <div className="text-2xl font-bold text-orange-500">{userRank.weekly_score}</div>
+                          <div className="text-xs text-muted-foreground">Weekly Score</div>
                         </div>
                         <div>
-                          <div className="text-2xl font-bold">{userRank.weekly_kilometers}</div>
+                          <div className="text-2xl font-bold">{formatKilometers(userRank.weekly_kilometers)}</div>
                           <div className="text-xs text-muted-foreground">This Week</div>
                         </div>
                       </div>
@@ -335,15 +329,18 @@ export default function Community() {
                   <CardContent className="p-6">
                     <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
                       <span className="text-blue-600">⭐</span>
-                      Weekly Nutrition Score
+                      Weekly Score
                     </h3>
                     <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
-                      Based on meal consistency, macro balance, hydration, and pre/post-run nutrition timing over the past 7 days.
+                      Average of daily scores (nutrition + training + bonuses - penalties) from unified scoring system over the past 7 days.
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Curious how we grade each day? <a href="/scores" className="text-primary underline underline-offset-2">See the scoring explainer</a>.
                     </p>
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                       <p className="text-xs text-muted-foreground">
-                        <strong>Ranking Formula:</strong> Your rank is based on both your nutrition score (60%) and total miles run (40%). 
-                        Keep logging meals and running to climb the leaderboard!
+                        <strong>Ranking Formula:</strong> Your rank is based on your weekly score, which combines nutrition and training performance. 
+                        Keep logging meals and completing workouts to climb the leaderboard!
                       </p>
                     </div>
                   </CardContent>
@@ -357,7 +354,7 @@ export default function Community() {
                       Global Leaderboard
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      All {leaderboard.length} registered NutriSync users ranked by nutrition + miles
+                      All {leaderboard.length} registered NutriSync users ranked by weekly score
                     </p>
 
                     <div className="space-y-3 max-h-[600px] overflow-y-auto">
@@ -394,7 +391,7 @@ export default function Community() {
 
                           {/* User Info */}
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold truncate">{entry.full_name}</div>
+                            <div className="font-semibold">{entry.full_name}</div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
                               {entry.location}
@@ -403,17 +400,13 @@ export default function Community() {
 
                           {/* Stats */}
                           <div className="text-right flex-shrink-0">
-                            <div className="font-bold">{entry.total_kilometers} km</div>
-                            <div className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                              <ActivityIcon className="w-3 h-3" />
-                              {entry.weekly_kilometers} km this week
-                            </div>
+                            <div className="font-bold">{formatKilometers(entry.weekly_kilometers)} km</div>
                           </div>
 
                           {/* Score Badge */}
                           <div className="text-right flex-shrink-0 min-w-[3rem]">
                             <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                              {entry.nutrition_score}
+                              {entry.weekly_score}
                             </div>
                           </div>
                         </div>

@@ -7,7 +7,7 @@ interface BottomNavProps {
 }
 
 const baseLinkStyles =
-  "flex flex-col items-center gap-1 px-4 py-2 rounded-2xl text-xs font-medium transition-all duration-200";
+  "flex flex-col items-center gap-0.5 px-2 py-2 rounded-2xl text-xs font-medium transition-all duration-200 sm:px-4";
 const activeLinkStyles =
   "text-primary bg-primary/10 shadow-[0_12px_28px_rgba(49,255,176,0.25)]";
 const inactiveLinkStyles =
@@ -15,9 +15,9 @@ const inactiveLinkStyles =
 
 export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-[9999] safe-area-inset-bottom pb-4 animate-slide-up">
-      <div className="max-w-none mx-auto px-4">
-        <div className="flex items-center justify-around rounded-3xl border border-border/80 bg-background/90 backdrop-blur-xl shadow-[0_-18px_45px_rgba(5,10,20,0.85)] py-3">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 safe-area-inset-bottom pb-2 sm:pb-4">
+      <div className="max-w-none mx-auto px-2 sm:px-4">
+        <div className="flex items-center justify-between rounded-3xl border border-border/60 bg-background/70 backdrop-blur-2xl shadow-[0_-18px_45px_rgba(5,10,20,0.65)] py-2 px-1 sm:py-3 sm:px-2">
           <NavLink
             to="/"
             className={({ isActive }) =>

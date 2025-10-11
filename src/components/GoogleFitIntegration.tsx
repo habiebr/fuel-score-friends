@@ -13,7 +13,8 @@ import {
   AlertCircle, 
   RefreshCw,
   ExternalLink,
-  Settings
+  Settings,
+  Calendar
 } from 'lucide-react';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useToast } from '@/hooks/use-toast';
@@ -34,7 +35,10 @@ export function GoogleFitIntegration() {
     lastSync, 
     syncStatus, 
     connectGoogleFit, 
-    getTodayData 
+    getTodayData,
+    isHistoricalSyncing,
+    historicalSyncProgress,
+    syncHistoricalData
   } = useGoogleFitSync();
   
   const { toast } = useToast();
@@ -146,11 +150,36 @@ export function GoogleFitIntegration() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Error Display */}
-        {syncStatus === 'error' && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="h-4 w-4 text-red-500" />
-            <span className="text-sm text-red-600">Failed to sync with Google Fit</span>
+        {/* Historical Sync Progress */}
+        {isHistoricalSyncing && historicalSyncProgress && (
+          <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
+              <span className="text-sm font-medium text-blue-800">Syncing Historical Data</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-blue-700">
+                <span>Progress</span>
+                <span>{historicalSyncProgress.syncedDays}/{historicalSyncProgress.totalDays} days</span>
+              </div>
+              <Progress 
+                value={(historicalSyncProgress.syncedDays / historicalSyncProgress.totalDays) * 100} 
+                className="h-2" 
+              />
+              <p className="text-xs text-blue-600">
+                Fetching your last {historicalSyncProgress.totalDays} days of Google Fit data...
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Historical Sync Complete */}
+        {!isHistoricalSyncing && historicalSyncProgress?.isComplete && (
+          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            <span className="text-sm text-green-800">
+              Historical sync complete! Synced {historicalSyncProgress.syncedDays} days of data.
+            </span>
           </div>
         )}
 
@@ -198,6 +227,15 @@ export function GoogleFitIntegration() {
                 >
                   <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
                   {isSyncing ? 'Syncing...' : 'Sync'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => syncHistoricalData(30)}
+                  disabled={isHistoricalSyncing || isSyncing}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  {isHistoricalSyncing ? 'Syncing...' : 'Sync 30 Days'}
                 </Button>
                 <Button
                   variant="outline"

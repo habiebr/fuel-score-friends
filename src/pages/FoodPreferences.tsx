@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ChevronLeft, X, Plus, Activity, Settings } from 'lucide-react';
+import { ChevronLeft, X, Plus, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BottomNav } from '@/components/BottomNav';
@@ -155,16 +155,10 @@ export default function FoodPreferences() {
                 <ChevronLeft className="w-5 h-5" />
               </Button>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-black dark:bg-white rounded-2xl flex items-center justify-center flex-shrink-0">
-                    <Activity className="w-6 h-6 text-white dark:text-black" />
-                  </div>
-                  <PageHeading
-                    title="Food Preferences"
-                    description="Customize your nutrition preferences"
-                    icon={Settings}
-                  />
-                </div>
+                <PageHeading
+                  title="Food Preferences"
+                  description="Customize your nutrition preferences"
+                />
               </div>
             </div>
           </div>
@@ -183,6 +177,32 @@ export default function FoodPreferences() {
                 <strong>AI-Powered Meal Suggestions:</strong> Your preferences are used by the Meal Generator and Recipe Recommender to personalize meal plans, filter incompatible recipes, and optimize nutrition targets based on your needs.
               </p>
             </div>
+
+            {/* Meal Preferences Button */}
+            <Card className="shadow-card mb-4">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center">
+                      <Settings className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-green-700 dark:text-green-300">Meal Planning Mode</h3>
+                      <p className="text-sm text-green-600 dark:text-green-400">Configure Flexi vs Strict meal planning</p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => navigate('/profile/meal-preferences')}
+                    variant="outline"
+                    size="sm"
+                    className="border-green-500/20 text-green-600 hover:bg-green-500/10"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Configure
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Dietary Restrictions */}
             <Card className="shadow-card mb-4">

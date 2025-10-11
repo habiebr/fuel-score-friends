@@ -34,12 +34,8 @@ if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     }
     if (event.data && (event as any).data.type === 'REQUEST_SUPABASE_ANON' && (event as any).ports && (event as any).ports[0]) {
       try {
-        let anonKey: string | undefined = undefined;
-        if ((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY) {
-          anonKey = (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string;
-        } else if ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) {
-          anonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY as string;
-        }
+        // Always prefer ANON key for client SDK (Realtime + REST)
+        const anonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
         (event as any).ports[0].postMessage({ anonKey });
       } catch {
         (event as any).ports[0].postMessage({ anonKey: undefined });

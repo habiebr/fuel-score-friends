@@ -21,31 +21,72 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, access_token, refresh_token, expires_in, token_type = 'Bearer', scope } = await req.json();
+    if (req.method !== 'POST') {
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    if (!user_id || !access_token || !refresh_token || !expires_in) {
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ code: 401, message: 'Missing authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Create a user-scoped client to resolve the authenticated user
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: userData, error: userError } = await authClient.auth.getUser();
+    if (userError || !userData?.user?.id) {
+      return new Response(JSON.stringify({ code: 401, message: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { access_token, refresh_token, expires_in, token_type = 'Bearer', scope } = await req.json();
+
+    if (!access_token || !refresh_token || !expires_in) {
       return new Response(JSON.stringify({ 
-        error: 'user_id, access_token, refresh_token, and expires_in are required' 
+        error: 'access_token, refresh_token, and expires_in are required' 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    // Initialize admin client for writes
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const admin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Calculate expiration time
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (expires_in * 1000));
 
-    // Store the new token (this will automatically deactivate old tokens via trigger)
-    const { data: newToken, error: insertError } = await supabase
+    // First, delete any existing active tokens for this user to avoid unique constraint issues
+    const { error: deleteError } = await admin
+      .from('google_tokens')
+      .delete()
+      .eq('user_id', userData.user.id)
+      .eq('is_active', true);
+
+    if (deleteError) {
+      console.warn('Error deleting old tokens:', deleteError);
+      // Continue anyway - the old tokens might not exist
+    }
+
+    // Now store the new token
+    const { data: newToken, error: insertError } = await admin
       .from('google_tokens')
       .insert({
-        user_id,
+        user_id: userData.user.id,
         access_token,
         refresh_token,
         expires_at: expiresAt.toISOString(),
@@ -68,7 +109,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Token stored successfully for user ${user_id}. Expires at: ${expiresAt.toISOString()}`);
+    console.log(`Token stored successfully for user ${userData.user.id}. Expires at: ${expiresAt.toISOString()}`);
 
     return new Response(JSON.stringify({
       success: true,

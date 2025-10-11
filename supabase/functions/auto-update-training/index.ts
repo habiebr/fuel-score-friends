@@ -25,7 +25,7 @@ serve(async (req) => {
 
     // Call the update-actual-training function
     const { data, error } = await supabase.functions.invoke('update-actual-training', {
-      body: { date },
+      body: { userId: user_id, date },
       headers: {
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
       }

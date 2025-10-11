@@ -119,6 +119,9 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
     setProgress(70);
     
     try {
+      // Use the current local time for logged_at
+      const now = new Date();
+      
       const { error } = await supabase
         .from('food_logs')
         .insert({
@@ -130,6 +133,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           protein_grams: nutritionData.protein_grams,
           carbs_grams: nutritionData.carbs_grams,
           fat_grams: nutritionData.fat_grams,
+          logged_at: now.toISOString(), // Explicitly set the timestamp
         });
 
       if (error) {

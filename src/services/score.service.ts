@@ -1,5 +1,4 @@
 import { supabase } from '@/integrations/supabase/client';
-import { dailyScore } from '@/science/dailyScore';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { 
   getTodayScore as getTodayUnifiedScore,
@@ -12,6 +11,7 @@ import {
 // - daily_meal_plans (targets) and day target from science (optional future)
 // - food_logs (actuals)
 // - training_activities (plan/actual proxy)
+// Note: dailyScore from @/science/dailyScore is deprecated, use unified-score.service instead
 
 export async function getTodayScore(userId: string): Promise<{
   score: number;

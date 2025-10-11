@@ -1,12 +1,12 @@
-# Cursor Branch Deployment Guide
+# Beta Branch Deployment Guide
 
-This project is configured to always deploy from the `cursor` branch to ensure consistent deployments.
+This project is configured to deploy from the `beta` branch to the beta environment.
 
 ## 🚀 Quick Deployment
 
 ### Option 1: Use the Deployment Script (Recommended)
 ```bash
-./deploy-cursor.sh
+./deploy-beta.sh
 ```
 
 ### Option 2: Use npm Scripts
@@ -18,18 +18,18 @@ npm run pwa:deploy
 
 ## 📋 What the Deployment Does
 
-1. **Branch Check**: Ensures you're on the `cursor` branch
-2. **Auto-Switch**: If not on cursor branch, automatically switches to it
+1. **Branch Check**: Ensures you're on the `beta` branch
+2. **Auto-Switch**: If not on beta branch, automatically switches to it
 3. **Build PWA**: Runs the PWA build process
-4. **Deploy**: Deploys to Cloudflare Pages with cursor branch
+4. **Deploy**: Deploys to Cloudflare Pages with beta branch
 5. **Confirmation**: Shows deployment URLs
 
 ## 🔧 Configuration
 
 ### Package.json Scripts
-- `npm run deploy` - Full deployment with account ID
-- `npm run pwa:deploy` - PWA deployment only
-- `npm run cf:deploy` - Cloudflare deployment only
+- `npm run deploy` - Full deployment with account ID (beta project)
+- `npm run pwa:deploy` - PWA deployment only (beta branch)
+- `npm run cf:deploy` - Cloudflare deployment only (beta branch)
 
 ### Deployment Script Features
 - ✅ Branch validation
@@ -43,16 +43,17 @@ npm run pwa:deploy
 
 After successful deployment, your PWA will be available at:
 
-- **Latest Deployment**: `https://[deployment-id].nutrisync.pages.dev`
-- **Cursor Branch Alias**: `https://cursor.nutrisync.pages.dev`
+- **Latest Deployment**: `https://[deployment-id].nutrisync-beta.pages.dev`
+- **Beta Branch Alias**: `https://beta.nutrisync.pages.dev`
+- **Beta Custom Domain**: `https://beta.nutrisync.id`
 - **Production**: `https://nutrisync.pages.dev`
 
 ## 🔄 Workflow
 
 ### Daily Development
-1. Work on the `cursor` branch
+1. Work on the `beta` branch
 2. Make your changes
-3. Run `./deploy-cursor.sh` to deploy
+3. Run `./deploy-beta.sh` to deploy
 4. Test on the live URL
 
 ### Branch Management
@@ -78,14 +79,14 @@ The script will automatically switch to the cursor branch:
 ### Manual Deployment
 If the script fails, you can deploy manually:
 ```bash
-# Ensure you're on cursor branch
-git checkout cursor
+# Ensure you're on beta branch
+git checkout beta
 
 # Build the PWA
 npm run build:pwa
 
-# Deploy manually
-CLOUDFLARE_ACCOUNT_ID=5a73505af9ed48e44ce4caeaa0fdf73f npx wrangler pages deploy dist --project-name nutrisync --branch=cursor --commit-dirty=true
+# Deploy manually to beta project
+CLOUDFLARE_ACCOUNT_ID=5a73505af9ed48e44ce4caeaa0fdf73f npx wrangler pages deploy dist --project-name nutrisync-beta --branch=beta --commit-dirty=true
 ```
 
 ## 📱 PWA Features

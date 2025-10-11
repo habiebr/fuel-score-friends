@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { refreshWeeklyAggregates } from '@/lib/weekly-google-fit';
 
 interface GoogleFitData {
   steps: number;
@@ -22,21 +21,30 @@ export function useGoogleFitSync() {
   const [syncStatus, setSyncStatus] = useState<'success' | 'error' | 'pending' | null>(null);
   const [lastErrorTime, setLastErrorTime] = useState<number | null>(null);
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
+  const [isHistoricalSyncing, setIsHistoricalSyncing] = useState(false);
+  const [historicalSyncProgress, setHistoricalSyncProgress] = useState<{
+    syncedDays: number;
+    totalDays: number;
+    isComplete: boolean;
+  } | null>(null);
+  const [syncInProgress, setSyncInProgress] = useState(false); // Prevent duplicate calls
 
-  // Load last sync time from Supabase on mount
+  // Load last sync time from google_tokens table
   useEffect(() => {
     if (!user) return;
     const loadLastSync = async () => {
       try {
         const { data } = await (supabase as any)
-          .from('user_preferences')
-          .select('value')
+          .from('google_tokens')
+          .select('last_refreshed_at')
           .eq('user_id', user.id)
-          .eq('key', 'googleFitLastSync')
-          .maybeSingle();
+          .eq('is_active', true)
+          .order('last_refreshed_at', { ascending: false })
+          .limit(1)
+          .single();
         
-        if (data?.value?.lastSync) {
-          setLastSync(new Date(data.value.lastSync));
+        if (data?.last_refreshed_at) {
+          setLastSync(new Date(data.last_refreshed_at));
         }
       } catch (error) {
         console.error('Error loading last sync time:', error);
@@ -45,26 +53,7 @@ export function useGoogleFitSync() {
     loadLastSync();
   }, [user]);
 
-  // Save last sync time to Supabase
-  useEffect(() => {
-    if (user && lastSync) {
-      (supabase as any)
-        .from('user_preferences')
-        .upsert({
-          user_id: user.id,
-          key: 'googleFitLastSync',
-          value: { lastSync: lastSync.toISOString() },
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,key'
-        })
-        .then(({ error }) => {
-          if (error) console.error('Error saving last sync time:', error);
-        });
-    }
-  }, [user, lastSync]);
-
-  // Check connection status on mount and token refresh, with resilient fallbacks
+  // Check connection status on mount and token refresh
   useEffect(() => {
     let cancelled = false;
     const checkConnection = async () => {
@@ -78,10 +67,16 @@ export function useGoogleFitSync() {
       } catch {}
 
       try {
-        // Fallback to persisted local storage flag/token
-        const persisted = localStorage.getItem('google_fit_connected') === 'true';
-        const storedToken = localStorage.getItem('google_fit_provider_token');
-        if (!cancelled && (persisted || storedToken)) {
+        // Check for active token in database
+        const { data } = await (supabase as any)
+          .from('google_tokens')
+          .select('id')
+          .eq('user_id', user?.id)
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle();
+        
+        if (!cancelled && data?.id) {
           setIsConnected(true);
           return;
         }
@@ -91,11 +86,21 @@ export function useGoogleFitSync() {
     };
     checkConnection();
     return () => { cancelled = true; };
-  }, [getGoogleAccessToken]);
+  }, [getGoogleAccessToken, user?.id]);
 
-  // Auto-sync every 15 minutes if connected (foreground) and register SW periodic sync
+  // Auto-sync every 5 minutes if connected (reduced from 15 for instant recovery)
   useEffect(() => {
     if (!user || !isConnected) return;
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+    
+    // Debounced sync function to prevent rapid-fire calls
+    const debouncedSync = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        syncGoogleFit();
+      }, 1000); // 1 second debounce (reduced from 2s for faster response)
+    };
 
     const checkAndSync = async () => {
       try {
@@ -107,50 +112,41 @@ export function useGoogleFitSync() {
           .maybeSingle();
         
         const lastSyncTime = data?.last_synced_at ? new Date(data.last_synced_at) : null;
-        if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (15 * 60 * 1000)) {
-          syncGoogleFit();
+        // Sync if no data or last sync > 5 minutes ago (reduced from 15 for instant recovery)
+        if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (5 * 60 * 1000)) {
+          debouncedSync();
         }
       } catch (error) {
         console.error('Error checking sync status:', error);
-        // If we can't check, try to sync anyway
-        syncGoogleFit();
+        // Don't auto-sync on error to prevent loops
       }
     };
 
     checkAndSync();
 
-    // Foreground interval (15 minutes)
-    const interval = setInterval(() => { syncGoogleFit(); }, 15 * 60 * 1000);
+    // Foreground interval (5 minutes for instant recovery)
+    const interval = setInterval(() => {
+      debouncedSync();
+    }, 5 * 60 * 1000);
 
-    // Also trigger sync on resume/online for PWA usage
-    const onFocus = () => { syncGoogleFit(); };
-    const onOnline = () => { syncGoogleFit(); };
+    // Debounce sync on resume/online to prevent multiple simultaneous calls
+    const onFocus = () => debouncedSync();
+    const onOnline = () => debouncedSync();
     window.addEventListener('focus', onFocus);
     window.addEventListener('online', onOnline);
 
-    // Register periodic background sync via Service Worker when available
-    (async () => {
-      try {
-        if ('serviceWorker' in navigator) {
-          const reg = await navigator.serviceWorker.ready;
-          // Try to register periodic sync (may require origin trial/permissions)
-          // @ts-ignore
-          if ('periodicSync' in reg) {
-            // @ts-ignore
-            await reg.periodicSync.register('health-periodic-sync', { minInterval: 15 * 60 * 1000 });
-          } else {
-            // Fallback: message SW to run sync when app is active
-            reg.active?.postMessage({ type: 'TRIGGER_HEALTH_SYNC' });
-          }
-        }
-      } catch {}
-    })();
-
-    return () => { clearInterval(interval); window.removeEventListener('focus', onFocus); window.removeEventListener('online', onOnline); };
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
+    };
   }, [user, isConnected]);
 
   const connectGoogleFit = useCallback(async () => {
     try {
+      // Set return URL for OAuth redirect
+      try { localStorage.setItem('oauth_return_to', '/onboarding?step=5'); } catch {}
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -164,6 +160,12 @@ export function useGoogleFitSync() {
       });
       if (error) throw error;
       setIsConnected(true);
+      
+      // Check if this is a first-time connection and trigger historical sync
+      setTimeout(() => {
+        checkAndTriggerHistoricalSync();
+      }, 2000); // Wait 2 seconds for token to be stored
+      
       return data;
     } catch (error: any) {
       toast({
@@ -178,316 +180,37 @@ export function useGoogleFitSync() {
 
   /**
    * Fetch today's Google Fit data and sync to database
+   * @param silent - If true, don't show toast notifications (for automatic background syncs)
    */
-  const syncGoogleFit = useCallback(async (): Promise<GoogleFitData | null> => {
+  const syncGoogleFit = useCallback(async (silent = true): Promise<GoogleFitData | null> => {
     if (!user) {
       console.error('No user authenticated');
       return null;
     }
 
-    // Circuit breaker: if we've had too many consecutive errors, wait before retrying
-    const now = Date.now();
-    if (consecutiveErrors >= 3 && lastErrorTime && (now - lastErrorTime) < 5 * 60 * 1000) {
-      console.log('Circuit breaker active: too many consecutive errors, skipping sync');
+    // Prevent duplicate concurrent syncs
+    if (syncInProgress) {
+      console.log('Sync already in progress, skipping duplicate call');
       return null;
     }
 
+    // Exponential backoff: if we've had consecutive errors, wait before retrying
+    const now = Date.now();
+    if (consecutiveErrors >= 3 && lastErrorTime) {
+      const backoffTime = Math.min(5 * 60 * 1000, Math.pow(2, consecutiveErrors - 3) * 30 * 1000); // 30s, 1m, 2m, 4m, 5m max
+      if ((now - lastErrorTime) < backoffTime) {
+        console.log(`Circuit breaker active: waiting ${Math.round(backoffTime / 1000)}s before retry (${consecutiveErrors} consecutive errors)`);
+        return null;
+      }
+    }
+
+    setSyncInProgress(true);
     setIsSyncing(true);
     setSyncStatus('pending');
 
-    const performSync = async (accessToken: string, attempt: number): Promise<GoogleFitData | null> => {
-      try {
-        // Validate token before making API calls
-        if (!accessToken) {
-          throw new Error('No access token available');
-        }
-
-        const today = new Date();
-        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-
-        const aggregate = async (dataTypeName: string) => {
-          const res = await fetch('/fitness', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              aggregateBy: [{ dataTypeName }],
-              bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
-              startTimeMillis: startOfDay.getTime(),
-              endTimeMillis: endOfDay.getTime()
-            })
-          });
-
-          if (res.status === 401) {
-            const err: any = new Error('Google Fit token expired');
-            err.status = 401;
-            throw err;
-          }
-
-          if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`Google Fit API error: ${res.status} - ${errorText}`);
-          }
-
-          return await res.json();
-        };
-
-        const [stepsData, caloriesData, activeMinutesData, heartRateData] = await Promise.all([
-          aggregate('com.google.step_count.delta'),
-          aggregate('com.google.calories.expended'),
-          aggregate('com.google.active_minutes'),
-          aggregate('com.google.heart_rate.bpm').catch(() => null)
-        ]);
-
-        const steps = stepsData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-        const caloriesBurned = caloriesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-        const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-        const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
-
-        // For sessions, we'll need to create a proxy or use a different approach
-        // For now, let's skip sessions to avoid CORS issues
-        let sessions: any[] = [];
-        try {
-          const sessionsRes = await fetch(
-            `/fitness?startTime=${startOfDay.toISOString()}&endTime=${endOfDay.toISOString()}`,
-            { 
-              method: 'GET',
-              headers: { 'Authorization': `Bearer ${accessToken}` } 
-            }
-          );
-          if (sessionsRes.ok) {
-            const sessionsData = await sessionsRes.json();
-            sessions = sessionsData.session || [];
-          }
-        } catch (error) {
-          console.warn('Failed to fetch sessions (proxy not available):', error);
-          sessions = [];
-        }
-
-        // Filter sessions to only include running/sport activities (exclude walking)
-        // More comprehensive list of exercise activities, explicitly excluding walking
-        const exerciseActivities = [
-          'running', 'jogging', 'sprint', 'marathon', 'half_marathon', '5k', '10k',
-          'cycling', 'biking', 'bike', 'road_cycling', 'mountain_biking', 'indoor_cycling',
-          'swimming', 'swim', 'pool_swimming', 'open_water_swimming',
-          'hiking', 'trail_running', 'mountain_hiking',
-          'elliptical', 'elliptical_trainer',
-          'rowing', 'indoor_rowing', 'outdoor_rowing',
-          'soccer', 'football', 'basketball', 'tennis', 'volleyball', 'badminton',
-          'golf', 'golfing',
-          'skiing', 'alpine_skiing', 'cross_country_skiing', 'snowboarding',
-          'skating', 'ice_skating', 'roller_skating', 'inline_skating',
-          'dancing', 'aerobic_dance', 'zumba', 'salsa', 'hip_hop',
-          'aerobics', 'step_aerobics', 'water_aerobics',
-          'strength_training', 'weight_lifting', 'weight_training', 'resistance_training',
-          'crossfit', 'functional_fitness',
-          'yoga', 'power_yoga', 'hot_yoga', 'vinyasa_yoga',
-          'pilates', 'mat_pilates', 'reformer_pilates',
-          'martial_arts', 'karate', 'taekwondo', 'judo', 'boxing', 'kickboxing', 'muay_thai',
-          'climbing', 'rock_climbing', 'indoor_climbing', 'bouldering',
-          'surfing', 'kayaking', 'canoeing', 'paddleboarding',
-          'triathlon', 'duathlon', 'athletics', 'track_and_field',
-          'gymnastics', 'calisthenics', 'plyometrics',
-          'kickboxing', 'boxing', 'mma', 'wrestling',
-          'rugby', 'hockey', 'lacrosse', 'baseball', 'softball',
-          'cricket', 'squash', 'racquetball', 'handball',
-          'archery', 'shooting', 'fencing',
-          'rowing_machine', 'treadmill', 'stair_climbing', 'stair_master'
-        ];
-        
-        // Explicitly exclude walking and related activities
-        const excludedActivities = [
-          'walking', 'walk', 'strolling', 'leisurely_walk', 'casual_walk',
-          'dog_walking', 'power_walking', 'brisk_walking',
-          'commuting', 'transportation', 'travel'
-        ];
-        
-        const filteredSessions = sessions.filter((session: any) => {
-          const activityType = String(session.activityType || session.activityTypeId || session.activity || '').toLowerCase();
-          const sessionName = String(session.name || '').toLowerCase();
-          const sessionDescription = String(session.description || '').toLowerCase();
-          
-          // Check if it's explicitly excluded
-          const isExcluded = excludedActivities.some(excluded => 
-            activityType.includes(excluded) || 
-            sessionName.includes(excluded) || 
-            sessionDescription.includes(excluded)
-          );
-          
-          if (isExcluded) {
-            console.log(`Excluding session: ${sessionName || activityType} (${sessionDescription})`);
-            return false;
-          }
-          
-          // Check if it's an exercise activity
-          const isExercise = exerciseActivities.some(activity => 
-            activityType.includes(activity) || 
-            sessionName.includes(activity) || 
-            sessionDescription.includes(activity)
-          );
-          
-          if (isExercise) {
-            console.log(`Including exercise session: ${sessionName || activityType} (${sessionDescription})`);
-          }
-          
-          return isExercise;
-        });
-
-        // Calculate distance only from exercise activities
-        let exerciseDistanceMeters = 0;
-        if (filteredSessions.length > 0) {
-          // Get detailed data for each exercise session to calculate distance
-          for (const session of filteredSessions) {
-            try {
-              const sessionStartTime = new Date(Number(session.startTimeMillis));
-              const sessionEndTime = new Date(Number(session.endTimeMillis));
-              
-              const sessionDistanceRes = await fetch(
-                "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate",
-                {
-                  method: "POST",
-                  headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    aggregateBy: [{ dataTypeName: 'com.google.distance.delta' }],
-                    bucketByTime: { durationMillis: 24 * 60 * 60 * 1000 },
-                    startTimeMillis: sessionStartTime.getTime(),
-                    endTimeMillis: sessionEndTime.getTime(),
-                    filter: [{
-                      dataSourceId: session.dataSourceId || undefined
-                    }].filter(f => f.dataSourceId)
-                  }),
-                }
-              );
-              
-              if (sessionDistanceRes.ok) {
-                const sessionDistanceData = await sessionDistanceRes.json();
-                const sessionDistance = sessionDistanceData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-                exerciseDistanceMeters += sessionDistance;
-              }
-            } catch (error) {
-              console.warn('Failed to get distance for session:', error);
-            }
-          }
-        }
-
-        const googleFitData: GoogleFitData = {
-          steps,
-          caloriesBurned,
-          activeMinutes,
-          distanceMeters: exerciseDistanceMeters, // Use exercise-only distance
-          heartRateAvg,
-          sessions: filteredSessions // Use filtered sessions
-        };
-
-        const { error: upsertErr } = await (supabase as any)
-          .from('google_fit_data')
-          .upsert({
-            user_id: user.id,
-            date: today.toISOString().split('T')[0],
-            steps,
-            calories_burned: caloriesBurned,
-            active_minutes: activeMinutes,
-            distance_meters: exerciseDistanceMeters, // Use exercise-only distance
-            heart_rate_avg: heartRateAvg,
-            sessions: filteredSessions, // Use filtered sessions
-            last_synced_at: new Date().toISOString(),
-            sync_source: 'google_fit'
-          }, { onConflict: 'user_id,date' });
-        if (upsertErr) throw upsertErr;
-
-        try {
-          if (Array.isArray(filteredSessions) && filteredSessions.length > 0) {
-            const mapped = filteredSessions.map((s: any) => ({
-              user_id: user.id,
-              session_id: String(s.id || `${s.startTimeMillis}-${s.endTimeMillis}`),
-              start_time: s.startTimeMillis ? new Date(Number(s.startTimeMillis)).toISOString() : new Date().toISOString(),
-              end_time: s.endTimeMillis ? new Date(Number(s.endTimeMillis)).toISOString() : new Date().toISOString(),
-              activity_type: s.activityType || s.activityTypeId || s.activity || null,
-              name: s.name || null,
-              description: s.description || null,
-              source: 'google_fit',
-              raw: s
-            }));
-
-            const batchSize = 50;
-            for (let i = 0; i < mapped.length; i += batchSize) {
-              const chunk = mapped.slice(i, i + batchSize);
-              await (supabase as any)
-                .from('google_fit_sessions')
-                .upsert(chunk, { onConflict: 'user_id,session_id' });
-            }
-          }
-        } catch (e) {
-          console.error('Failed to upsert google_fit_sessions:', e);
-        }
-
-        const now = new Date();
-        setLastSync(now);
-        setSyncStatus('success');
-        setIsConnected(true);
-        
-        // Reset error counters on successful sync
-        setConsecutiveErrors(0);
-        setLastErrorTime(null);
-
-        // Refresh weekly aggregates after successful sync
-        try {
-          await refreshWeeklyAggregates(user.id);
-        } catch (aggregateError) {
-          console.warn('Failed to refresh weekly aggregates:', aggregateError);
-        }
-
-        // Trigger automatic training activity update for today
-        try {
-          const today = new Date().toISOString().split('T')[0];
-          await supabase.functions.invoke('update-actual-training', {
-            body: { date: today }
-          });
-          console.log('Triggered automatic training activity update');
-        } catch (updateError) {
-          console.error('Error triggering training update:', updateError);
-          // Don't fail the whole sync if training update fails
-        }
-
-        toast({
-          title: "Google Fit synced",
-          description: `${steps} steps, ${Math.round(caloriesBurned)} calories burned`,
-        });
-
-        return googleFitData;
-      } catch (error: any) {
-        console.error(`Google Fit API call failed (attempt ${attempt + 1}):`, error);
-        
-        // Handle token expiration with retry
-        if (attempt === 0 && (error?.status === 401 || `${error?.message || ''}`.includes('401') || error?.message?.includes('invalid_token'))) {
-          console.log('Token appears to be expired, attempting refresh...');
-          try {
-            const refreshed = await getGoogleAccessToken({ forceRefresh: true });
-            if (refreshed && refreshed !== accessToken) {
-              console.log('Token refreshed successfully, retrying sync...');
-              return performSync(refreshed, attempt + 1);
-            } else {
-              console.error('Failed to refresh token - no new token received');
-              throw new Error('Unable to refresh Google Fit token');
-            }
-          } catch (refreshError) {
-            console.error('Token refresh failed:', refreshError);
-            throw new Error('Unable to refresh Google Fit token');
-          }
-        }
-        throw error;
-      }
-    };
-
     try {
-      const initialToken = await getGoogleAccessToken();
-      if (!initialToken) {
+      const accessToken = await getGoogleAccessToken();
+      if (!accessToken) {
         toast({
           title: 'Google Fit not connected',
           description: 'Please connect Google Fit to sync your activity.',
@@ -497,7 +220,70 @@ export function useGoogleFitSync() {
         return null;
       }
 
-      return await performSync(initialToken, 0);
+      // Call the Edge Function to fetch and store data
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not signed in');
+      }
+
+      // Add timeout to prevent hanging requests (reduced to 15s for faster response)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (reduced from 30s)
+
+      const { data: response, error: functionError } = await (supabase as any).functions.invoke('fetch-google-fit-data', {
+        body: { accessToken },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (functionError) {
+        throw new Error(functionError.message || 'Failed to fetch Google Fit data');
+      }
+
+      if (!response?.success || !response?.data) {
+        throw new Error(response?.error || 'Invalid response from Google Fit');
+      }
+
+      const googleFitData = response.data;
+      const now = new Date();
+      setLastSync(now);
+      setSyncStatus('success');
+      setIsConnected(true);
+      
+      // Reset error counters on successful sync
+      setConsecutiveErrors(0);
+      setLastErrorTime(null);
+
+      // Refresh weekly aggregates after successful sync
+      try {
+        // TODO: Implement weekly aggregates refresh if needed
+        console.log('Weekly aggregates refresh would be called here');
+      } catch (aggregateError) {
+        console.warn('Failed to refresh weekly aggregates:', aggregateError);
+      }
+
+      // Trigger automatic training activity update
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          await supabase.functions.invoke('update-actual-training', {
+            body: { userId: user?.id, date: today }
+          });
+          console.log('Triggered automatic training activity update');
+        } catch (updateError) {
+          console.error('Error triggering training update:', updateError);
+        }
+
+      if (!silent) {
+        toast({
+          title: "Google Fit synced",
+          description: `${googleFitData.steps} steps, ${Math.round(googleFitData.caloriesBurned)} calories burned`,
+        });
+      }
+
+      return googleFitData;
+
     } catch (error: any) {
       console.error('Google Fit sync failed:', error);
 
@@ -507,31 +293,36 @@ export function useGoogleFitSync() {
 
       const errorMessage = error?.message || "Could not sync Google Fit data";
       
-      toast({
-        title: "Sync failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-
-      setSyncStatus('error');
-      
-      // Handle different types of errors
-      if (error?.status === 401 || error?.message?.includes('401') || error?.message?.includes('invalid_token')) {
-        console.log('Setting Google Fit as disconnected due to authentication error');
+      if (error?.code === 'TOKEN_EXPIRED' || error?.message?.includes('401') || error?.message?.includes('token expired')) {
+        if (!silent) {
+          toast({
+            title: 'Re-authentication required',
+            description: 'Your Google Fit session expired. Please reconnect Google Fit from the Import page.',
+            variant: 'destructive',
+          });
+        }
         setIsConnected(false);
-        // Clear stored tokens on auth failure
         try {
           localStorage.removeItem('google_fit_provider_token');
-          localStorage.removeItem('google_fit_provider_refresh_token');
-          localStorage.removeItem('google_fit_provider_token_expires_at');
         } catch {}
+      } else {
+        if (!silent) {
+          toast({
+            title: 'Sync failed',
+            description: errorMessage,
+            variant: 'destructive',
+          });
+        }
       }
 
+      setSyncStatus('error');
       return null;
+
     } finally {
       setIsSyncing(false);
+      setSyncInProgress(false);
     }
-  }, [user, getGoogleAccessToken, toast, consecutiveErrors, lastErrorTime]);
+  }, [user, getGoogleAccessToken, toast, consecutiveErrors, lastErrorTime, syncInProgress]);
 
   /**
    * Fetch today's Google Fit data from database (cached)
@@ -580,6 +371,105 @@ export function useGoogleFitSync() {
     }
   }, [user, syncGoogleFit]);
 
+  /**
+   * Check if this is a first-time Google Fit connection and trigger historical sync
+   */
+  const checkAndTriggerHistoricalSync = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      // Check if user has any existing Google Fit data
+      const { data: existingData, error } = await (supabase as any)
+        .from('google_fit_data')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking existing data:', error);
+        return;
+      }
+
+      // If no existing data, this is a first-time connection
+      if (!existingData) {
+        console.log('First-time Google Fit connection detected, triggering historical sync');
+        await syncHistoricalData(30); // Sync last 30 days
+      }
+    } catch (error) {
+      console.error('Error checking for first-time connection:', error);
+    }
+  }, [user]);
+
+  /**
+   * Sync historical Google Fit data
+   */
+  const syncHistoricalData = useCallback(async (daysBack: number = 30): Promise<void> => {
+    if (!user) return;
+
+    setIsHistoricalSyncing(true);
+    setHistoricalSyncProgress({ syncedDays: 0, totalDays: daysBack, isComplete: false });
+
+    try {
+      const accessToken = await getGoogleAccessToken();
+      if (!accessToken) {
+        throw new Error('No Google Fit access token available');
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not signed in');
+      }
+
+      toast({
+        title: "Syncing historical data",
+        description: `Fetching your last ${daysBack} days of Google Fit data...`,
+      });
+
+      const { data: response, error: functionError } = await (supabase as any).functions.invoke('sync-historical-google-fit-data', {
+        body: { accessToken, daysBack },
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (functionError) {
+        throw new Error(functionError.message || 'Failed to sync historical data');
+      }
+
+      if (!response?.success) {
+        throw new Error(response?.error || 'Invalid response from historical sync');
+      }
+
+      setHistoricalSyncProgress({
+        syncedDays: response.data.syncedDays,
+        totalDays: response.data.totalDays,
+        isComplete: true
+      });
+
+      toast({
+        title: "Historical sync complete!",
+        description: `Successfully synced ${response.data.syncedDays} days of data`,
+      });
+
+      // Trigger a regular sync to get today's data
+      setTimeout(() => {
+        syncGoogleFit();
+      }, 1000);
+
+    } catch (error: any) {
+      console.error('Historical sync failed:', error);
+      
+      toast({
+        title: 'Historical sync failed',
+        description: error.message || 'Could not sync historical data',
+        variant: 'destructive',
+      });
+
+      setHistoricalSyncProgress(null);
+    } finally {
+      setIsHistoricalSyncing(false);
+    }
+  }, [user, getGoogleAccessToken, toast, syncGoogleFit]);
+
   const resetErrorState = useCallback(() => {
     setConsecutiveErrors(0);
     setLastErrorTime(null);
@@ -596,6 +486,11 @@ export function useGoogleFitSync() {
     connectGoogleFit,
     resetErrorState,
     consecutiveErrors,
-    lastErrorTime
+    lastErrorTime,
+    // Historical sync functionality
+    syncHistoricalData,
+    isHistoricalSyncing,
+    historicalSyncProgress,
+    checkAndTriggerHistoricalSync
   };
 }

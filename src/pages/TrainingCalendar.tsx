@@ -112,7 +112,7 @@ export default function TrainingCalendar() {
             </Button>
           </div>
 
-          {/* Training Nutrition Widget - Simplified */}
+          {/* Actual/Planned Training widget */}
           <div className="mb-6">
             <Collapsible open={isNutritionExpanded} onOpenChange={setIsNutritionExpanded}>
               <Card className="shadow-card">
@@ -124,12 +124,11 @@ export default function TrainingCalendar() {
                           <Activity className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <CardTitle className="text-lg">Training Nutrition</CardTitle>
+                          <CardTitle className="text-lg">Training</CardTitle>
                           <CardDescription>
                             {isNutritionExpanded 
-                              ? 'Click to minimize nutrition recommendations'
-                              : 'Click to view personalized nutrition recommendations'
-                            }
+                              ? 'Click to hide training summary'
+                              : 'Click to view today\'s actual/planned training'}
                           </CardDescription>
                         </div>
                       </div>
@@ -145,33 +144,10 @@ export default function TrainingCalendar() {
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <CardContent className="pt-0">
-                      <TrainingNutritionWidget
+                    <TrainingNutritionWidget
                       selectedDate={new Date()}
                       activities={Object.values(activitiesByDate).flat()}
                       tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
-                      onRefresh={() => {
-                        // re-fetch without forcing a full reload
-                        const start = format(weekStart, 'yyyy-MM-dd');
-                        const end = format(addDays(weekStart, 6), 'yyyy-MM-dd');
-                        (async () => {
-                          const { data } = await (supabase as any)
-                            .from('training_activities')
-                            .select('*')
-                            .eq('user_id', user!.id)
-                            .gte('date', start)
-                            .lte('date', end)
-                            .order('date', { ascending: true })
-                            .order('is_actual', { ascending: false });
-                          const grouped: Record<string, any[]> = {};
-                          for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = [];
-                          (data || []).forEach((row: any) => {
-                            const key = row.date;
-                            const act = row;
-                            if (act.is_actual) grouped[key] = [act]; else grouped[key].push(act);
-                          });
-                          setActivitiesByDate(grouped);
-                        })();
-                      }}
                     />
                   </CardContent>
                 </CollapsibleContent>

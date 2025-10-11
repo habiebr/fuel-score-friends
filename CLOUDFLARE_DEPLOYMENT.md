@@ -77,9 +77,20 @@ The project is configured with:
 ## Custom Domain (Optional)
 
 1. In Cloudflare Pages dashboard, go to your project
-2. Click "Custom domains"
-3. Add your domain
-4. Update DNS records as instructed
+2. For beta, open the `nutrisync-beta` project → Custom domains
+3. Add `beta.nutrisync.id` and follow DNS instructions (CNAME to pages.dev)
+4. Ensure SSL is active and domain is verified
+
+## Disable Preview Deployments (Recommended)
+
+In each Pages project:
+1. Go to Settings → Previews
+2. Toggle off "Preview deployments"
+3. Save
+
+Notes:
+- Keep production branch set to `beta` for `nutrisync-beta`
+- Keep production branch set to `main` for `nutrisync` (primary prod)
 
 ## Monitoring and Analytics
 

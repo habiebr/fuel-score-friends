@@ -8,8 +8,8 @@ if [ "$current_branch" != "main" ]; then
   echo "⚠️  Not on main branch. Current: $current_branch"
   echo "🔄 Switching to main..."
   git checkout main
-  echo "🔁 Merging latest from cursor..."
-  git merge --no-edit cursor || true
+  echo "🔁 Merging latest from beta..."
+  git merge --no-edit beta || true
 fi
 
 echo "🔨 Building PWA..."
