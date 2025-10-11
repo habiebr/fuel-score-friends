@@ -95,6 +95,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [weeklyScore, setWeeklyScore] = useState(0);
   const [todayScore, setTodayScore] = useState(0);
   const [todayBreakdown, setTodayBreakdown] = useState<{ nutrition: number; training: number; bonuses?: number; penalties?: number }>({ nutrition: 0, training: 0 });
+  const [hasMainMeals, setHasMainMeals] = useState(false);
   // Removed manual generate plan action from dashboard
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
   const [newActivity, setNewActivity] = useState<null | { planned?: string; actual?: string; sessionId: string }>(null);
@@ -561,6 +562,13 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       const rawMealPlans = mealPlansData.data || [];
       const profile = profileData.data;
       const todayGoogleFitData = googleFitDataResult.data;
+      
+      // Check if user has logged any main meals (not just snacks)
+      const mainMeals = foodLogs.filter(log => 
+        ['breakfast', 'lunch', 'dinner'].includes(log.meal_type?.toLowerCase() || '')
+      );
+      const hasMainMeals = mainMeals.length > 0;
+      
       const normalizedMealPlans: MealPlan[] = rawMealPlans.map((plan) => ({
         ...plan,
         meal_suggestions: Array.isArray(plan.meal_suggestions)
@@ -599,6 +607,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         bonuses: unifiedScoreResult?.breakdown?.bonuses || 0,
         penalties: unifiedScoreResult?.breakdown?.penalties || 0
       });
+      setHasMainMeals(hasMainMeals);
 
       // Get weekly unified score with error handling
       let weeklyScoreResult = null;
@@ -768,8 +777,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   // Use unified scoring system for meal score
   const nutritionScore = todayBreakdown.nutrition || 0;
   const mealScore = {
-    score: nutritionScore,
-    rating: nutritionScore >= 80 ? 'Excellent' as const :
+    score: hasMainMeals ? nutritionScore : 0,
+    rating: !hasMainMeals ? 'Needs Improvement' as const :
+            nutritionScore >= 80 ? 'Excellent' as const :
             nutritionScore >= 65 ? 'Good' as const :
             nutritionScore >= 50 ? 'Fair' as const :
             'Needs Improvement' as const
@@ -823,19 +833,16 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-background p-3 pb-28 safe-area-inset">
-      <div className="max-w-none mx-auto">
-        {/* Header - NutriSync Branding */}
-        <div className="mb-6 pt-2">
-          <div className="flex items-center justify-between">
-            <PageHeading
-              title="Dashboard"
-              description="Your nutrition and training overview"
-              icon={Home}
-            />
-            <div className="flex items-center gap-3" />
-          </div>
-        </div>
+    <div className="max-w-none mx-auto p-4">
+      {/* Header - NutriSync Branding */}
+      <div className="flex items-center justify-between">
+        <PageHeading
+          title="Dashboard"
+          description="Your nutrition and training overview"
+          icon={Home}
+        />
+        <div className="flex items-center gap-3" />
+      </div>
 
         {/* Recovery Suggestion */}
         {newActivity && (
@@ -909,17 +916,17 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             protein={{
               current: data?.macros?.protein?.consumed || 0,
               target: data?.macros?.protein?.target || 120,
-              color: '#3F8CFF'
+              color: '#FF6B6B' // Vibrant red/coral for protein
             }}
             carbs={{
               current: data?.macros?.carbs?.consumed || 0,
               target: data?.macros?.carbs?.target || 330,
-              color: '#39D98A'
+              color: '#4ECDC4' // Vibrant teal/cyan for carbs
             }}
             fat={{
               current: data?.macros?.fat?.consumed || 0,
               target: data?.macros?.fat?.target || 67,
-              color: '#FFC15E'
+              color: '#FFD93D' // Vibrant yellow for fat
             }}
             showEducation={true}
           />
@@ -950,8 +957,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
         {/* Today's Nutrition Plan removed */}
 
-
       </div>
-    </div>
   );
 }

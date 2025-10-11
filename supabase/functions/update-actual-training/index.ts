@@ -1,55 +1,55 @@
+// @deno-types="https://deno.land/x/types/deno.ns.d.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from '../_shared/cors.ts';
 
+interface TrainingActivity {
+  id?: string;
+  user_id: string;
+  date: string;
+  activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
+  start_time: string | null;
+  duration_minutes: number;
+  distance_km: number | null;
+  intensity: 'low' | 'moderate' | 'high';
+  estimated_calories: number;
+  notes: string | null;
+  is_actual?: boolean;
+}
+
 interface GoogleFitSession {
   id: string;
   user_id: string;
-  session_id: string;
   start_time: string;
   end_time: string;
   activity_type: string;
   name: string;
-  description: string;
-  source: string;
+  description?: string;
   raw: any;
 }
 
-interface TrainingActivity {
-  id: string;
-  user_id: string;
-  date: string;
-  activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other';
-  start_time?: string;
-  duration_minutes: number;
-  distance_km?: number;
-  intensity: 'low' | 'moderate' | 'high';
-  estimated_calories: number;
-  notes?: string;
-  is_actual?: boolean; // Flag to distinguish actual vs planned
-}
-
-serve(async (req) => {
+serve(async (req: Request) => {
+  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Initialize Supabase client with service role key
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
+    const { userId, date } = await req.json();
+    if (!userId || !date) {
+      return new Response(JSON.stringify({ error: 'userId and date are required' }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const { date } = await req.json();
+    const user = { id: userId }; // Use the provided user ID
+
     if (!date) {
       return new Response(JSON.stringify({ error: 'Date is required' }), {
         status: 400,
@@ -59,13 +59,16 @@ serve(async (req) => {
 
     console.log(`Updating actual training for user ${user.id} on ${date}`);
 
-    // First check if user has a Google Fit token
+    // Check if user has a Google Fit token
+    console.log('Checking Google Fit token for user:', user.id);
     const { data: googleFitToken, error: tokenError } = await supabase
       .from('google_tokens')
-      .select('user_id, expires_at, is_active')
+      .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors
+
+    console.log('Active Google Fit token:', { googleFitToken, tokenError });
 
     if (tokenError || !googleFitToken) {
       console.log(`User ${user.id} does not have a Google Fit token connected`);
@@ -100,10 +103,10 @@ serve(async (req) => {
     const { data: googleFitSessions, error: sessionsError } = await supabase
       .from('google_fit_sessions')
       .select('*')
-      .eq('user_id', user.id)
-      .gte('start_time', `${date}T00:00:00`)
-      .lte('start_time', `${date}T23:59:59`)
-      .order('start_time', { ascending: true });
+      .eq('user_id', user.id);
+    
+    console.log('DEBUG: Google Fit sessions:', JSON.stringify(googleFitSessions, null, 2));
+    console.log('DEBUG: Sessions error if any:', sessionsError);
 
     if (sessionsError) {
       console.error('Error fetching Google Fit sessions:', sessionsError);
@@ -123,40 +126,26 @@ serve(async (req) => {
       });
     }
 
-    // Get existing planned activities for the date
-    const { data: plannedActivities, error: plannedError } = await supabase
+    // Get existing activities for the date (both planned and actual)
+    const { data: existingActivities, error: activitiesError } = await supabase
       .from('training_activities')
       .select('*')
       .eq('user_id', user.id)
-      .eq('date', date)
-      .eq('is_actual', false); // Only planned activities
+      .eq('date', date);
 
-    if (plannedError) {
-      console.error('Error fetching planned activities:', plannedError);
-      return new Response(JSON.stringify({ error: 'Failed to fetch planned activities' }), {
+    if (activitiesError) {
+      console.error('Error fetching activities:', activitiesError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch activities' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Remove existing actual activities for this date
-    const { error: deleteError } = await supabase
-      .from('training_activities')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('date', date)
-      .eq('is_actual', true);
+    const plannedActivities = existingActivities?.filter(a => !a.is_actual) || [];
+    const existingActualActivities = existingActivities?.filter(a => a.is_actual) || [];
 
-    if (deleteError) {
-      console.error('Error deleting existing actual activities:', deleteError);
-      return new Response(JSON.stringify({ error: 'Failed to delete existing actual activities' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Convert Google Fit sessions to training activities
-    const actualActivities: Omit<TrainingActivity, 'id'>[] = googleFitSessions.map(session => {
+    // Convert Google Fit sessions to training activity updates
+    const googleFitActivities: Omit<TrainingActivity, 'id'>[] = googleFitSessions.map((session: GoogleFitSession) => {
       const startTime = new Date(session.start_time);
       const endTime = new Date(session.end_time);
       const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60));
@@ -184,22 +173,60 @@ serve(async (req) => {
       };
     });
 
-    // Insert actual activities
-    const { data: insertedActivities, error: insertError } = await supabase
-      .from('training_activities')
-      .insert(actualActivities)
-      .select();
+    let updatedActivities;
+    
+    // If there's a planned activity, update it with actual data
+    if (plannedActivities && plannedActivities.length > 0) {
+      const plannedActivity = plannedActivities[0]; // Take the first planned activity
+      const googleFitData = googleFitActivities[0]; // Take the first Google Fit session
+      
+      if (googleFitData) {
+        // Update the planned activity with actual data
+        const { data: updated, error: updateError } = await supabase
+          .from('training_activities')
+          .update({
+            activity_type: googleFitData.activity_type,
+            start_time: googleFitData.start_time,
+            duration_minutes: googleFitData.duration_minutes,
+            distance_km: googleFitData.distance_km,
+            intensity: googleFitData.intensity,
+            estimated_calories: googleFitData.estimated_calories,
+            notes: googleFitData.notes,
+            is_actual: true
+          })
+          .eq('id', plannedActivity.id)
+          .select();
 
-    if (insertError) {
-      console.error('Error inserting actual activities:', insertError);
-      return new Response(JSON.stringify({ error: 'Failed to insert actual activities' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+        if (updateError) {
+          console.error('Error updating planned activity:', updateError);
+          return new Response(JSON.stringify({ error: 'Failed to update planned activity' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        updatedActivities = updated;
+      }
+    } else {
+      // No planned activity exists, insert new actual activities
+      const { data: inserted, error: insertError } = await supabase
+        .from('training_activities')
+        .insert(googleFitActivities)
+        .select();
+
+      if (insertError) {
+        console.error('Error inserting actual activities:', insertError);
+        return new Response(JSON.stringify({ error: 'Failed to insert actual activities' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      updatedActivities = inserted;
     }
 
     // Check if actual activities differ significantly from planned
-    const hasSignificantDifference = checkSignificantDifference(plannedActivities || [], actualActivities);
+    const hasSignificantDifference = checkSignificantDifference(plannedActivities || [], googleFitActivities);
 
     // Trigger meal plan refresh if there's a significant difference
     if (hasSignificantDifference) {
@@ -216,18 +243,20 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ 
       success: true,
-      message: `Updated ${actualActivities.length} actual training activities`,
-      activities: insertedActivities,
+      message: `Updated ${googleFitActivities.length} actual training activities`,
+      activities: updatedActivities,
       planned_activities: plannedActivities?.length || 0,
       significant_difference: hasSignificantDifference,
-      meal_plan_refreshed: hasSignificantDifference
+      meal_plan_refreshed: hasSignificantDifference,
+      updated_existing: plannedActivities && plannedActivities.length > 0
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('Error in update-actual-training function:', error);
-    return new Response(JSON.stringify({ error: error?.message || String(error) }), {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

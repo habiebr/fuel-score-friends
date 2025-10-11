@@ -87,12 +87,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log('Auth state change:', event, session?.user?.id, session?.access_token ? 'has_token' : 'no_token');
+        
+        // Update session state
         setSession(session);
         setUser(session?.user ?? null);
+        
+        // Set auth token for all future requests if session exists
+        if (session?.access_token) {
+          supabase.realtime.setAuth(session.access_token);
+          // Update global headers for all requests
+          (supabase as any).rest.headers.Authorization = `Bearer ${session.access_token}`;
+        } else {
+          // Clear auth header when no session
+          delete (supabase as any).rest.headers.Authorization;
+        }
+        
         setLoading(false);
-
         persistGoogleTokens(session as ProviderSession);
 
         // Note: Notification permission should only be requested on user interaction

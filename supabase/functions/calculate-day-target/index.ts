@@ -35,27 +35,90 @@ interface DayTarget {
   }>;
 }
 
+async function initSupabaseClient(req: Request, reqBody: any) {
+  // Get authorization header (case-insensitive)
+  const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
+  const admin_key = reqBody?.admin_key;
+
+  // Check admin key first
+  if (admin_key === Deno.env.get('ADMIN_FORCE_SYNC_KEY')) {
+    // Skip auth check for admin operations
+    console.log('Admin key authenticated');
+    
+    // Initialize client with service role for admin operations
+    return createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+  }
+
+  // If no admin key, verify JWT token
+  if (!authHeader) {
+    return new Response(
+      JSON.stringify({ error: 'Missing Authorization header' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Initialize client with auth header
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { 
+      global: { 
+        headers: { Authorization: authHeader } 
+      } 
+    }
+  );
+
+  // Verify JWT token
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    return supabase;
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: 'Failed to verify authentication' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
 serve(async (req) => {
+  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    );
-
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Parse request body first
+    let reqBody;
+    try {
+      reqBody = await req.json();
+    } catch (e) {
+      console.error('Failed to parse request body:', e);
+      return new Response(
+        JSON.stringify({ error: 'Invalid request body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const { profile, load, date } = await req.json();
+    // Initialize and verify auth
+    const supabaseClientResponse = await initSupabaseClient(req, reqBody);
+    if (supabaseClientResponse instanceof Response) {
+      return supabaseClientResponse;
+    }
+    const supabaseClient = supabaseClientResponse;
+
+    // Use the already parsed request body
+    const { profile, load, date } = reqBody;
 
     if (!profile || !load || !date) {
       return new Response(JSON.stringify({ error: 'Missing required parameters' }), {

@@ -73,12 +73,10 @@ const Index = () => {
         <OnboardingDialog open={showOnboarding} onComplete={handleOnboardingComplete} />
       )}
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-none mx-auto p-4">
         <Dashboard 
           onAddMeal={() => setFoodTrackerOpen(true)} 
           onAnalyzeFitness={() => setFitnessScreenshotOpen(true)}
         />
-        </div>
       </div>
       <BottomNav />
       <ActionFAB

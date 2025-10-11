@@ -18,6 +18,7 @@ import { getTodayUnifiedScore, getWeeklyUnifiedScore } from '@/services/unified-
 import { TodayMealScoreCard } from '@/components/TodayMealScoreCard';
 import { TodayNutritionCard } from '@/components/TodayNutritionCard';
 import { WeeklyKilometersCard } from '@/components/WeeklyMilesCard';
+import { getLocalDayBoundaries, getLocalDateString } from '@/lib/timezone';
 import { UpcomingWorkouts } from '@/components/UpcomingWorkouts';
 import { TodayInsightsCard } from '@/components/TodayInsightsCard';
 import { format, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
@@ -62,6 +63,7 @@ interface DashboardData {
   carbsGrams: number;
   fatGrams: number;
   mealsLogged: number;
+  hasMainMeals: boolean;
   steps: number;
   caloriesBurned: number;
   activeMinutes: number;
@@ -82,16 +84,19 @@ interface DashboardData {
     consumed: number;
     target: number;
     percentage: number;
+    color: string;
   };
   carbs: {
     consumed: number;
     target: number;
     percentage: number;
+    color: string;
   };
   fat: {
     consumed: number;
     target: number;
     percentage: number;
+    color: string;
   };
   nextRun?: string;
   insights: string[];
@@ -121,7 +126,8 @@ export function CachedDashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps)
     async () => {
       if (!user || !session) throw new Error('No authenticated user');
       
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getLocalDateString();
+      const { start, end } = getLocalDayBoundaries(new Date());
       
       // Fetch all data in parallel
       const [foodLogsData, mealPlansData, profileData, googleFitData] = await Promise.all([
@@ -129,8 +135,8 @@ export function CachedDashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps)
           .from('food_logs')
           .select('*')
           .eq('user_id', user.id)
-          .gte('logged_at', `${today}T00:00:00`)
-          .lt('logged_at', `${today}T23:59:59.999`)
+          .gte('logged_at', start)
+          .lte('logged_at', end)
           .order('logged_at', { ascending: false }),
         supabase
           .from('daily_meal_plans')
@@ -159,6 +165,12 @@ export function CachedDashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps)
       const rawMealPlans = mealPlansData.data || [];
       const profile = profileData.data;
       const todayGoogleFitData = googleFitData.data;
+
+      // Check if user has logged any main meals (not just snacks)
+      const mainMeals = foodLogs.filter(log => 
+        ['breakfast', 'lunch', 'dinner'].includes(log.meal_type?.toLowerCase() || '')
+      );
+      const hasMainMeals = mainMeals.length > 0;
 
       const exerciseData = {
         steps: todayGoogleFitData?.steps || 0,
@@ -196,6 +208,7 @@ export function CachedDashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps)
         carbsGrams: consumedNutrition.carbs,
         fatGrams: consumedNutrition.fat,
         mealsLogged: foodLogs.length,
+        hasMainMeals: hasMainMeals,
         steps: exerciseData.steps,
         caloriesBurned: exerciseData.calories_burned,
         activeMinutes: exerciseData.active_minutes,
@@ -215,17 +228,20 @@ export function CachedDashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps)
         protein: {
           consumed: consumedNutrition.protein,
           target: Math.round(tdee * 0.25 / 4), // 25% of calories from protein
-          percentage: Math.round((consumedNutrition.protein / (tdee * 0.25 / 4)) * 100)
+          percentage: Math.round((consumedNutrition.protein / (tdee * 0.25 / 4)) * 100),
+          color: '#FF6B6B' // Vibrant red/coral for protein
         },
         carbs: {
           consumed: consumedNutrition.carbs,
           target: Math.round(tdee * 0.45 / 4), // 45% of calories from carbs
-          percentage: Math.round((consumedNutrition.carbs / (tdee * 0.45 / 4)) * 100)
+          percentage: Math.round((consumedNutrition.carbs / (tdee * 0.45 / 4)) * 100),
+          color: '#4ECDC4' // Vibrant teal/cyan for carbs
         },
         fat: {
           consumed: consumedNutrition.fat,
           target: Math.round(tdee * 0.30 / 9), // 30% of calories from fat
-          percentage: Math.round((consumedNutrition.fat / (tdee * 0.30 / 9)) * 100)
+          percentage: Math.round((consumedNutrition.fat / (tdee * 0.30 / 9)) * 100),
+          color: '#FFD93D' // Vibrant yellow for fat
         },
         insights: [
           `You've logged ${foodLogs.length} meals today`,
@@ -436,14 +452,30 @@ export function CachedDashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps)
           {/* Nutrition Overview */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <TodayNutritionCard
-              calories={dashboardData.calories}
-              protein={dashboardData.protein}
-              carbs={dashboardData.carbs}
-              fat={dashboardData.fat}
+              calories={{
+                current: dashboardData.calories.consumed,
+                target: dashboardData.calories.target
+              }}
+              protein={{
+                current: dashboardData.protein.consumed,
+                target: dashboardData.protein.target,
+                color: dashboardData.protein.color
+              }}
+              carbs={{
+                current: dashboardData.carbs.consumed,
+                target: dashboardData.carbs.target,
+                color: dashboardData.carbs.color
+              }}
+              fat={{
+                current: dashboardData.fat.consumed,
+                target: dashboardData.fat.target,
+                color: dashboardData.fat.color
+              }}
             />
             <TodayMealScoreCard
-              score={dashboardData.dailyScore}
-              rating={dashboardData.dailyScore >= 80 ? 'Excellent' : 
+              score={dashboardData.hasMainMeals ? dashboardData.dailyScore : 0}
+              rating={!dashboardData.hasMainMeals ? 'Needs Improvement' :
+                     dashboardData.dailyScore >= 80 ? 'Excellent' : 
                      dashboardData.dailyScore >= 65 ? 'Good' : 
                      dashboardData.dailyScore >= 50 ? 'Fair' : 'Needs Improvement'}
             />

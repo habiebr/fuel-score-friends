@@ -29,17 +29,32 @@ interface TokenRecord {
   is_active: boolean;
 }
 
-serve(async (req) => {
+interface TokenRefreshResult {
+  user_id: string;
+  success: boolean;
+  error?: string;
+  needs_reauth?: boolean;
+  expires_at?: string;
+  refresh_count?: number;
+}
+
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Parse request parameters
-    const { 
-      batch_size = 50,  // Process 50 tokens at a time by default
-      threshold_minutes = 30  // Refresh tokens expiring within 30 minutes
-    } = await req.json();
+    // Parse request parameters if provided, otherwise use defaults
+    let batch_size = 50;  // Process 50 tokens at a time by default
+    let threshold_minutes = 30;  // Refresh tokens expiring within 30 minutes
+    
+    try {
+      const body = await req.json();
+      batch_size = body.batch_size ?? batch_size;
+      threshold_minutes = body.threshold_minutes ?? threshold_minutes;
+    } catch {
+      // Ignore JSON parsing errors and use defaults
+    }
 
     // Initialize Supabase admin client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -56,12 +71,13 @@ serve(async (req) => {
       throw new Error(`Failed to fetch settings: ${settingsError.message}`);
     }
 
-    const settingsMap = Object.fromEntries(settings?.map(s => [s.key, s.value]) || []);
+    const settingsMap = Object.fromEntries((settings || []).map((s: { key: string, value: string }) => [s.key, s.value]));
     const googleClientId = settingsMap.google_client_id;
     const googleClientSecret = settingsMap.google_client_secret;
 
     if (!googleClientId || !googleClientSecret) {
       throw new Error('Google OAuth credentials not configured');
+    }
 
     // Calculate the threshold timestamp
     const now = new Date();
@@ -170,9 +186,9 @@ serve(async (req) => {
     }));
 
     // Summarize results
-    const successful = results.filter(r => r.success).length;
-    const failed = results.filter(r => !r.success).length;
-    const needsReauth = results.filter(r => r.needs_reauth).length;
+    const successful = results.filter((r: TokenRefreshResult) => r.success).length;
+    const failed = results.filter((r: TokenRefreshResult) => !r.success).length;
+    const needsReauth = results.filter((r: TokenRefreshResult) => r.needs_reauth).length;
 
     // Log results to refresh_logs table if it exists
     try {

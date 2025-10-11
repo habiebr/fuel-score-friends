@@ -70,7 +70,19 @@ serve(async (req) => {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (expires_in * 1000));
 
-    // Store the new token (this will automatically deactivate old tokens via trigger)
+    // First, delete any existing active tokens for this user to avoid unique constraint issues
+    const { error: deleteError } = await admin
+      .from('google_tokens')
+      .delete()
+      .eq('user_id', userData.user.id)
+      .eq('is_active', true);
+
+    if (deleteError) {
+      console.warn('Error deleting old tokens:', deleteError);
+      // Continue anyway - the old tokens might not exist
+    }
+
+    // Now store the new token
     const { data: newToken, error: insertError } = await admin
       .from('google_tokens')
       .insert({

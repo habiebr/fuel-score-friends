@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Empty Day Scores</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 32px;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fix Empty Day Nutrition Scores</h1>
+    <p>This will recalculate all nutrition scores for days where no food was logged and set them to 0.</p>
+    
+    <button id="fixButton" onclick="fixScores()">Fix Empty Day Scores</button>
+    
+    <div id="result"></div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        const supabaseUrl = 'https://eecdbddpzwedficnpenm.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlY2RiZGRwendlZGZpY25wZW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTYxODc2MTQsImV4cCI6MjAxMTc2MzYxNH0.CBlVVu41QWnrfJbh_-c5LUAh2L3zP5Xk_GXwq4Hoaag';
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+        window.fixScores = async function() {
+            const button = document.getElementById('fixButton');
+            const resultDiv = document.getElementById('result');
+            
+            button.disabled = true;
+            resultDiv.textContent = 'Running...';
+            resultDiv.className = 'info';
+            
+            try {
+                const { data, error } = await supabase.functions.invoke('fix-empty-day-scores');
+                
+                if (error) {
+                    resultDiv.textContent = `Error: ${error.message}`;
+                    resultDiv.className = 'error';
+                } else {
+                    resultDiv.textContent = JSON.stringify(data, null, 2);
+                    resultDiv.className = 'success';
+                }
+            } catch (err) {
+                resultDiv.textContent = `Error: ${err.message}`;
+                resultDiv.className = 'error';
+            } finally {
+                button.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>

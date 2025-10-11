@@ -308,6 +308,20 @@ export async function getWeeklyScoreFromCache(
 }
 
 /**
+ * Get weekly score with unified scoring (alias for getWeeklyScoreFromCache)
+ * This function is used when you want to get weekly scores for a specific week
+ */
+export async function getWeeklyUnifiedScore(
+  userId: string,
+  weekStart?: Date,
+  strategy?: ScoringStrategy
+): Promise<{ average: number; dailyScores: Array<{ date: string; score: number }> }> {
+  // Strategy parameter is kept for API compatibility but not used
+  // since we're reading from cached scores
+  return getWeeklyScoreFromCache(userId, weekStart);
+}
+
+/**
  * Get all users' weekly scores from cache for leaderboard
  */
 export async function getAllUsersWeeklyScoresFromCache(

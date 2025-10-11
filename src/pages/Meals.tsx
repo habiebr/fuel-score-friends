@@ -36,6 +36,7 @@ import {
   calculateBMR
 } from '@/lib/nutrition-engine';
 import { getActivityMultiplier, deriveMacrosFromCalories, accumulateConsumedFromFoodLogs } from '@/lib/nutrition';
+import { getLocalDayBoundaries, getLocalDateString } from '@/lib/timezone';
 
 interface FoodLog {
   id: string;
@@ -128,15 +129,16 @@ export default function Meals() {
     if (!user) return;
     setLoading(true);
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getLocalDateString();
+      const { start, end } = getLocalDayBoundaries(new Date());
 
-      // Fetch today's food logs with same filtering as Dashboard
+      // Fetch today's food logs using local timezone boundaries
       const { data: todayLogs, error: todayError } = await supabase
         .from('food_logs')
         .select('*')
         .eq('user_id', user.id)
-        .gte('logged_at', `${today}T00:00:00`)
-        .lt('logged_at', `${today}T23:59:59.999`)
+        .gte('logged_at', start)
+        .lte('logged_at', end)
         .order('logged_at', { ascending: false });
 
       if (todayError) {
@@ -355,7 +357,7 @@ export default function Meals() {
       // First, trigger training update (supabase client injects auth headers)
       try {
         await supabase.functions.invoke('update-actual-training', {
-          body: { date: today }
+          body: { userId: user.id, date: today }
         });
         console.log('Training data updated');
       } catch (e) {
@@ -382,8 +384,7 @@ export default function Meals() {
       const { data, error } = await supabase.functions.invoke('smart-ai-cache', {
         body: { date: today },
         headers: {
-          ...(apiKey ? { apikey: apiKey } : {}),
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+          ...(apiKey ? { apikey: apiKey } : {})
         }
       });
       if (error) throw error;
@@ -433,9 +434,43 @@ export default function Meals() {
   }, [lastSync, user]);
 
   // Auto-generate when planKey changes (e.g., training plan updated)
+  // But only if we don't have a recent plan cached
   useEffect(() => {
-    if (user) {
+    const checkAndGenerate = async () => {
+      if (!user) return;
+      
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const cacheKey = `nutritionSuggestions:${today}:${planKey || 'default'}`;
+      
+      // Check if we already have cached data for this plan key
+      const { data: prefData } = await (supabase as any)
+        .from('user_preferences')
+        .select('value')
+        .eq('user_id', user.id)
+        .eq('key', cacheKey)
+        .maybeSingle();
+
+      // Only generate if no cache exists or cache is older than 4 hours
+      if (prefData?.value?.meals && prefData?.value?.updatedAt) {
+        const cacheAge = Date.now() - new Date(prefData.value.updatedAt).getTime();
+        const fourHoursInMs = 4 * 60 * 60 * 1000;
+        
+        if (cacheAge < fourHoursInMs) {
+          console.log('Using cached nutrition suggestions (cache age:', Math.round(cacheAge / 60000), 'minutes)');
+          setAiPlan(prefData.value.meals);
+          setLastUpdated(prefData.value.updatedAt);
+          setRecommendedRecipes(extractRecipesFromAiPlan(prefData.value.meals).map(r => ({ recipe: r, score: 90, reasons: [], compatibility: 'good' })));
+          return; // Don't generate, use cache
+        }
+      }
+      
+      // No cache or cache is stale - generate new plan
+      console.log('Generating new nutrition suggestions...');
       generateAIPlan();
+    };
+    
+    if (user && planKey) {
+      checkAndGenerate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planKey]);
@@ -514,38 +549,29 @@ export default function Meals() {
             title="Meals"
             description="Track, review and plan your nutrition"
             icon={Utensils}
-            actions={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/goals')}
-                className="rounded-full"
-              >
-                <Activity className="mr-2 h-4 w-4" />
-                Training
-              </Button>
-            }
           />
 
-          <div className="mb-6 overflow-x-auto">
-            <div className="inline-flex min-w-max items-center gap-1 rounded-full border border-white/10 bg-black/10 p-1 shadow-inner backdrop-blur-sm dark:border-white/20 dark:bg-white/10">
-              {tabOptions.map(({ value, label, icon: Icon }) => (
-                <Button
-                  key={value}
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setActiveTab(value)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-full px-4 text-sm font-medium transition-all",
-                    activeTab === value
-                      ? "bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(49,255,176,0.35)]"
-                      : "text-muted-foreground hover:bg-white/20 hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </Button>
-              ))}
+          <div className="mb-6">
+            <div className="overflow-x-auto -mx-4 px-4">
+              <div className="inline-flex min-w-max items-center gap-1 rounded-full border border-white/10 bg-black/10 p-1 shadow-inner backdrop-blur-sm dark:border-white/20 dark:bg-white/10">
+                {tabOptions.map(({ value, label, icon: Icon }) => (
+                  <Button
+                    key={value}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActiveTab(value)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-full px-4 text-sm font-medium transition-all whitespace-nowrap",
+                      activeTab === value
+                        ? "bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(49,255,176,0.35)]"
+                        : "text-muted-foreground hover:bg-white/20 hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
 

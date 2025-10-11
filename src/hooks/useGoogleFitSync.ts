@@ -27,6 +27,7 @@ export function useGoogleFitSync() {
     totalDays: number;
     isComplete: boolean;
   } | null>(null);
+  const [syncInProgress, setSyncInProgress] = useState(false); // Prevent duplicate calls
 
   // Load last sync time from google_tokens table
   useEffect(() => {
@@ -87,9 +88,19 @@ export function useGoogleFitSync() {
     return () => { cancelled = true; };
   }, [getGoogleAccessToken, user?.id]);
 
-  // Auto-sync every 15 minutes if connected
+  // Auto-sync every 5 minutes if connected (reduced from 15 for instant recovery)
   useEffect(() => {
     if (!user || !isConnected) return;
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+    
+    // Debounced sync function to prevent rapid-fire calls
+    const debouncedSync = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        syncGoogleFit();
+      }, 1000); // 1 second debounce (reduced from 2s for faster response)
+    };
 
     const checkAndSync = async () => {
       try {
@@ -101,27 +112,31 @@ export function useGoogleFitSync() {
           .maybeSingle();
         
         const lastSyncTime = data?.last_synced_at ? new Date(data.last_synced_at) : null;
-        if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (15 * 60 * 1000)) {
-          syncGoogleFit();
+        // Sync if no data or last sync > 5 minutes ago (reduced from 15 for instant recovery)
+        if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (5 * 60 * 1000)) {
+          debouncedSync();
         }
       } catch (error) {
         console.error('Error checking sync status:', error);
-        syncGoogleFit();
+        // Don't auto-sync on error to prevent loops
       }
     };
 
     checkAndSync();
 
-    // Foreground interval (15 minutes)
-    const interval = setInterval(syncGoogleFit, 15 * 60 * 1000);
+    // Foreground interval (5 minutes for instant recovery)
+    const interval = setInterval(() => {
+      debouncedSync();
+    }, 5 * 60 * 1000);
 
-    // Also trigger sync on resume/online
-    const onFocus = () => syncGoogleFit();
-    const onOnline = () => syncGoogleFit();
+    // Debounce sync on resume/online to prevent multiple simultaneous calls
+    const onFocus = () => debouncedSync();
+    const onOnline = () => debouncedSync();
     window.addEventListener('focus', onFocus);
     window.addEventListener('online', onOnline);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('online', onOnline);
@@ -165,20 +180,31 @@ export function useGoogleFitSync() {
 
   /**
    * Fetch today's Google Fit data and sync to database
+   * @param silent - If true, don't show toast notifications (for automatic background syncs)
    */
-  const syncGoogleFit = useCallback(async (): Promise<GoogleFitData | null> => {
+  const syncGoogleFit = useCallback(async (silent = true): Promise<GoogleFitData | null> => {
     if (!user) {
       console.error('No user authenticated');
       return null;
     }
 
-    // Circuit breaker: if we've had too many consecutive errors, wait before retrying
-    const now = Date.now();
-    if (consecutiveErrors >= 3 && lastErrorTime && (now - lastErrorTime) < 5 * 60 * 1000) {
-      console.log('Circuit breaker active: too many consecutive errors, skipping sync');
+    // Prevent duplicate concurrent syncs
+    if (syncInProgress) {
+      console.log('Sync already in progress, skipping duplicate call');
       return null;
     }
 
+    // Exponential backoff: if we've had consecutive errors, wait before retrying
+    const now = Date.now();
+    if (consecutiveErrors >= 3 && lastErrorTime) {
+      const backoffTime = Math.min(5 * 60 * 1000, Math.pow(2, consecutiveErrors - 3) * 30 * 1000); // 30s, 1m, 2m, 4m, 5m max
+      if ((now - lastErrorTime) < backoffTime) {
+        console.log(`Circuit breaker active: waiting ${Math.round(backoffTime / 1000)}s before retry (${consecutiveErrors} consecutive errors)`);
+        return null;
+      }
+    }
+
+    setSyncInProgress(true);
     setIsSyncing(true);
     setSyncStatus('pending');
 
@@ -200,10 +226,17 @@ export function useGoogleFitSync() {
         throw new Error('Not signed in');
       }
 
+      // Add timeout to prevent hanging requests (reduced to 15s for faster response)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (reduced from 30s)
+
       const { data: response, error: functionError } = await (supabase as any).functions.invoke('fetch-google-fit-data', {
         body: { accessToken },
-        headers: { Authorization: `Bearer ${session.access_token}` }
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (functionError) {
         throw new Error(functionError.message || 'Failed to fetch Google Fit data');
@@ -235,17 +268,19 @@ export function useGoogleFitSync() {
         try {
           const today = new Date().toISOString().split('T')[0];
           await supabase.functions.invoke('update-actual-training', {
-            body: { date: today }
+            body: { userId: user?.id, date: today }
           });
           console.log('Triggered automatic training activity update');
         } catch (updateError) {
           console.error('Error triggering training update:', updateError);
         }
 
-      toast({
-        title: "Google Fit synced",
-        description: `${googleFitData.steps} steps, ${Math.round(googleFitData.caloriesBurned)} calories burned`,
-      });
+      if (!silent) {
+        toast({
+          title: "Google Fit synced",
+          description: `${googleFitData.steps} steps, ${Math.round(googleFitData.caloriesBurned)} calories burned`,
+        });
+      }
 
       return googleFitData;
 
@@ -259,21 +294,25 @@ export function useGoogleFitSync() {
       const errorMessage = error?.message || "Could not sync Google Fit data";
       
       if (error?.code === 'TOKEN_EXPIRED' || error?.message?.includes('401') || error?.message?.includes('token expired')) {
-        toast({
-          title: 'Re-authentication required',
-          description: 'Your Google Fit session expired. Please reconnect Google Fit from the Import page.',
-          variant: 'destructive',
-        });
+        if (!silent) {
+          toast({
+            title: 'Re-authentication required',
+            description: 'Your Google Fit session expired. Please reconnect Google Fit from the Import page.',
+            variant: 'destructive',
+          });
+        }
         setIsConnected(false);
         try {
           localStorage.removeItem('google_fit_provider_token');
         } catch {}
       } else {
-        toast({
-          title: 'Sync failed',
-          description: errorMessage,
-          variant: 'destructive',
-        });
+        if (!silent) {
+          toast({
+            title: 'Sync failed',
+            description: errorMessage,
+            variant: 'destructive',
+          });
+        }
       }
 
       setSyncStatus('error');
@@ -281,8 +320,9 @@ export function useGoogleFitSync() {
 
     } finally {
       setIsSyncing(false);
+      setSyncInProgress(false);
     }
-  }, [user, getGoogleAccessToken, toast, consecutiveErrors, lastErrorTime]);
+  }, [user, getGoogleAccessToken, toast, consecutiveErrors, lastErrorTime, syncInProgress]);
 
   /**
    * Fetch today's Google Fit data from database (cached)
