@@ -6,7 +6,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { getDateRangeFromString } from '@/lib/timezone';
+import { getDateRangeForQuery } from '@/lib/timezone';
 import { 
   calculateUnifiedScore, 
   calculateMealScores, 
@@ -88,7 +88,7 @@ export async function getDailyUnifiedScore(
   console.log('Nutrition targets with windows:', nutritionTargetsWithWindows);
 
   // Fetch food logs for the day
-  const dateRange = getDateRangeFromString(dateISO);
+  const dateRange = getDateRangeForQuery(dateISO);
   const { data: foodLogs } = await supabase
     .from('food_logs')
     .select('meal_type, calories, protein_grams, carbs_grams, fat_grams, logged_at')
@@ -255,7 +255,7 @@ export async function getMealScores(
     .eq('date', dateISO);
 
   // Fetch food logs
-  const dateRange = getDateRangeFromString(dateISO);
+  const dateRange = getDateRangeForQuery(dateISO);
   const { data: foodLogs } = await supabase
     .from('food_logs')
     .select('meal_type, calories, protein_grams, carbs_grams, fat_grams')
