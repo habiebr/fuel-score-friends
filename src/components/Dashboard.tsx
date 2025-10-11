@@ -615,13 +615,21 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         const weekStart = new Date();
         weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Start of week (Monday)
         weeklyScoreResult = await getWeeklyScoreFromCache(user.id, weekStart);
-        console.log('Weekly unified score:', weeklyScoreResult);
+        console.log('📊 WEEKLY SCORE DEBUG:', {
+          weekStart: format(weekStart, 'yyyy-MM-dd'),
+          result: weeklyScoreResult,
+          average: weeklyScoreResult?.average,
+          dailyScores: weeklyScoreResult?.dailyScores,
+          validScoresCount: weeklyScoreResult?.dailyScores?.filter(d => d.score > 0).length
+        });
       } catch (weeklyScoreError) {
-        console.error('Error getting weekly unified score:', weeklyScoreError);
+        console.error('❌ Error getting weekly unified score:', weeklyScoreError);
         weeklyScoreResult = null;
       }
       
-      setWeeklyScore(weeklyScoreResult?.average || 0);
+      const calculatedWeeklyScore = weeklyScoreResult?.average || 0;
+      console.log('📊 Setting weekly score to:', calculatedWeeklyScore);
+      setWeeklyScore(calculatedWeeklyScore);
 
       // Calculate BMR and targets
       const bmr = profile ? calculateBMR({
@@ -891,9 +899,33 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             variant="warning"
             tooltip={
               <>
-                <p className="font-semibold">🟠 Weekly Score</p>
-                <p>Shows your 7-day average performance and consistency.</p>
-                <p>Higher scores mean steadier nutrition–training habits.</p>
+                <p className="font-semibold mb-2">⭐ Weekly Score</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Average of daily scores (nutrition + training + bonuses - penalties) from unified scoring system over the past 7 days.
+                </p>
+                
+                <div className="space-y-2 text-xs">
+                  <div className="p-2 bg-muted/30 rounded">
+                    <p className="font-medium mb-1">📊 Formula:</p>
+                    <p className="text-muted-foreground">
+                      Weekly Score = Σ(Daily Scores) / 7 days
+                    </p>
+                  </div>
+                  
+                  <div className="p-2 bg-muted/30 rounded">
+                    <p className="font-medium mb-1">🏆 Ranking:</p>
+                    <p className="text-muted-foreground">
+                      Your rank is based on your weekly score, which combines nutrition and training performance. Keep logging meals and completing workouts to climb the leaderboard!
+                    </p>
+                  </div>
+                  
+                  <div className="p-2 bg-muted/30 rounded">
+                    <p className="font-medium mb-1">💡 Tip:</p>
+                    <p className="text-muted-foreground">
+                      Curious how we grade each day? <a href="/scoring-explainer" className="text-primary underline">See the scoring explainer</a>.
+                    </p>
+                  </div>
+                </div>
               </>
             }
           />

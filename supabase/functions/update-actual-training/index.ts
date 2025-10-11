@@ -99,13 +99,17 @@ serve(async (req: Request) => {
       });
     }
 
-    // Get Google Fit sessions for the date
-    const { data: googleFitSessions, error: sessionsError } = await supabase
+    // Get Google Fit sessions for the specific date only
+    // Important: Filter by date to avoid processing all sessions repeatedly
+    console.log(`Fetching Google Fit sessions for user ${user.id} on date ${date}`);
+    const { data: googleFitSessions, error: sessionsError} = await supabase
       .from('google_fit_sessions')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .gte('start_time', `${date}T00:00:00`)
+      .lt('start_time', `${date}T23:59:59`);
     
-    console.log('DEBUG: Google Fit sessions:', JSON.stringify(googleFitSessions, null, 2));
+    console.log('DEBUG: Google Fit sessions for date:', JSON.stringify(googleFitSessions, null, 2));
     console.log('DEBUG: Sessions error if any:', sessionsError);
 
     if (sessionsError) {

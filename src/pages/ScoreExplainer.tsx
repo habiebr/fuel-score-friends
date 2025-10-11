@@ -158,7 +158,7 @@ const WeeklyScoreExplainer = () => (
         <Clock className="h-4 w-4" />
         <AlertTitle>7-day moving average</AlertTitle>
         <AlertDescription>
-          We average your valid daily scores from Monday through Sunday. Missing or zero-score days do not count toward the denominator.
+          Average of daily scores (nutrition + training + bonuses - penalties) from unified scoring system over the past 7 days (Monday through Sunday).
         </AlertDescription>
       </Alert>
 
@@ -182,6 +182,28 @@ const WeeklyScoreExplainer = () => (
           </p>
         </CardContent>
       </Card>
+
+      <Separator className="my-4" />
+
+      <section className="space-y-3">
+        <h3 className="font-semibold text-lg flex items-center gap-2">
+          <Award className="h-5 w-5" /> Leaderboard Ranking
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Your rank is based on your weekly score, which combines nutrition and training performance.
+        </p>
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="p-4 space-y-2">
+            <div className="font-semibold text-primary">🏆 Ranking Formula</div>
+            <p className="text-sm text-muted-foreground">
+              Rankings are sorted by <strong>weekly score (descending)</strong>. If two users have the same weekly score, we then sort by <strong>total kilometers</strong> run over the past year.
+            </p>
+            <p className="text-sm text-primary font-medium mt-2">
+              💡 Tip: Keep logging meals and completing workouts to climb the leaderboard!
+            </p>
+          </CardContent>
+        </Card>
+      </section>
     </CardContent>
   </Card>
 );

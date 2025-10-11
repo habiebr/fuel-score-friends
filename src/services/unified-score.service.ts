@@ -185,16 +185,30 @@ export async function getDailyUnifiedScore(
 
   // Calculate score
   const breakdown = calculateUnifiedScore(context);
-  console.log('Calculated score:', {
+  console.log('============ SCORE CALCULATION DEBUG ============');
+  console.log('📊 Calculated score:', {
     userId,
     dateISO,
-    breakdown,
-    context,
+    finalScore: breakdown.total,
+    breakdown: {
+      nutrition: breakdown.nutrition.total,
+      training: breakdown.training.total,
+      bonuses: breakdown.bonuses,
+      penalties: breakdown.penalties
+    },
+    dataUsed: {
+      mealPlansCount: (mealPlans || []).length,
+      foodLogsCount: (foodLogs || []).length,
+      hasTrainingPlan: !!trainingPlan,
+      hasActualTraining: !!trainingActual,
+      trainingLoad: load
+    },
     nutritionTargets: nutritionTargetsWithWindows,
     nutritionActuals,
     trainingPlan,
     trainingActual
   });
+  console.log('================================================');
 
   // Persist score to database using direct table insert
   try {

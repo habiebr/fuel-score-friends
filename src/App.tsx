@@ -22,6 +22,7 @@ import Training from "./pages/Training.tsx";
 import TrainingCalendar from "./pages/TrainingCalendar";
 import Community from "./pages/Community";
 import ScoreExplainerPage from "./pages/ScoreExplainer";
+import NutritionExplainerPage from "./pages/NutritionExplainer";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import { CachedWidgetsDemo } from "./pages/CachedWidgetsDemo";
@@ -177,7 +178,12 @@ function App() {
                       <ScoreExplainerPage />
                     </ProtectedRoute>
                   } />
-                           <Route path="/import" element={
+                  <Route path="/nutrition-explainer" element={
+                    <ProtectedRoute>
+                      <NutritionExplainerPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/import" element={
                              <ProtectedRoute>
                                <Import />
                              </ProtectedRoute>
