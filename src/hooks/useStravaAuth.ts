@@ -41,7 +41,7 @@ export function useStravaAuth() {
         .from('strava_tokens' as any)
         .select('athlete_id, expires_at, scope')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
         setIsConnected(false);
@@ -140,7 +140,7 @@ export function useStravaAuth() {
         .from('strava_tokens' as any)
         .select('access_token')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (fetchError) throw fetchError;
 
