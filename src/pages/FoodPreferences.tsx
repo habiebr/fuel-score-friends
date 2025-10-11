@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ChevronLeft, X, Plus, Settings } from 'lucide-react';
+import { ChevronLeft, X, Plus, Settings, UtensilsCrossed } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BottomNav } from '@/components/BottomNav';
@@ -144,32 +144,29 @@ export default function FoodPreferences() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate('/profile')}
-                className="flex-shrink-0"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-              <div className="flex-1 min-w-0">
-                <PageHeading
-                  title="Food Preferences"
-                  description="Customize your nutrition preferences"
-                />
-              </div>
+          <div className="mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/profile')}
+              className="-ml-2 flex-shrink-0"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+          </div>
+          <div className="flex items-center gap-3 sm:gap-4 mb-6">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 text-white shadow-lg sm:h-12 sm:w-12">
+              <UtensilsCrossed className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
+            <PageHeading
+              title="Food Preferences"
+              description="Customize your nutrition preferences"
+              className="!mb-0 flex-1"
+            />
           </div>
 
           {/* Content */}
-          <div className="p-4">
-            <PageHeading
-              title="Food Preferences"
-              description="Tailor meal plans to your dietary needs and habits."
-              className="mb-4"
-            />
+          <div className="space-y-4">
 
             {/* Info Box */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">

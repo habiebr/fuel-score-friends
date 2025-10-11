@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -557,16 +557,25 @@ export default function Goals() {
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
           <div className="mb-2">
-            <Button variant="ghost" onClick={() => navigate('/')} className="-ml-2">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/')}
+              className="-ml-2 flex-shrink-0"
+            >
+              <ChevronLeft className="w-5 h-5" />
             </Button>
           </div>
-          <PageHeading
-            title="Set Your Goals & Training Plan"
-            description="Define your running goal and create your weekly training schedule."
-            className="mt-3"
-          />
+          <div className="flex items-center gap-3 sm:gap-4 mb-6">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg sm:h-12 sm:w-12">
+              <Target className="h-5 w-5 sm:h-6 sm:w-6" />
+            </div>
+            <PageHeading
+              title="Set Your Goals & Training Plan"
+              description="Define your running goal and create your weekly training schedule."
+              className="!mb-0 flex-1"
+            />
+          </div>
 
 
           {/* Progress Indicator */}
@@ -920,7 +929,7 @@ export default function Goals() {
                     onClick={() => setCurrentStep(1)}
                     className="flex items-center gap-2"
                   >
-                    <ArrowLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-4 w-4" />
                     Back to Goal
                   </Button>
                   <Button
