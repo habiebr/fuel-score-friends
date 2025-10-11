@@ -185,57 +185,24 @@ serve(async (req: Request) => {
         .eq('is_actual', true);
     }
     
-    // If there's a planned activity, update it with actual data (use first Google Fit session only)
-    if (plannedActivities && plannedActivities.length > 0) {
-      const plannedActivity = plannedActivities[0]; // Take the first planned activity
-      const googleFitData = googleFitActivities[0]; // Take the first Google Fit session only
+    // Always insert actual activity as a NEW record (don't update planned activity)
+    // This preserves the planned activity for logging/comparison purposes
+    const firstActivity = googleFitActivities[0];
+    if (firstActivity) {
+      const { data: inserted, error: insertError } = await supabase
+        .from('training_activities')
+        .insert([firstActivity]) // Insert only the first activity
+        .select();
+
+      if (insertError) {
+        console.error('Error inserting actual activity:', insertError);
+        return new Response(JSON.stringify({ error: 'Failed to insert actual activity' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       
-      if (googleFitData) {
-        // Update the planned activity with actual data
-        const { data: updated, error: updateError } = await supabase
-          .from('training_activities')
-          .update({
-            activity_type: googleFitData.activity_type,
-            start_time: googleFitData.start_time,
-            duration_minutes: googleFitData.duration_minutes,
-            distance_km: googleFitData.distance_km,
-            intensity: googleFitData.intensity,
-            estimated_calories: googleFitData.estimated_calories,
-            notes: googleFitData.notes,
-            is_actual: true
-          })
-          .eq('id', plannedActivity.id)
-          .select();
-
-        if (updateError) {
-          console.error('Error updating planned activity:', updateError);
-          return new Response(JSON.stringify({ error: 'Failed to update planned activity' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        
-        updatedActivities = updated;
-      }
-    } else {
-      // No planned activity exists, insert only the first actual activity
-      const firstActivity = googleFitActivities[0];
-      if (firstActivity) {
-        const { data: inserted, error: insertError } = await supabase
-          .from('training_activities')
-          .insert([firstActivity]) // Insert only the first activity
-          .select();
-
-        if (insertError) {
-          console.error('Error inserting actual activity:', insertError);
-          return new Response(JSON.stringify({ error: 'Failed to insert actual activity' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        
-        updatedActivities = inserted;
-      }
+      updatedActivities = inserted;
     }
 
     // Check if actual activities differ significantly from planned
@@ -256,12 +223,13 @@ serve(async (req: Request) => {
 
     return new Response(JSON.stringify({ 
       success: true,
-      message: `Updated ${googleFitActivities.length} actual training activities`,
-      activities: updatedActivities,
-      planned_activities: plannedActivities?.length || 0,
+      message: `Logged actual activity for ${date}. Planned activity preserved for comparison.`,
+      actual_activity: updatedActivities?.[0],
+      planned_activity: plannedActivities?.[0] || null,
+      has_planned: plannedActivities && plannedActivities.length > 0,
       significant_difference: hasSignificantDifference,
       meal_plan_refreshed: hasSignificantDifference,
-      updated_existing: plannedActivities && plannedActivities.length > 0
+      note: 'Actual data is used for nutrition calculations while planned data is kept for logging'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

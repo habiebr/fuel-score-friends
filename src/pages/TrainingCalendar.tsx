@@ -26,6 +26,11 @@ interface TrainingActivity {
   is_actual?: boolean; // Flag to distinguish actual vs planned activities
 }
 
+interface DayActivities {
+  planned?: TrainingActivity;
+  actual?: TrainingActivity;
+}
+
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function TrainingCalendar() {
@@ -33,7 +38,7 @@ export default function TrainingCalendar() {
   const navigate = useNavigate();
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const datesOfWeek = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
-  const [activitiesByDate, setActivitiesByDate] = useState<Record<string, TrainingActivity[]>>({});
+  const [activitiesByDate, setActivitiesByDate] = useState<Record<string, DayActivities>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,13 +57,11 @@ export default function TrainingCalendar() {
           .order('date', { ascending: true })
           .order('is_actual', { ascending: false }); // Actual activities first
         if (error) throw error;
-        const grouped: Record<string, TrainingActivity[]> = {};
-        for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = [];
         
-        // First pass: Separate actual and planned activities by date
-        const actualByDate: Record<string, TrainingActivity[]> = {};
-        const plannedByDate: Record<string, TrainingActivity[]> = {};
+        const grouped: Record<string, DayActivities> = {};
+        for (const d of datesOfWeek) grouped[format(d, 'yyyy-MM-dd')] = {};
         
+        // Organize activities by date, separating planned and actual
         (data || []).forEach((row: any) => {
           const key = row.date;
           const act: TrainingActivity = {
@@ -74,25 +77,20 @@ export default function TrainingCalendar() {
             is_actual: row.is_actual || false,
           };
           
+          if (!grouped[key]) grouped[key] = {};
+          
           if (act.is_actual) {
-            if (!actualByDate[key]) actualByDate[key] = [];
-            actualByDate[key].push(act);
+            // Only keep the first actual activity
+            if (!grouped[key].actual) {
+              grouped[key].actual = act;
+            }
           } else {
-            if (!plannedByDate[key]) plannedByDate[key] = [];
-            plannedByDate[key].push(act);
+            // Only keep the first planned activity
+            if (!grouped[key].planned) {
+              grouped[key].planned = act;
+            }
           }
         });
-        
-        // Second pass: Prioritize actual activities, show only one activity per day
-        for (const date of Object.keys(grouped)) {
-          if (actualByDate[date] && actualByDate[date].length > 0) {
-            // If there are actual activities, show only the first actual activity
-            grouped[date] = [actualByDate[date][0]];
-          } else if (plannedByDate[date] && plannedByDate[date].length > 0) {
-            // If no actual activities, show only the first planned activity
-            grouped[date] = [plannedByDate[date][0]];
-          }
-        }
         
         setActivitiesByDate(grouped);
       } finally {
@@ -124,19 +122,28 @@ export default function TrainingCalendar() {
           {/* Today's Training Widget - Only show when actual Google Fit activity is detected */}
           {(() => {
             const today = format(new Date(), 'yyyy-MM-dd');
-            const todayActivities = activitiesByDate[today] || [];
-            const hasActualActivityToday = todayActivities.some(a => a.is_actual);
+            const todayData = activitiesByDate[today];
+            const hasActualActivityToday = todayData?.actual !== undefined;
             
             // Only render the widget if there's actual activity detected for today
-            return hasActualActivityToday ? (
+            if (!hasActualActivityToday) return null;
+            
+            // Convert to array for widget compatibility
+            const allActivities = Object.values(activitiesByDate).flatMap(day => 
+              [day.actual, day.planned].filter(Boolean) as TrainingActivity[]
+            );
+            const tomorrowData = activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')];
+            const tomorrowActivities = [tomorrowData?.actual, tomorrowData?.planned].filter(Boolean) as TrainingActivity[];
+            
+            return (
               <div className="mb-6">
                 <TrainingNutritionWidget
                   selectedDate={new Date()}
-                  activities={Object.values(activitiesByDate).flat()}
-                  tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
+                  activities={allActivities}
+                  tomorrowActivities={tomorrowActivities}
                 />
               </div>
-            ) : null;
+            );
           })()}
 
           <Card className="shadow-card">
@@ -148,19 +155,24 @@ export default function TrainingCalendar() {
             <CardContent className="space-y-4">
               {datesOfWeek.map((d, idx) => {
                 const key = format(d, 'yyyy-MM-dd');
-                const list = activitiesByDate[key] || [];
-                const totalDistance = list.reduce((sum, a) => sum + (a.distance_km || 0), 0);
-                const totalDuration = list.reduce((sum, a) => sum + (a.duration_minutes || 0), 0);
-                const totalCalories = list.reduce((sum, a) => sum + (a.estimated_calories || 0), 0);
-                const isRestDay = !loading && list.length === 0;
-                const hasActualActivity = list.some(a => a.is_actual);
+                const dayData = activitiesByDate[key] || {};
+                
+                // Use actual data if available, otherwise use planned
+                const displayActivity = dayData.actual || dayData.planned;
+                const hasActualActivity = dayData.actual !== undefined;
+                const isRestDay = !loading && !displayActivity;
+                
+                const totalDistance = displayActivity?.distance_km || 0;
+                const totalDuration = displayActivity?.duration_minutes || 0;
+                const totalCalories = displayActivity?.estimated_calories || 0;
+                
                 const primarySummary =
                   totalDistance > 0
                     ? `${parseFloat(totalDistance.toFixed(totalDistance >= 10 ? 0 : 1))} km`
                     : totalDuration > 0
                     ? `${totalDuration} min`
                     : 'Rest day';
-                const intensitySummary = isRestDay ? 'rest' : list.length === 1 ? list[0].intensity : 'mixed';
+                const intensitySummary = isRestDay ? 'rest' : displayActivity?.intensity || 'moderate';
 
                 return (
                   <div
@@ -190,73 +202,113 @@ export default function TrainingCalendar() {
 
                         <div className="space-y-3">
                           {loading && <div className="text-xs text-muted-foreground">Loading...</div>}
-                          {!loading && list.length === 0 && (
+                          {!loading && isRestDay && (
                             <div className="flex items-center justify-between rounded-2xl border border-dashed border-border/50 bg-background/50 px-4 py-3 text-sm text-muted-foreground">
                               Rest day — keep nutrition on point.
                               <span className="text-xs uppercase tracking-wide text-muted-foreground/70">No activity</span>
                             </div>
                           )}
 
-                          {list.map((a, i) => {
-                            const isRun = a.activity_type === 'run';
-                            const primaryMetric = isRun
-                              ? a.distance_km
-                                ? `${a.distance_km} km`
-                                : `${a.duration_minutes} min`
-                              : `${a.duration_minutes} min`;
-                            const metricLabel = isRun && a.distance_km ? 'distance' : 'duration';
-                            const startTimeLabel = a.start_time
-                              ? format(new Date(`1970-01-01T${a.start_time}`), 'hh:mm a')
-                              : null;
-
-                            return (
-                              <div
-                                key={i}
-                                className="flex flex-col gap-2 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm shadow-inner shadow-black/10 backdrop-blur"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className={`h-2.5 w-2.5 rounded-full shadow-[0_0_10px_rgba(49,255,176,0.5)] ${
-                                      a.is_actual ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-primary'
-                                    }`} />
-                                    <span className="text-sm font-semibold capitalize">{a.activity_type}</span>
-                                    {a.is_actual && (
-                                      <span className="rounded-full bg-green-100 dark:bg-green-900/20 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
-                                        Actual
+                          {/* Show actual activity if exists */}
+                          {displayActivity && (
+                            <div className="space-y-2">
+                              {/* Actual Activity Card */}
+                              {hasActualActivity && dayData.actual && (
+                                <div className="flex flex-col gap-2 rounded-2xl border-2 border-green-500/30 bg-gradient-to-br from-green-50/80 to-emerald-50/60 dark:from-green-900/20 dark:to-emerald-900/10 px-4 py-3 text-sm shadow-lg shadow-green-500/10 backdrop-blur">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+                                      <span className="text-sm font-bold capitalize text-green-900 dark:text-green-100">{dayData.actual.activity_type}</span>
+                                      <span className="rounded-full bg-green-600 px-2 py-0.5 text-xs font-bold text-white">
+                                        ACTUAL
                                       </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">{a.intensity}</span>
-                                    {a.is_actual && (
-                                      <span className="text-xs text-green-600 dark:text-green-400">✓</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                                  <div className="flex items-center gap-1">
-                                    <span className="font-semibold text-foreground">{primaryMetric}</span>
-                                    <span>{metricLabel}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <span className="font-semibold text-foreground">{a.estimated_calories}</span>
-                                    <span>kcal</span>
-                                  </div>
-                                  {startTimeLabel && (
-                                    <div className="flex items-center gap-1">
-                                      <span className="font-semibold text-foreground">{startTimeLabel}</span>
-                                      <span>start</span>
                                     </div>
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-green-700 dark:text-green-300">{dayData.actual.intensity}</span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-4 text-xs text-green-700 dark:text-green-300">
+                                    {dayData.actual.activity_type === 'run' && dayData.actual.distance_km ? (
+                                      <>
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-bold text-green-900 dark:text-green-100">{dayData.actual.distance_km} km</span>
+                                          <span>distance</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-semibold">{dayData.actual.duration_minutes} min</span>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-bold text-green-900 dark:text-green-100">{dayData.actual.duration_minutes} min</span>
+                                        <span>duration</span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-semibold">{dayData.actual.estimated_calories} kcal</span>
+                                    </div>
+                                    {dayData.actual.start_time && (
+                                      <div className="flex items-center gap-1">
+                                        <span>{format(new Date(`1970-01-01T${dayData.actual.start_time}`), 'hh:mm a')}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {dayData.actual.notes && (
+                                    <p className="text-xs italic text-green-600 dark:text-green-400">{dayData.actual.notes}</p>
                                   )}
                                 </div>
-                                {a.notes && (
-                                  <div className="rounded-xl border border-border/40 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
-                                    {a.notes}
+                              )}
+
+                              {/* Planned Activity Card (shown for comparison when actual exists, or as main card when no actual) */}
+                              {dayData.planned && (
+                                <div className={`flex flex-col gap-2 rounded-2xl px-4 py-3 text-sm backdrop-blur ${
+                                  hasActualActivity 
+                                    ? 'border border-dashed border-border/40 bg-background/30 opacity-60' 
+                                    : 'border border-border/60 bg-background/70 shadow-inner shadow-black/10'
+                                }`}>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`h-2.5 w-2.5 rounded-full ${hasActualActivity ? 'bg-gray-400' : 'bg-primary'}`} />
+                                      <span className="text-sm font-semibold capitalize">{dayData.planned.activity_type}</span>
+                                      {hasActualActivity && (
+                                        <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                                          Planned
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">{dayData.planned.intensity}</span>
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                                    {dayData.planned.activity_type === 'run' && dayData.planned.distance_km ? (
+                                      <>
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-semibold text-foreground">{dayData.planned.distance_km} km</span>
+                                          <span>distance</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-semibold">{dayData.planned.duration_minutes} min</span>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-semibold text-foreground">{dayData.planned.duration_minutes} min</span>
+                                        <span>duration</span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-semibold">{dayData.planned.estimated_calories} kcal</span>
+                                    </div>
+                                    {dayData.planned.start_time && (
+                                      <div className="flex items-center gap-1">
+                                        <span>{format(new Date(`1970-01-01T${dayData.planned.start_time}`), 'hh:mm a')}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {dayData.planned.notes && (
+                                    <p className="text-xs italic text-muted-foreground">{dayData.planned.notes}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
