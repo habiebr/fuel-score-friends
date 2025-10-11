@@ -5,6 +5,7 @@ import { Clock, Coffee, Sun, Sunset, Moon, Zap, CheckCircle } from 'lucide-react
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
+import { getDateRangeInUserTimezone } from '@/lib/timezone';
 
 interface MealLog {
   id: string;
@@ -91,14 +92,14 @@ export function MealTimeline({ className = '' }: MealTimelineProps) {
 
     setLoading(true);
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const todayRange = getDateRangeInUserTimezone();
 
       const { data } = await supabase
         .from('food_logs')
         .select('id, food_name, calories, logged_at, meal_type')
         .eq('user_id', user.id)
-        .gte('logged_at', `${today}T00:00:00`)
-        .lte('logged_at', `${today}T23:59:59`)
+        .gte('logged_at', todayRange.start)
+        .lte('logged_at', todayRange.end)
         .order('logged_at', { ascending: true });
 
       setMealLogs(data || []);

@@ -1,0 +1,62 @@
+@keyframes fade-in {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  0% { transform: scale(0.95); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes scale-hover {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.1); }
+}
+
+@keyframes slide-up {
+  0% { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: var(--shadow-glow); }
+  50% { box-shadow: 0 0 60px hsl(var(--primary-glow) / 0.5); }
+}
+
+@keyframes constant-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes rotate-transition {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-fade-in {
+  animation: fade-in 700ms ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 700ms ease-out;
+}
+
+.animate-scale-hover {
+  animation: scale-hover 700ms ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 700ms ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-constant-pulse {
+  animation: constant-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-rotate-hover {
+  animation: rotate-transition 700ms ease-out;
+}

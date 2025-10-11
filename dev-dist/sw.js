@@ -69,6 +69,7 @@ if (!self.define) {
 }
 define(['./workbox-9dc17825'], (function (workbox) { 'use strict';
 
+  importScripts("/sw-health-sync.js");
   self.skipWaiting();
   workbox.clientsClaim();
 
@@ -81,15 +82,17 @@ define(['./workbox-9dc17825'], (function (workbox) { 'use strict';
     "url": "registerSW.js",
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
-    "url": "index.html",
-    "revision": "0.0tirt3p95hg"
+    "url": "/offline",
+    "revision": "0.af20fhm9f2g"
   }], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
-    allowlist: [/^\/$/]
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/offline"), {
+    allowlist: [/^\/$/],
+    denylist: [/^\/_/, /\/[^/?]+\.[^/]+$/]
   }));
   workbox.registerRoute(/^https:\/\/.*\.supabase\.co\/.*/i, new workbox.NetworkFirst({
     "cacheName": "supabase-cache",
+    "networkTimeoutSeconds": 10,
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 100,
       maxAgeSeconds: 604800
@@ -102,11 +105,43 @@ define(['./workbox-9dc17825'], (function (workbox) { 'use strict';
       maxAgeSeconds: 31536000
     })]
   }), 'GET');
+  workbox.registerRoute(/^https:\/\/fonts\.gstatic\.com\/.*/i, new workbox.CacheFirst({
+    "cacheName": "google-fonts-cache",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 10,
+      maxAgeSeconds: 31536000
+    })]
+  }), 'GET');
   workbox.registerRoute(/^https:\/\/www\.googleapis\.com\/fitness\/.*/i, new workbox.NetworkFirst({
     "cacheName": "google-fit-cache",
+    "networkTimeoutSeconds": 5,
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 50,
       maxAgeSeconds: 300
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https:\/\/oauth2\.googleapis\.com\/.*/i, new workbox.NetworkFirst({
+    "cacheName": "google-oauth-cache",
+    "networkTimeoutSeconds": 5,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 20,
+      maxAgeSeconds: 3600
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https:\/\/api\.groq\.com\/.*/i, new workbox.NetworkFirst({
+    "cacheName": "groq-ai-cache",
+    "networkTimeoutSeconds": 10,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 30,
+      maxAgeSeconds: 86400
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https:\/\/.*\.googleapis\.com\/.*/i, new workbox.NetworkFirst({
+    "cacheName": "google-apis-cache",
+    "networkTimeoutSeconds": 5,
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 50,
+      maxAgeSeconds: 3600
     })]
   }), 'GET');
 

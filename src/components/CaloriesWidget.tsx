@@ -4,6 +4,7 @@ import { Target, Utensils, Flame } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
+import { getDateRangeInUserTimezone } from '@/lib/timezone';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs } from '@/lib/nutrition';
 
 interface CaloriesData {
@@ -29,7 +30,8 @@ export function CaloriesWidget() {
 
     setLoading(true);
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const todayRange = getDateRangeInUserTimezone();
+      const today = todayRange.dateString;
 
       // Fetch meal plans for today
       const { data: mealPlans } = await supabase
@@ -43,8 +45,8 @@ export function CaloriesWidget() {
         .from('food_logs')
         .select('*')
         .eq('user_id', user.id)
-        .gte('logged_at', `${today}T00:00:00`)
-        .lte('logged_at', `${today}T23:59:59`);
+        .gte('logged_at', todayRange.start)
+        .lte('logged_at', todayRange.end);
 
       // Fetch today's wearable calories burned
       const { data: wearableToday } = await (supabase as any)

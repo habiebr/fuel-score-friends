@@ -27,6 +27,7 @@ import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, compute
 import { calculateBMR } from '@/lib/nutrition-engine';
 import { getWeeklyGoogleFitData, getWeeklyMileageTarget } from '@/lib/weekly-google-fit';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
+import { getTodayInUserTimezone, getDateRangeInUserTimezone } from '@/lib/timezone';
 
 // Per-user TTL cache for main dashboard
 const DASHBOARD_MAIN_CACHE_KEY = 'dashboard:main:v1';
@@ -391,7 +392,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     setLoading((prev) => prev || !data);
 
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getTodayInUserTimezone();
+      const todayRange = getDateRangeInUserTimezone();
 
       const scoringPromise = Promise.allSettled([
         getTodayUnifiedScore(user.id, 'runner-focused'),
@@ -425,8 +427,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           .from('food_logs')
           .select('*')
           .eq('user_id', user.id)
-          .gte('logged_at', `${today}T00:00:00`)
-          .lte('logged_at', `${today}T23:59:59`),
+          .gte('logged_at', todayRange.start)
+          .lte('logged_at', todayRange.end),
         (supabase as any)
           .from('profiles')
           .select('age, sex, weight_kg, height_cm, activity_level')
@@ -577,7 +579,12 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       const [todayScoreOutcome, weeklyScoreOutcome] = await scoringPromise;
       if (todayScoreOutcome.status === 'fulfilled') {
         setTodayScore(todayScoreOutcome.value.score);
-        setTodayBreakdown(todayScoreOutcome.value.breakdown);
+        setTodayBreakdown({
+          nutrition: todayScoreOutcome.value.breakdown.nutrition.total,
+          training: todayScoreOutcome.value.breakdown.training.total,
+          bonuses: todayScoreOutcome.value.breakdown.bonuses,
+          penalties: todayScoreOutcome.value.breakdown.penalties
+        });
       } else {
         setTodayScore(0);
         setTodayBreakdown({ nutrition: 0, training: 0 });

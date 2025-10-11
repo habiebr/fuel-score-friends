@@ -5,6 +5,7 @@ import { Target, Utensils, Flame, Zap, TrendingUp, Loader2 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
+import { getDateRangeInUserTimezone } from '@/lib/timezone';
 import { deriveMacrosFromCalories } from '@/lib/nutrition';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, adjustedPlannedCaloriesForActivity } from '@/lib/nutrition';
 
@@ -56,7 +57,8 @@ export function CombinedNutritionWidget() {
 
     setLoading(true);
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const todayRange = getDateRangeInUserTimezone();
+      const today = todayRange.dateString;
 
       // Fetch user profile for activity level
       const { data: profile } = await supabase
@@ -77,8 +79,8 @@ export function CombinedNutritionWidget() {
         .from('food_logs')
         .select('*')
         .eq('user_id', user.id)
-        .gte('logged_at', `${today}T00:00:00`)
-        .lte('logged_at', `${today}T23:59:59`);
+        .gte('logged_at', todayRange.start)
+        .lte('logged_at', todayRange.end);
 
       // Fetch today's wearable calories burned
       const { data: wearableToday } = await (supabase as any)

@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { getDateRangeFromString } from '@/lib/timezone';
 import { 
   calculateUnifiedScore, 
   calculateMealScores, 
@@ -83,12 +84,13 @@ export async function getDailyUnifiedScore(
   };
 
   // Fetch food logs for the day
+  const dateRange = getDateRangeFromString(dateISO);
   const { data: foodLogs } = await supabase
     .from('food_logs')
     .select('meal_type, calories, protein_grams, carbs_grams, fat_grams, logged_at')
     .eq('user_id', userId)
-    .gte('logged_at', `${dateISO}T00:00:00`)
-    .lte('logged_at', `${dateISO}T23:59:59`);
+    .gte('logged_at', dateRange.start)
+    .lte('logged_at', dateRange.end);
 
   // Calculate nutrition actuals
   const nutritionActuals = (foodLogs || []).reduce((acc, log) => ({
@@ -180,12 +182,13 @@ export async function getMealScores(
     .eq('date', dateISO);
 
   // Fetch food logs
+  const dateRange = getDateRangeFromString(dateISO);
   const { data: foodLogs } = await supabase
     .from('food_logs')
     .select('meal_type, calories, protein_grams, carbs_grams, fat_grams')
     .eq('user_id', userId)
-    .gte('logged_at', `${dateISO}T00:00:00`)
-    .lte('logged_at', `${dateISO}T23:59:59`);
+    .gte('logged_at', dateRange.start)
+    .lte('logged_at', dateRange.end);
 
   if (!mealPlans || mealPlans.length === 0) {
     return { scores: [], average: 0 };
