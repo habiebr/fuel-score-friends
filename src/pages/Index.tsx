@@ -7,6 +7,7 @@ import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { ActionFAB } from '@/components/ActionFAB';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -20,17 +21,8 @@ const Index = () => {
       if (!loading && !user) {
         navigate('/auth');
       } else if (!loading && user) {
-        // Check if user has seen onboarding
-        const { data } = await supabase
-          .from('user_preferences')
-          .select('value')
-          .eq('user_id', user.id)
-          .eq('key', 'onboarding')
-          .maybeSingle();
-        
-        if (!data?.value?.hasSeenOnboarding) {
-          setShowOnboarding(true);
-        }
+        // Onboarding disabled - always skip
+        setShowOnboarding(false);
       }
     };
     
