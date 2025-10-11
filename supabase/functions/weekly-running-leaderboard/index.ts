@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { isRunningSession, extractDistanceMeters, getSessionKey } from '../_shared/google-fit-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,24 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
   'Access-Control-Max-Age': '86400',
 };
-
-const RUN_KEYWORDS = [
-  'run',
-  'jog',
-  'marathon',
-  'trail',
-  'treadmill',
-  'road run',
-  'half',
-  '5k',
-  '10k'
-];
-
-const RUN_ACTIVITY_CODES = new Set([
-  '8', '57', '58', '59', '72',
-  '173', '174', '175', '176', '177', '178', '179', '180', '181', '182', '183', '184', '185', '186', '187', '188',
-  '3000', '3001'
-]);
 
 // Indonesian timezone offset (WIB = UTC+7)
 const INDONESIA_TIMEZONE_OFFSET_HOURS = 7;
@@ -47,90 +30,6 @@ function normalizeWeekStart(date: Date): Date {
   
   // Convert back to UTC
   return new Date(indonesianTime.getTime() - (INDONESIA_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000));
-}
-
-function isRunningSession(session: Record<string, unknown> | null | undefined): boolean {
-  if (!session) return false;
-  const candidates = [
-    session?.activity_type,
-    session?.activityType,
-    session?.activity,
-    session?.activityTypeId,
-    session?.name,
-    session?.description,
-    (session as any)?.raw?.activity_type,
-    (session as any)?.raw?.activityType,
-    (session as any)?.raw?.activity,
-    (session as any)?.raw?.activityTypeId,
-    (session as any)?.raw?.name,
-    (session as any)?.raw?.description,
-  ];
-
-  for (const candidate of candidates) {
-    if (candidate == null) continue;
-    const text = String(candidate).toLowerCase();
-    if (RUN_KEYWORDS.some(keyword => text.includes(keyword))) {
-      return true;
-    }
-    if (RUN_ACTIVITY_CODES.has(text)) {
-      return true;
-    }
-    const numeric = Number(candidate);
-    if (!Number.isNaN(numeric) && RUN_ACTIVITY_CODES.has(String(numeric))) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function extractDistanceMeters(session: Record<string, unknown> | null | undefined): number {
-  if (!session) return 0;
-  const candidates = [
-    (session as any)?._computed_distance_meters,
-    (session as any)?.distance_meters,
-    (session as any)?.distanceMeters,
-    (session as any)?.raw?._computed_distance_meters,
-    (session as any)?.raw?.distance_meters,
-    (session as any)?.raw?.distanceMeters,
-    (session as any)?.raw?.metrics?.distance,
-    (session as any)?.raw?.metrics?.distance_meters,
-  ];
-
-  for (const candidate of candidates) {
-    const parsed = Number(candidate);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-
-  return 0;
-}
-
-function getSessionKey(session: Record<string, unknown> | null | undefined): string | null {
-  if (!session) return null;
-  const id =
-    (session as any)?.session_id ??
-    (session as any)?.id ??
-    (session as any)?.raw?.session_id ??
-    (session as any)?.raw?.id;
-  if (id) return String(id);
-
-  const start =
-    (session as any)?.start_time ??
-    (session as any)?.startTimeMillis ??
-    (session as any)?.raw?.start_time ??
-    (session as any)?.raw?.startTimeMillis;
-  const end =
-    (session as any)?.end_time ??
-    (session as any)?.endTimeMillis ??
-    (session as any)?.raw?.end_time ??
-    (session as any)?.raw?.endTimeMillis;
-
-  if (start && end) {
-    return `${start}-${end}`;
-  }
-
-  return null;
 }
 
 serve(async (req) => {

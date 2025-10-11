@@ -1,131 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { isRunningSession, extractDistanceMeters, getSessionKey } from '../_shared/google-fit-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, cache-control, expires, pragma',
 };
-
-const RUN_KEYWORDS = [
-  'run',
-  'jog',
-  'marathon',
-  'trail',
-  'treadmill',
-  'road run',
-  'half',
-  '5k',
-  '10k'
-];
-
-const RUN_ACTIVITY_CODES = new Set([
-  '8', // Running
-  '57', // Running on sand
-  '58', // Running on stairs
-  '59', // Running on treadmill
-  '72', // Trail running
-  '173', // Running (general)
-  '174', // Running on treadmill (alternate)
-  '175', // Running outdoors
-  '176', // Running - high intensity
-  '177', // Running - sprint
-  '178', // Running - intervals
-  '179', // Running - long distance
-  '180', // Running - recovery
-  '181', // Running - tempo
-  '182', // Running - track
-  '183', // Running - cross country
-  '184', // Running - hill
-  '185', // Running - race
-  '186', // Running - warmup
-  '187', // Running - cooldown
-  '188', // Running - fartlek
-  '3000', // Custom running activity
-  '3001'
-]);
-
-function isRunningSession(session: any): boolean {
-  const candidates = [
-    session?.activity_type,
-    session?.activityType,
-    session?.activity,
-    session?.activityTypeId,
-    session?.name,
-    session?.description,
-    session?.raw?.activity_type,
-    session?.raw?.activityType,
-    session?.raw?.activity,
-    session?.raw?.activityTypeId,
-    session?.raw?.name,
-    session?.raw?.description
-  ];
-
-  for (const candidate of candidates) {
-    if (candidate == null) continue;
-    const text = String(candidate).toLowerCase();
-    if (RUN_KEYWORDS.some(keyword => text.includes(keyword))) {
-      return true;
-    }
-    if (RUN_ACTIVITY_CODES.has(text)) {
-      return true;
-    }
-    const numeric = Number(candidate);
-    if (!Number.isNaN(numeric) && RUN_ACTIVITY_CODES.has(String(numeric))) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function extractSessionDistanceMeters(session: any): number {
-  const candidates = [
-    session?._computed_distance_meters,
-    session?.distance_meters,
-    session?.distanceMeters,
-    session?.raw?._computed_distance_meters,
-    session?.raw?.distance_meters,
-    session?.raw?.distanceMeters,
-    session?.raw?.metrics?.distance,
-    session?.raw?.metrics?.distance_meters
-  ];
-
-  const numeric = candidates
-    .map(value => {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : 0;
-    })
-    .filter(value => value > 0);
-
-  if (numeric.length === 0) return 0;
-  return Math.max(...numeric);
-}
-
-function getSessionIdentifier(session: any): string | null {
-  const id =
-    session?.session_id ??
-    session?.id ??
-    session?.raw?.session_id ??
-    session?.raw?.id;
-  if (id) return String(id);
-
-  const start =
-    session?.start_time ??
-    session?.startTimeMillis ??
-    session?.raw?.start_time ??
-    session?.raw?.startTimeMillis;
-  const end =
-    session?.end_time ??
-    session?.endTimeMillis ??
-    session?.raw?.end_time ??
-    session?.raw?.endTimeMillis;
-
-  if (start && end) {
-    return `${start}-${end}`;
-  }
-
-  return null;
-}
 
 function getWeekStartStr(date: Date): string {
   const d = new Date(date);
@@ -207,9 +87,9 @@ serve(async (req) => {
         let hasRunningSession = false;
         for (const session of sessions) {
           if (!isRunningSession(session)) continue;
-          const sessionId = getSessionIdentifier(session);
+          const sessionId = getSessionKey(session);
           if (!sessionId) continue;
-          const distance = extractSessionDistanceMeters(session);
+          const distance = extractDistanceMeters(session);
           if (distance <= 0) continue;
           const existing = runningSessions.get(sessionId);
           if (!existing || distance > existing) {
@@ -232,9 +112,9 @@ serve(async (req) => {
 
       for (const session of sessionRows || []) {
         if (!isRunningSession(session)) continue;
-        const sessionId = getSessionIdentifier(session);
+        const sessionId = getSessionKey(session);
         if (!sessionId) continue;
-        const distance = extractSessionDistanceMeters(session);
+        const distance = extractDistanceMeters(session);
         if (distance <= 0) continue;
         const existing = runningSessions.get(sessionId);
         if (!existing || distance > existing) {

@@ -1,67 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { 
+  includedActivityCodes, 
+  excludedActivityCodes,
+  activityTypeNames 
+} from '../_shared/google-fit-activities.ts';
+import { normalizeSession as normalizeGoogleFitSession } from '../_shared/google-fit-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, cache-control, expires, pragma',
-};
-
-const includedActivityCodes = new Set([
-  '8', '9', '10', '57', '58', '59', '70', '71', '72', '108',
-  '112', '113', '116', '117', '118', '119', '122', '123', '124',
-  '134', '135', '138', '157', '169', '170', '171', '173', '174',
-  '175', '176', '177', '178', '179', '180', '181', '182', '183',
-  '184', '185', '186', '187', '188', '3000', '3001'
-]);
-
-const excludedActivityCodes = new Set([
-  '7', '93', '94', '143', '145'
-]);
-
-const activityTypeNames: Record<number, string> = {
-  7: 'Walking',
-  8: 'Running',
-  9: 'Jogging',
-  10: 'Sprinting',
-  57: 'Beach Run',
-  58: 'Stair Run',
-  59: 'Treadmill Run',
-  70: 'Extreme Biking',
-  71: 'Road Biking',
-  72: 'Trail Run',
-  108: 'Nordic Walking',
-  112: 'CrossFit',
-  113: 'Functional Training',
-  116: 'HIIT',
-  117: 'Spinning',
-  118: 'Stair Climb',
-  119: 'Indoor Cycling',
-  122: 'Treadmill Run',
-  123: 'Cycle Race',
-  124: 'Jump Rope',
-  134: 'Trail Bike',
-  135: 'HIIT',
-  138: 'Mountain Biking',
-  157: 'Hiking',
-  169: 'Swimming',
-  170: 'Open Water Swim',
-  171: 'Pool Swim',
-  173: 'Running',
-  174: 'Treadmill Running',
-  175: 'Outdoor Running',
-  176: 'High Intensity Run',
-  177: 'Sprint',
-  178: 'Interval Run',
-  179: 'Long Run',
-  180: 'Recovery Run',
-  181: 'Tempo Run',
-  182: 'Track Run',
-  183: 'Cross Country Run',
-  184: 'Hill Run',
-  185: 'Race',
-  186: 'Warmup Run',
-  187: 'Cooldown Run',
-  188: 'Fartlek Run',
 };
 
 function normalizeSession(session: any) {

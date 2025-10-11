@@ -1,6 +1,14 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import {
+  exerciseActivities,
+  excludedActivities,
+  includedActivityCodes,
+  excludedActivityCodes,
+  activityTypeNames
+} from '../_shared/google-fit-activities.ts';
+import { normalizeActivityName } from '../_shared/google-fit-utils.ts';
 
 interface HistoricalGoogleFitData {
   steps: number;
@@ -10,72 +18,6 @@ interface HistoricalGoogleFitData {
   heartRateAvg?: number;
   sessions: any[];
   date: string;
-}
-
-// Activity type mapping (from your fetch-google-fit-data function)
-const activityTypeNames: Record<number, string> = {
-  7: 'Walking',
-  8: 'Running',
-  9: 'Jogging',
-  10: 'Sprinting',
-  57: 'Beach Run',
-  58: 'Stair Run',
-  59: 'Treadmill Run',
-  70: 'Extreme Biking',
-  71: 'Road Biking',
-  72: 'Trail Run',
-  108: 'Nordic Walking',
-  112: 'CrossFit',
-  113: 'Functional Training',
-  116: 'HIIT',
-  117: 'Spinning',
-  118: 'Stair Climb',
-  119: 'Indoor Cycling',
-  122: 'Treadmill Run',
-  123: 'Cycle Race',
-  124: 'Jump Rope',
-  134: 'Trail Bike',
-  135: 'HIIT',
-  138: 'Mountain Biking',
-  157: 'Hiking',
-  169: 'Swimming',
-  170: 'Open Water Swim',
-  171: 'Pool Swim',
-  173: 'Running',
-  174: 'Treadmill Running',
-  175: 'Outdoor Running',
-};
-
-// Exercise activities to include (from your existing logic)
-const exerciseActivities = [
-  'running', 'jogging', 'sprint', 'cycling', 'biking', 'swimming',
-  'hiking', 'elliptical', 'rowing', 'soccer', 'basketball', 'tennis',
-  'strength_training', 'crossfit', 'yoga', 'pilates'
-];
-
-// Activities to exclude
-const excludedActivities = [
-  'walking', 'walk', 'strolling', 'dog_walking', 'commuting'
-];
-
-// Numeric codes for exercise activities
-const includedActivityCodes = new Set([
-  '8', '9', '10', '57', '58', '59', '70', '71', '72',
-  '112', '113', '116', '117', '118', '119', '122', '123',
-  '124', '138', '157', '169', '170', '171', '173', '174', '175'
-]);
-
-const excludedActivityCodes = new Set(['7', '93', '94', '143', '145']);
-
-function normalizeActivityName(session: any): string | null {
-  if (!session) return null;
-  const existing = String(session.name || session.description || '').trim();
-  if (existing) return existing;
-  const numericType = Number(session.activityType ?? session.activityTypeId ?? session.activity);
-  if (!Number.isNaN(numericType) && activityTypeNames[numericType]) {
-    return activityTypeNames[numericType];
-  }
-  return null;
 }
 
 function filterExerciseSessions(sessions: any[]): any[] {

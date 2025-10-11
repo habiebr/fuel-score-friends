@@ -618,49 +618,105 @@ export default function Meals() {
                     </div>
                   ) : (
                     <>
-                      <div className="grid grid-cols-7 gap-2">
-                        {weekDays.map((day) => (
-                          <div key={day} className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                            <div className="text-xs font-medium mb-1">{format(new Date(day), 'EEE')}</div>
-                            <div className="text-sm font-semibold">{weekTotals[day]?.calories || 0} kcal</div>
-                            <div className="text-[10px] text-muted-foreground">
-                              P {weekTotals[day]?.protein || 0} • C {weekTotals[day]?.carbs || 0} • F {weekTotals[day]?.fat || 0}
+                      <div className="grid grid-cols-7 gap-3">
+                        {weekDays.map((day) => {
+                          const isToday = day === format(new Date(), 'yyyy-MM-dd');
+                          const hasMeals = (weekTotals[day]?.calories || 0) > 0;
+                          return (
+                            <div 
+                              key={day} 
+                              className={`p-3 rounded-xl transition-all ${
+                                isToday 
+                                  ? 'bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 ring-2 ring-blue-500 dark:ring-blue-400' 
+                                  : hasMeals
+                                  ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 hover:shadow-md'
+                                  : 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800'
+                              }`}
+                            >
+                              <div className={`text-xs font-bold mb-2 ${isToday ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                {format(new Date(day), 'EEE')}
+                              </div>
+                              <div className={`text-lg font-bold mb-1 ${isToday ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>
+                                {weekTotals[day]?.calories || 0}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground font-medium mb-2">kcal</div>
+                              <div className="text-[9px] text-muted-foreground leading-tight">
+                                <div>P: {weekTotals[day]?.protein || 0}g</div>
+                                <div>C: {weekTotals[day]?.carbs || 0}g</div>
+                                <div>F: {weekTotals[day]?.fat || 0}g</div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       <div className="space-y-3">
-                        {weekDays.map((day) => (
-                          <Card key={`d-${day}`} className="border">
-                            <CardContent className="p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="font-semibold text-sm">{format(new Date(day), 'EEE, MMM d')}</div>
-                                <div className="text-sm text-muted-foreground">{weekTotals[day]?.calories || 0} kcal</div>
+                        {weekDays.map((day) => {
+                          const isToday = day === format(new Date(), 'yyyy-MM-dd');
+                          const hasMeals = (weekTotals[day]?.calories || 0) > 0;
+                          return (
+                            <Card 
+                              key={`d-${day}`} 
+                              className={`border transition-all ${
+                                isToday 
+                                  ? 'ring-2 ring-blue-500 dark:ring-blue-400 bg-blue-50/30 dark:bg-blue-900/10' 
+                                  : hasMeals 
+                                  ? 'hover:shadow-lg' 
+                                  : 'opacity-60'
+                              }`}
+                            >
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className={`font-bold text-base ${isToday ? 'text-blue-700 dark:text-blue-300' : ''}`}>
+                                  {format(new Date(day), 'EEE, MMM d')}
+                                  {isToday && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">Today</span>}
+                                </div>
+                                <div className="text-base font-bold">{weekTotals[day]?.calories || 0} kcal</div>
                               </div>
                               {(weekLogs[day] || []).length > 0 ? (
                                 <div className="space-y-2">
                                   {(weekLogs[day] || []).map((log) => (
-                                    <div key={log.id} className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 rounded-md p-2">
+                                    <div key={log.id} className="flex items-center justify-between bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg p-3 hover:shadow-md transition-all">
                                       <div className="flex-1 min-w-0">
-                                        <div className="font-medium truncate">{log.food_name}</div>
-                                        <div className="text-xs text-muted-foreground">{format(new Date(log.logged_at), 'hh:mm a')} • {log.meal_type}</div>
+                                        <div className="font-semibold truncate text-sm">{log.food_name}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                          <span className="inline-flex items-center gap-1">
+                                            <span>{format(new Date(log.logged_at), 'hh:mm a')}</span>
+                                            <span>•</span>
+                                            <span className="capitalize font-medium">{log.meal_type}</span>
+                                          </span>
+                                        </div>
                                       </div>
-                                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                        <span>P {log.protein_grams}g</span>
-                                        <span>C {log.carbs_grams}g</span>
-                                        <span>F {log.fat_grams}g</span>
-                                        <span className="font-semibold text-foreground">{log.calories} kcal</span>
+                                      <div className="flex items-center gap-4 text-xs ml-3">
+                                        <div className="text-center">
+                                          <div className="font-bold text-blue-600 dark:text-blue-400">{log.protein_grams}g</div>
+                                          <div className="text-[9px] text-muted-foreground">P</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="font-bold text-green-600 dark:text-green-400">{log.carbs_grams}g</div>
+                                          <div className="text-[9px] text-muted-foreground">C</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="font-bold text-yellow-600 dark:text-yellow-400">{log.fat_grams}g</div>
+                                          <div className="text-[9px] text-muted-foreground">F</div>
+                                        </div>
+                                        <div className="text-center bg-white dark:bg-gray-900 rounded-md px-2 py-1">
+                                          <div className="font-bold text-foreground">{log.calories}</div>
+                                          <div className="text-[9px] text-muted-foreground">kcal</div>
+                                        </div>
                                       </div>
                                     </div>
                                   ))}
                                 </div>
                               ) : (
-                                <div className="text-xs text-muted-foreground">No entries</div>
+                                <div className="text-center py-4 text-sm text-muted-foreground bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                                  No entries for this day
+                                </div>
                               )}
                             </CardContent>
                           </Card>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -830,14 +886,14 @@ export default function Meals() {
                 {aiPlan && (
                   <Card className="shadow-card">
                     <CardContent className="p-4">
-                      <h3 className="font-semibold text-base mb-3">AI Meal Plan (Today)</h3>
+                      <h3 className="font-semibold text-base mb-3">Meal Plan (Today)</h3>
                       {['breakfast','lunch','dinner','snack'].map((m) => aiPlan[m] ? (
                         <div key={m} className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
                           <div className="flex items-center justify-between mb-2">
                             <div className="capitalize font-medium">{m}</div>
-                            <div className="text-xs text-muted-foreground">Target: {aiPlan[m].target_calories} kcal</div>
+                            <div className="text-sm font-semibold">{aiPlan[m].target_calories} kcal</div>
                           </div>
-                          <div className="grid grid-cols-3 gap-3">
+                          <div className="grid grid-cols-3 gap-3 mb-3">
                             <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-2">
                               <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{aiPlan[m].target_protein}g</div>
                               <div className="text-xs text-muted-foreground">Protein</div>
@@ -852,9 +908,12 @@ export default function Meals() {
                             </div>
                           </div>
                           {Array.isArray(aiPlan[m].suggestions) && aiPlan[m].suggestions.length > 0 && (
-                            <ul className="mt-2 text-sm list-disc list-inside text-muted-foreground">
+                            <ul className="space-y-1">
                               {aiPlan[m].suggestions.slice(0,2).map((s: any, i: number) => (
-                                <li key={i}>{s.name} — {s.calories} kcal</li>
+                                <li key={i} className="flex items-center justify-between text-sm">
+                                  <span className="font-medium">{s.name}</span>
+                                  <span className="text-muted-foreground">{s.calories} kcal</span>
+                                </li>
                               ))}
                             </ul>
                           )}

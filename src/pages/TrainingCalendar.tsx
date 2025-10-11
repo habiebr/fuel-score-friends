@@ -110,14 +110,23 @@ export default function TrainingCalendar() {
             </Button>
           </div>
 
-          {/* Today's Training Widget */}
-          <div className="mb-6">
-            <TrainingNutritionWidget
-              selectedDate={new Date()}
-              activities={Object.values(activitiesByDate).flat()}
-              tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
-            />
-          </div>
+          {/* Today's Training Widget - Only show when actual Google Fit activity is detected */}
+          {(() => {
+            const today = format(new Date(), 'yyyy-MM-dd');
+            const todayActivities = activitiesByDate[today] || [];
+            const hasActualActivityToday = todayActivities.some(a => a.is_actual);
+            
+            // Only render the widget if there's actual activity detected for today
+            return hasActualActivityToday ? (
+              <div className="mb-6">
+                <TrainingNutritionWidget
+                  selectedDate={new Date()}
+                  activities={Object.values(activitiesByDate).flat()}
+                  tomorrowActivities={activitiesByDate[format(addDays(new Date(), 1), 'yyyy-MM-dd')] || []}
+                />
+              </div>
+            ) : null;
+          })()}
 
           <Card className="shadow-card">
             <CardHeader className="pb-4">
