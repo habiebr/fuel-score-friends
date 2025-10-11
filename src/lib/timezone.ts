@@ -2,6 +2,42 @@
  * Timezone utilities for handling user-specific date/time operations
  */
 
+// Indonesian timezone (WIB = UTC+7)
+const INDONESIA_TIMEZONE = 'Asia/Jakarta';
+
+/**
+ * Get the current date/time in Indonesian timezone
+ */
+export function getIndonesianTime(date: Date = new Date()): Date {
+  // Convert to Indonesian timezone
+  const indonesianTime = new Date(date.toLocaleString('en-US', { timeZone: INDONESIA_TIMEZONE }));
+  return indonesianTime;
+}
+
+/**
+ * Get the start of the current week (Monday 00:00) in Indonesian timezone
+ * Returns ISO string in UTC that represents Monday 00:00 WIB
+ */
+export function getWeekStartIndonesian(referenceDate?: Date): Date {
+  const now = referenceDate || new Date();
+  
+  // Get current time in Indonesian timezone
+  const indonesianTime = getIndonesianTime(now);
+  
+  // Get day of week (0 = Sunday, 1 = Monday, etc.)
+  const dayOfWeek = indonesianTime.getDay();
+  
+  // Calculate days to subtract to get to Monday
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  
+  // Create Monday 00:00:00 in Indonesian timezone
+  const monday = new Date(indonesianTime);
+  monday.setDate(monday.getDate() - daysToMonday);
+  monday.setHours(0, 0, 0, 0);
+  
+  return monday;
+}
+
 /**
  * Get the start and end of a date in the user's local timezone
  * This returns UTC timestamps that represent the local day boundaries

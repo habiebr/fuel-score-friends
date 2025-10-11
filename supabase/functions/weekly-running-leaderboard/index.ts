@@ -26,16 +26,27 @@ const RUN_ACTIVITY_CODES = new Set([
   '3000', '3001'
 ]);
 
+// Indonesian timezone offset (WIB = UTC+7)
+const INDONESIA_TIMEZONE_OFFSET_HOURS = 7;
+
 function normalizeWeekStart(date: Date): Date {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) {
+  // Convert to Indonesian time (UTC+7)
+  const indonesianTime = new Date(date.getTime() + (INDONESIA_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000));
+  
+  if (Number.isNaN(indonesianTime.getTime())) {
     throw new Error('Invalid date supplied to weekly-running-leaderboard');
   }
-  const day = d.getDay();
+  
+  // Get day of week in Indonesian time
+  const day = indonesianTime.getUTCDay();
   const diff = (day === 0 ? -6 : 1) - day; // Monday start
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  
+  // Set to Monday 00:00 Indonesian time
+  indonesianTime.setUTCDate(indonesianTime.getUTCDate() + diff);
+  indonesianTime.setUTCHours(0, 0, 0, 0);
+  
+  // Convert back to UTC
+  return new Date(indonesianTime.getTime() - (INDONESIA_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000));
 }
 
 function isRunningSession(session: Record<string, unknown> | null | undefined): boolean {

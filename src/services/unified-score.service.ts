@@ -6,7 +6,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { getDateRangeForQuery } from '@/lib/timezone';
+import { getDateRangeForQuery, getWeekStartIndonesian } from '@/lib/timezone';
 import { 
   calculateUnifiedScore, 
   calculateMealScores, 
@@ -278,13 +278,14 @@ export async function getMealScores(
 
 /**
  * Get weekly score from cached data (no recalculation)
+ * Week starts Monday 00:00 Indonesian time (WIB/UTC+7)
  */
 export async function getWeeklyScoreFromCache(
   userId: string,
   weekStart?: Date
 ): Promise<{ average: number; dailyScores: Array<{ date: string; score: number }> }> {
-  const startDate = weekStart || new Date();
-  startDate.setDate(startDate.getDate() - startDate.getDay() + 1); // Start of week (Monday)
+  // Get Monday 00:00 in Indonesian timezone
+  const startDate = weekStart || getWeekStartIndonesian();
   
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 6); // End of week (Sunday)
@@ -326,12 +327,13 @@ export async function getWeeklyUnifiedScore(
 
 /**
  * Get all users' weekly scores from cache for leaderboard
+ * Week starts Monday 00:00 Indonesian time (WIB/UTC+7)
  */
 export async function getAllUsersWeeklyScoresFromCache(
   weekStart?: Date
 ): Promise<Array<{ user_id: string; weekly_score: number; daily_scores: Array<{ date: string; score: number }> }>> {
-  const startDate = weekStart || new Date();
-  startDate.setDate(startDate.getDate() - startDate.getDay() + 1); // Start of week (Monday)
+  // Get Monday 00:00 in Indonesian timezone
+  const startDate = weekStart || getWeekStartIndonesian();
   
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 6); // End of week (Sunday)
