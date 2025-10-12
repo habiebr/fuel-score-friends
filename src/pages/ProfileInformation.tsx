@@ -148,6 +148,36 @@ export default function ProfileInformation() {
                   />
                 </div>
 
+                {/* Timezone */}
+                <div className="space-y-2">
+                  <Label htmlFor="timezone">Timezone</Label>
+                  <Select
+                    value={formData.timezone}
+                    onValueChange={(value) => setFormData({...formData, timezone: value})}
+                  >
+                    <SelectTrigger className="bg-gray-100 dark:bg-gray-800 border-0">
+                      <SelectValue placeholder="Select timezone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UTC">UTC (+0)</SelectItem>
+                      <SelectItem value="Asia/Jakarta">Asia/Jakarta (UTC+7)</SelectItem>
+                      <SelectItem value="Asia/Singapore">Asia/Singapore (UTC+8)</SelectItem>
+                      <SelectItem value="Asia/Shanghai">Asia/Shanghai (UTC+8)</SelectItem>
+                      <SelectItem value="Asia/Seoul">Asia/Seoul (UTC+9)</SelectItem>
+                      <SelectItem value="Asia/Tokyo">Asia/Tokyo (UTC+9)</SelectItem>
+                      <SelectItem value="Australia/Sydney">Australia/Sydney (UTC+11)</SelectItem>
+                      <SelectItem value="Pacific/Auckland">Pacific/Auckland (UTC+13)</SelectItem>
+                      <SelectItem value="America/Los_Angeles">Los Angeles (UTC-7)</SelectItem>
+                      <SelectItem value="America/New_York">New York (UTC-4)</SelectItem>
+                      <SelectItem value="Europe/London">London (UTC+1)</SelectItem>
+                      <SelectItem value="Europe/Paris">Paris (UTC+2)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Used for correctly logging meals and activities in your local time
+                  </p>
+                </div>
+
                 {/* Email */}
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -176,29 +206,6 @@ export default function ProfileInformation() {
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     Required for accurate BMR calculation (Mifflin-St Jeor equation)
-                  </p>
-                </div>
-
-                {/* Timezone */}
-                <div className="space-y-2">
-                  <Label htmlFor="timezone">Timezone</Label>
-                  <Select
-                    value={formData.timezone}
-                    onValueChange={(value) => setFormData({...formData, timezone: value})}
-                  >
-                    <SelectTrigger className="bg-gray-100 dark:bg-gray-800 border-0">
-                      <SelectValue placeholder="Select timezone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Asia/Jakarta">Asia/Jakarta (UTC+7)</SelectItem>
-                      <SelectItem value="Asia/Singapore">Asia/Singapore (UTC+8)</SelectItem>
-                      <SelectItem value="Asia/Tokyo">Asia/Tokyo (UTC+9)</SelectItem>
-                      <SelectItem value="UTC">UTC</SelectItem>
-                      {/* Add more timezone options as needed */}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Used for correctly logging meals and activities in your local time
                   </p>
                 </div>
 
