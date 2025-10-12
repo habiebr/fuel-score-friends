@@ -218,7 +218,8 @@ export default function Meals() {
       const totalsByDay: Record<string, { calories: number; protein: number; carbs: number; fat: number }> = {};
 
       (logs || []).forEach((log) => {
-        const day = (log.logged_at || '').slice(0, 10);
+        // Convert UTC timestamp to local date string to avoid timezone issues
+        const day = format(new Date(log.logged_at), 'yyyy-MM-dd');
         if (!grouped[day]) grouped[day] = [];
         grouped[day].push(log);
       });
