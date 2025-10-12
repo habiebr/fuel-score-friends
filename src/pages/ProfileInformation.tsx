@@ -29,7 +29,8 @@ export default function ProfileInformation() {
     sex: 'male',
     weight_kg: '',
     height_cm: '',
-    age: ''
+    age: '',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone // Default to browser timezone
   });
 
   useEffect(() => {
@@ -56,7 +57,8 @@ export default function ProfileInformation() {
         sex: data.sex || 'male',
         weight_kg: data.weight_kg?.toString() || '',
         height_cm: data.height_cm?.toString() || '',
-        age: data.age?.toString() || ''
+        age: data.age?.toString() || '',
+        timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
       });
     }
   };
@@ -75,6 +77,7 @@ export default function ProfileInformation() {
           weight_kg: parseFloat(formData.weight_kg) || null,
           height_cm: parseFloat(formData.height_cm) || null,
           age: parseInt(formData.age) || null,
+          timezone: formData.timezone,
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
 
@@ -173,6 +176,29 @@ export default function ProfileInformation() {
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     Required for accurate BMR calculation (Mifflin-St Jeor equation)
+                  </p>
+                </div>
+
+                {/* Timezone */}
+                <div className="space-y-2">
+                  <Label htmlFor="timezone">Timezone</Label>
+                  <Select
+                    value={formData.timezone}
+                    onValueChange={(value) => setFormData({...formData, timezone: value})}
+                  >
+                    <SelectTrigger className="bg-gray-100 dark:bg-gray-800 border-0">
+                      <SelectValue placeholder="Select timezone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Asia/Jakarta">Asia/Jakarta (UTC+7)</SelectItem>
+                      <SelectItem value="Asia/Singapore">Asia/Singapore (UTC+8)</SelectItem>
+                      <SelectItem value="Asia/Tokyo">Asia/Tokyo (UTC+9)</SelectItem>
+                      <SelectItem value="UTC">UTC</SelectItem>
+                      {/* Add more timezone options as needed */}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Used for correctly logging meals and activities in your local time
                   </p>
                 </div>
 
