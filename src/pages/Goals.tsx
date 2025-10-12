@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
+import { getUserTimezone, getLocalDateString } from '@/lib/timezone';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -435,44 +436,127 @@ export default function Goals() {
   };
 
   const handleSaveGoals = async () => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Not logged in",
+        description: "Please log in to save your goals",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setUploading(true);
     try {
+      console.log('Starting handleSaveGoals...');
+      
       // Start a transaction
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('No session found');
+      if (!session) {
+        throw new Error('No session found');
+      }
+      
+      console.log('Session found:', session.user?.id);
+      
+      // Validate required fields
+      if (!customGoalName.trim()) {
+        throw new Error('Please enter a goal name');
+      }
+      if (!raceGoal) {
+        throw new Error('Please select a race type');
+      }
+      if (!targetDate) {
+        throw new Error('Please select a target date');
+      }
+      if (!fitnessLevel) {
+        throw new Error('Please select your fitness level');
+      }
+      
+      console.log('Validation passed, proceeding with save...');
+      console.log('Goals to save:', {
+        goalName: customGoalName,
+        raceGoal,
+        targetDate,
+        fitnessLevel
+      });
 
       // 1. Update profile with goal info
-      const { error: profileError } = await supabase
+      console.log('Preparing profile update...');
+      
+      // Prepare weekly pattern data first to catch any potential JSON issues
+      const weeklyPattern = DAYS.map((day, idx) => {
+        const currentDate = datesOfWeek[idx];
+        const key = format(currentDate, 'yyyy-MM-dd');
+        const acts = activitiesByDate[key] || [];
+        
+        return {
+          day,
+          activities: acts.map(act => ({
+            activity_type: act.activity_type,
+            duration_minutes: Math.max(0, parseInt(String(act.duration_minutes)) || 0),
+            distance_km: act.distance_km ? parseFloat(String(act.distance_km)) || null : null,
+            intensity: act.intensity,
+            estimated_calories: Math.max(0, parseInt(String(act.estimated_calories)) || 0)
+          }))
+        };
+      });
+
+      console.log('Weekly pattern prepared:', weeklyPattern);
+      
+      const profileData = {
+        user_id: user.id,
+        fitness_goals: [customGoalName.trim()],
+        goal_type: raceGoal || null,
+        goal_name: customGoalName.trim() || null,
+        target_date: targetDate || null,
+        fitness_level: fitnessLevel || null,
+        activity_level: JSON.stringify(weeklyPattern)
+      };
+
+      console.log('Profile data to save:', profileData);
+
+      const { data: savedProfile, error: profileError } = await supabase
         .from('profiles')
-        .upsert({
-          user_id: user.id,
-          fitness_goals: [customGoalName.trim()],
-          goal_type: raceGoal || null,
-          goal_name: customGoalName.trim() || null,
-          target_date: targetDate || null,
-          fitness_level: fitnessLevel || null
-        }, {
+        .upsert(profileData, {
           onConflict: 'user_id'
         });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('Profile update failed:', profileError);
+        throw new Error(`Profile update failed: ${profileError.message}`);
+      }
 
-      // 2. Persist only the current week's training plan
+      console.log('Profile updated successfully:', savedProfile);
+
+      // 2. Persist the current week's training plan
       const startDateObj = datesOfWeek[0];
       const endDateObj = addDays(weekStart, 6);
 
-      // delete existing activities for this week only
+      console.log('Starting training activities update...');
+      
+      // Delete existing activities for this week only
+      const deleteStartDate = format(startDateObj, 'yyyy-MM-dd');
+      const deleteEndDate = format(endDateObj, 'yyyy-MM-dd');
+      
+      console.log('Deleting activities for date range:', {
+        start: deleteStartDate,
+        end: deleteEndDate
+      });
+
       const { error: delErr } = await (supabase as any)
         .from('training_activities')
         .delete()
         .eq('user_id', user.id)
-        .gte('date', format(startDateObj, 'yyyy-MM-dd'))
-        .lte('date', format(endDateObj, 'yyyy-MM-dd'));
-      if (delErr) throw delErr;
+        .gte('date', deleteStartDate)
+        .lte('date', deleteEndDate);
 
-      // Save only the current week's activities
+      if (delErr) {
+        console.error('Failed to delete existing activities:', delErr);
+        throw new Error(`Failed to delete existing activities: ${delErr.message}`);
+      }
+
+      console.log('Successfully deleted existing activities');
+
+      // Prepare new activities
       const rows: any[] = [];
       datesOfWeek.forEach((date) => {
         const key = format(date, 'yyyy-MM-dd');
@@ -483,24 +567,45 @@ export default function Goals() {
             date: key,
             activity_type: act.activity_type,
             start_time: act.start_time,
-            duration_minutes: act.duration_minutes,
-            distance_km: act.distance_km,
+            duration_minutes: Math.max(0, parseInt(String(act.duration_minutes)) || 0),
+            distance_km: act.distance_km ? parseFloat(String(act.distance_km)) || null : null,
             intensity: act.intensity,
-            estimated_calories: act.estimated_calories,
+            estimated_calories: Math.max(0, parseInt(String(act.estimated_calories)) || 0),
             notes: act.notes,
           });
         });
       });
 
+      console.log('Prepared activities to insert:', rows);
+
       if (rows.length > 0) {
-        const { error: insErr } = await (supabase as any).from('training_activities').insert(rows);
-        if (insErr) throw insErr;
+        const { data: insertedRows, error: insErr } = await (supabase as any)
+          .from('training_activities')
+          .insert(rows)
+          .select();
+
+        if (insErr) {
+          console.error('Failed to insert activities:', insErr);
+          throw new Error(`Failed to insert activities: ${insErr.message}`);
+        }
+
+        console.log('Successfully inserted activities:', insertedRows);
+      } else {
+        console.log('No activities to insert');
       }
 
       // 3. Regenerate meal plans for this week only
+      console.log('Starting meal plan generation...');
+
       const startDate = format(startDateObj, 'yyyy-MM-dd');
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-      await supabase.functions.invoke('generate-meal-plan-range', {
+      
+      console.log('Invoking meal plan generation for:', {
+        startDate,
+        weeks: 1
+      });
+
+      const { data: mealPlanData, error: mealPlanError } = await supabase.functions.invoke('generate-meal-plan-range', {
         body: { startDate, weeks: 1 },
         headers: {
           ...(apiKey ? { apikey: apiKey } : {}),
@@ -508,13 +613,42 @@ export default function Goals() {
         }
       });
 
+      if (mealPlanError) {
+        console.error('Meal plan generation failed:', mealPlanError);
+        // Don't throw here as meal plan generation is not critical
+        toast({
+          title: "Note",
+          description: "Goals saved, but meal plan generation failed. Your meal plans may need to be regenerated.",
+          variant: "default",
+        });
+      } else {
+        console.log('Meal plan generation successful:', mealPlanData);
+      }
+
       toast({
         title: "Goals & Weekly Pattern saved!",
         description: "Your running goal and base weekly training pattern have been saved",
       });
 
     } catch (error) {
-      console.error('Error saving goals:', error);
+      console.error('Error in handleSaveGoals:', error);
+      // More detailed error logging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      }
+      // If it's a Supabase error, it might have additional details
+      const supabaseError = error as any;
+      if (supabaseError?.code || supabaseError?.details || supabaseError?.hint) {
+        console.error('Supabase error details:', {
+          code: supabaseError.code,
+          details: supabaseError.details,
+          hint: supabaseError.hint
+        });
+      }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast({
         title: "Save failed",

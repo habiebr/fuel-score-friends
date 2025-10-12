@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, subDays } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
 import { getMealScores } from '@/services/unified-score.service';
+import { getDateRangeForQuery, utcToLocalDateString } from '@/lib/timezone';
 
 interface FoodLog {
   id: string;
@@ -59,12 +60,16 @@ export default function MealHistory() {
       const startDate = format(currentWeekStart, 'yyyy-MM-dd');
       const endDate = format(new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
 
+      // Get date range in user's timezone
+      const { start: startTime } = getDateRangeForQuery(startDate);
+      const { end: endTime } = getDateRangeForQuery(endDate);
+
       const { data: logs } = await supabase
         .from('food_logs')
         .select('*')
         .eq('user_id', user.id)
-        .gte('logged_at', `${startDate}T00:00:00`)
-        .lte('logged_at', `${endDate}T23:59:59`)
+        .gte('logged_at', startTime)
+        .lte('logged_at', endTime)
         .order('logged_at', { ascending: false });
 
       // Build 7 dates for the week
@@ -89,7 +94,7 @@ export default function MealHistory() {
 
       const days = dates.map((dateStr) => {
         const dayLogs = logs?.filter(log => 
-          format(new Date(log.logged_at), 'yyyy-MM-dd') === dateStr
+          utcToLocalDateString(log.logged_at) === dateStr
         ) || [];
 
         const totalCalories = dayLogs.reduce((sum, log) => sum + (log.calories || 0), 0);

@@ -2,37 +2,40 @@
  * Timezone utilities for handling user-specific date/time operations
  */
 
-// Indonesian timezone (WIB = UTC+7)
-const INDONESIA_TIMEZONE = 'Asia/Jakarta';
+// Get user's local timezone from browser
+export function getUserTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
 
 /**
- * Get the current date/time in Indonesian timezone
+ * Get the current date/time in user's local timezone
  */
-export function getIndonesianTime(date: Date = new Date()): Date {
-  // Convert to Indonesian timezone
-  const indonesianTime = new Date(date.toLocaleString('en-US', { timeZone: INDONESIA_TIMEZONE }));
-  return indonesianTime;
+export function getLocalTime(date: Date = new Date()): Date {
+  const userTimezone = getUserTimezone();
+  return new Date(date.toLocaleString('en-US', { timeZone: userTimezone }));
 }
 
 /**
  * Get the start of the current week (Monday 00:00) in Indonesian timezone
  * Returns ISO string in UTC that represents Monday 00:00 WIB
  */
-export function getWeekStartIndonesian(referenceDate?: Date): Date {
+export function getWeekStart(referenceDate?: Date): Date {
   const now = referenceDate || new Date();
   
-  // Get current time in Indonesian timezone
-  const indonesianTime = getIndonesianTime(now);
+  // Get current time in user's timezone
+  const localTime = getLocalTime(now);
   
   // Get day of week (0 = Sunday, 1 = Monday, etc.)
-  const dayOfWeek = indonesianTime.getDay();
+  const dayOfWeek = localTime.getDay();
   
-  // Calculate days to subtract to get to Monday
-  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    // Calculate days to subtract to get to Monday
+  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   
-  // Create Monday 00:00:00 in Indonesian timezone
-  const monday = new Date(indonesianTime);
-  monday.setDate(monday.getDate() - daysToMonday);
+  // Create a new date for Monday by subtracting the days
+  const monday = new Date(localTime);
+  monday.setDate(localTime.getDate() - daysToSubtract);
+  
+  // Set to start of day (00:00:00.000)
   monday.setHours(0, 0, 0, 0);
   
   return monday;

@@ -9,27 +9,29 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-// Indonesian timezone offset (WIB = UTC+7)
-const INDONESIA_TIMEZONE_OFFSET_HOURS = 7;
+// Default to UTC+7 if no timezone offset provided
+const DEFAULT_TIMEZONE_OFFSET_HOURS = 7;
 
-function normalizeWeekStart(date: Date): Date {
-  // Convert to Indonesian time (UTC+7)
-  const indonesianTime = new Date(date.getTime() + (INDONESIA_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000));
+function normalizeWeekStart(date: Date, timezoneOffset?: number): Date {
+  // Use provided timezone offset or default to UTC+7
+  const offsetHours = typeof timezoneOffset === 'number' ? timezoneOffset : DEFAULT_TIMEZONE_OFFSET_HOURS;
+  // Convert to local time using offset
+  const localTime = new Date(date.getTime() + (offsetHours * 60 * 60 * 1000));
   
-  if (Number.isNaN(indonesianTime.getTime())) {
+  if (Number.isNaN(localTime.getTime())) {
     throw new Error('Invalid date supplied to weekly-running-leaderboard');
   }
   
-  // Get day of week in Indonesian time
-  const day = indonesianTime.getUTCDay();
+  // Get day of week in local time
+  const day = localTime.getUTCDay();
   const diff = (day === 0 ? -6 : 1) - day; // Monday start
   
-  // Set to Monday 00:00 Indonesian time
-  indonesianTime.setUTCDate(indonesianTime.getUTCDate() + diff);
-  indonesianTime.setUTCHours(0, 0, 0, 0);
+  // Set to Monday 00:00 local time
+  localTime.setUTCDate(localTime.getUTCDate() + diff);
+  localTime.setUTCHours(0, 0, 0, 0);
   
   // Convert back to UTC
-  return new Date(indonesianTime.getTime() - (INDONESIA_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000));
+  return new Date(localTime.getTime() - (offsetHours * 60 * 60 * 1000));
 }
 
 serve(async (req) => {

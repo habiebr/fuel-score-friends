@@ -15,6 +15,19 @@ import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { PageHeading } from '@/components/PageHeading';
 
+const TIMEZONE_OPTIONS = [
+  { value: 'UTC', label: 'UTC (+0)', offset: 0 },
+  { value: 'Asia/Jakarta', label: 'Asia/Jakarta (UTC+7)', offset: 7 },
+  { value: 'Asia/Singapore', label: 'Asia/Singapore (UTC+8)', offset: 8 },
+  { value: 'Asia/Shanghai', label: 'Asia/Shanghai (UTC+8)', offset: 8 },
+  { value: 'Asia/Seoul', label: 'Asia/Seoul (UTC+9)', offset: 9 },
+  { value: 'Asia/Tokyo', label: 'Asia/Tokyo (UTC+9)', offset: 9 },
+  { value: 'Australia/Sydney', label: 'Australia/Sydney (UTC+11)', offset: 11 },
+  { value: 'Pacific/Auckland', label: 'Pacific/Auckland (UTC+13)', offset: 13 },
+  { value: 'America/Los_Angeles', label: 'Los Angeles (UTC-7)', offset: -7 },
+  { value: 'America/New_York', label: 'New York (UTC-4)', offset: -4 }
+];
+
 export default function ProfileInformation() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -159,22 +172,18 @@ export default function ProfileInformation() {
                       <SelectValue placeholder="Select timezone" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="UTC">UTC (+0)</SelectItem>
-                      <SelectItem value="Asia/Jakarta">Asia/Jakarta (UTC+7)</SelectItem>
-                      <SelectItem value="Asia/Singapore">Asia/Singapore (UTC+8)</SelectItem>
-                      <SelectItem value="Asia/Shanghai">Asia/Shanghai (UTC+8)</SelectItem>
-                      <SelectItem value="Asia/Seoul">Asia/Seoul (UTC+9)</SelectItem>
-                      <SelectItem value="Asia/Tokyo">Asia/Tokyo (UTC+9)</SelectItem>
-                      <SelectItem value="Australia/Sydney">Australia/Sydney (UTC+11)</SelectItem>
-                      <SelectItem value="Pacific/Auckland">Pacific/Auckland (UTC+13)</SelectItem>
-                      <SelectItem value="America/Los_Angeles">Los Angeles (UTC-7)</SelectItem>
-                      <SelectItem value="America/New_York">New York (UTC-4)</SelectItem>
-                      <SelectItem value="Europe/London">London (UTC+1)</SelectItem>
-                      <SelectItem value="Europe/Paris">Paris (UTC+2)</SelectItem>
+                      {TIMEZONE_OPTIONS.map(tz => (
+                        <SelectItem key={tz.value} value={tz.value}>
+                          {tz.label} {tz.value === Intl.DateTimeFormat().resolvedOptions().timeZone && '(Browser Default)'}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Used for correctly logging meals and activities in your local time
+                    {formData.timezone === Intl.DateTimeFormat().resolvedOptions().timeZone ? 
+                      "Using your browser's timezone for accurate time tracking" :
+                      "Used for correctly logging meals and activities in your local time"
+                    }
                   </p>
                 </div>
 
