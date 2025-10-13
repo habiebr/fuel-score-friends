@@ -589,10 +589,43 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         sessions: todayGoogleFitData?.sessions || []
       };
 
-      // Determine training load from today's activity (science-based approach)
-      const determineTrainingLoad = (data: typeof exerciseData): TrainingLoad => {
-        const activeMinutes = data.active_minutes || 0;
-        const distanceKm = (data.distance_meters || 0) / 1000;
+      // Determine training load - PREFER PLANNED TRAINING over actual activity
+      const determineTrainingLoad = async (): Promise<TrainingLoad> => {
+        // 1. Check for planned training from training_activities table
+        const today = getLocalDateString(new Date());
+        const { data: plannedActivities } = await (supabase as any)
+          .from('training_activities')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('date', today);
+        
+        if (plannedActivities && plannedActivities.length > 0) {
+          // Use planned training to determine load
+          const totalDuration = plannedActivities.reduce((sum: number, act: any) => sum + (act.duration_minutes || 0), 0);
+          const totalDistance = plannedActivities.reduce((sum: number, act: any) => sum + (act.distance_km || 0), 0);
+          const hasRest = plannedActivities.some((act: any) => act.activity_type === 'rest');
+          const hasHighIntensity = plannedActivities.some((act: any) => act.intensity === 'high');
+          
+          console.log('📅 Using PLANNED training from training_activities:', {
+            activities: plannedActivities.length,
+            totalDuration,
+            totalDistance,
+            hasRest,
+            hasHighIntensity
+          });
+          
+          // Classify based on planned workout
+          if (hasRest && plannedActivities.length === 1) return 'rest';
+          if (totalDistance >= 15) return 'long';
+          if (hasHighIntensity || (totalDuration >= 60 && totalDistance >= 10)) return 'quality';
+          if (totalDuration >= 45 || totalDistance >= 8) return 'moderate';
+          return 'easy';
+        }
+        
+        // 2. Fallback: Infer from actual activity (Google Fit)
+        console.log('⚠️ No planned training found, inferring from actual Google Fit data');
+        const activeMinutes = exerciseData.active_minutes || 0;
+        const distanceKm = (exerciseData.distance_meters || 0) / 1000;
         
         // Rest day: minimal activity
         if (activeMinutes < 15 && distanceKm < 2) return 'rest';
@@ -610,7 +643,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         return 'moderate';
       };
 
-      const trainingLoad = determineTrainingLoad(exerciseData);
+      const trainingLoad = await determineTrainingLoad();
 
       // Calculate nutrition targets using SCIENCE LAYER (runner-specific)
       let targetCalories = 0;

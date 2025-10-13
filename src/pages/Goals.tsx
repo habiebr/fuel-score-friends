@@ -502,6 +502,9 @@ export default function Goals() {
 
       console.log('Weekly pattern prepared:', weeklyPattern);
       
+      // Get user's timezone
+      const userTimezone = getUserTimezone();
+      
       const profileData = {
         user_id: user.id,
         fitness_goals: [customGoalName.trim()],
@@ -509,7 +512,8 @@ export default function Goals() {
         goal_name: customGoalName.trim() || null,
         target_date: targetDate || null,
         fitness_level: fitnessLevel || null,
-        activity_level: JSON.stringify(weeklyPattern)
+        activity_level: JSON.stringify(weeklyPattern),
+        timezone: userTimezone // Fix: Add timezone to prevent NULL error
       };
 
       console.log('Profile data to save:', profileData);

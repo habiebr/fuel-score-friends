@@ -168,12 +168,45 @@ export default function Meals() {
       }
 
       if (profile) {
-        // Determine training load from today's activity (same logic as Dashboard)
-        const todayFitData = await getTodayData();
-        const activeMinutes = todayFitData?.activeMinutes || 0;
-        const distanceKm = (todayFitData?.distanceMeters || 0) / 1000;
-        
-        const determineTrainingLoad = (): TrainingLoad => {
+        // Determine training load - PREFER PLANNED TRAINING over actual activity
+        const determineTrainingLoad = async (): Promise<TrainingLoad> => {
+          // 1. Check for planned training from training_activities table
+          const today = getLocalDateString(new Date());
+          const { data: plannedActivities } = await (supabase as any)
+            .from('training_activities')
+            .select('*')
+            .eq('user_id', user?.id)
+            .eq('date', today);
+          
+          if (plannedActivities && plannedActivities.length > 0) {
+            // Use planned training to determine load
+            const totalDuration = plannedActivities.reduce((sum: number, act: any) => sum + (act.duration_minutes || 0), 0);
+            const totalDistance = plannedActivities.reduce((sum: number, act: any) => sum + (act.distance_km || 0), 0);
+            const hasRest = plannedActivities.some((act: any) => act.activity_type === 'rest');
+            const hasHighIntensity = plannedActivities.some((act: any) => act.intensity === 'high');
+            
+            console.log('📅 Meals Page - Using PLANNED training from training_activities:', {
+              activities: plannedActivities.length,
+              totalDuration,
+              totalDistance,
+              hasRest,
+              hasHighIntensity
+            });
+            
+            // Classify based on planned workout
+            if (hasRest && plannedActivities.length === 1) return 'rest';
+            if (totalDistance >= 15) return 'long';
+            if (hasHighIntensity || (totalDuration >= 60 && totalDistance >= 10)) return 'quality';
+            if (totalDuration >= 45 || totalDistance >= 8) return 'moderate';
+            return 'easy';
+          }
+          
+          // 2. Fallback: Infer from actual activity (Google Fit)
+          console.log('⚠️ Meals Page - No planned training found, inferring from actual Google Fit data');
+          const todayFitData = await getTodayData();
+          const activeMinutes = todayFitData?.activeMinutes || 0;
+          const distanceKm = (todayFitData?.distanceMeters || 0) / 1000;
+          
           if (activeMinutes < 15 && distanceKm < 2) return 'rest';
           if (activeMinutes < 45 || distanceKm < 8) return 'easy';
           if (distanceKm >= 15) return 'long';
@@ -181,7 +214,10 @@ export default function Meals() {
           return 'moderate';
         };
         
-        const trainingLoad = determineTrainingLoad();
+        const trainingLoad = await determineTrainingLoad();
+        
+        // Get today's Google Fit data for exercise calories
+        const todayFitData = await getTodayData();
         
         // Create profile object for nutrition-engine
         const userProfile = {
