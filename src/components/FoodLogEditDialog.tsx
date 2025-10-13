@@ -242,12 +242,12 @@ export function FoodLogEditDialog({ open, onOpenChange, foodLog, onSave, onDelet
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2 pt-4">
+          <div className="flex flex-col sm:flex-row gap-2 pt-4">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="flex-1"
+              className="w-full"
             >
               <X className="h-4 w-4 mr-2" />
               Cancel
@@ -258,7 +258,7 @@ export function FoodLogEditDialog({ open, onOpenChange, foodLog, onSave, onDelet
                 variant="destructive"
                 onClick={handleDelete}
                 disabled={loading}
-                className="flex-1"
+                className="w-full"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -271,7 +271,7 @@ export function FoodLogEditDialog({ open, onOpenChange, foodLog, onSave, onDelet
             <Button
               onClick={handleSave}
               disabled={loading}
-              className="flex-1"
+              className="w-full"
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
