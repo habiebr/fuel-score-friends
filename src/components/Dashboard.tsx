@@ -601,9 +601,33 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           sex: profile.sex
         });
         const activityMultiplier = profile.activity_level ? getActivityMultiplier(profile.activity_level) : 1.55;
-        targetCalories = Math.round(bmr * activityMultiplier);
-        macroTargets = deriveMacrosFromCalories(targetCalories);
-        console.log('📊 Nutrition targets calculated:', { bmr, activityMultiplier, targetCalories, macroTargets });
+        const baseCalories = Math.round(bmr * activityMultiplier);
+        
+        // Add calories burned from today's training to the target
+        const caloriesBurnedToday = exerciseData.calories_burned || 0;
+        targetCalories = baseCalories + caloriesBurnedToday;
+        
+        // Scale macros proportionally if exercise calories are significant
+        if (caloriesBurnedToday > 0) {
+          const baseMacros = deriveMacrosFromCalories(baseCalories);
+          const scale = targetCalories / baseCalories;
+          macroTargets = {
+            protein: Math.round(baseMacros.protein * scale),
+            carbs: Math.round(baseMacros.carbs * scale),
+            fat: Math.round(baseMacros.fat * scale)
+          };
+        } else {
+          macroTargets = deriveMacrosFromCalories(targetCalories);
+        }
+        
+        console.log('📊 Nutrition targets calculated:', { 
+          bmr, 
+          activityMultiplier, 
+          baseCalories,
+          caloriesBurnedToday,
+          targetCalories, 
+          macroTargets 
+        });
       }
 
       const plannedNutrition = accumulatePlannedFromMealPlans(rawMealPlans);

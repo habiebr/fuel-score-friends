@@ -177,8 +177,37 @@ export default function Meals() {
           ? getActivityMultiplier((profile as any).activity_level)
           : 1.5;
         
-        const calorieTarget = Math.round(bmr * activityMultiplier);
-        const macroTargets = deriveMacrosFromCalories(calorieTarget);
+        const baseCalories = Math.round(bmr * activityMultiplier);
+        
+        // Get today's Google Fit data to account for training calories
+        const todayFitData = await getTodayData();
+        const caloriesBurnedToday = todayFitData?.caloriesBurned || 0;
+        
+        // Add burned calories to target (you need to eat more on training days!)
+        const calorieTarget = baseCalories + caloriesBurnedToday;
+        
+        // Scale macros proportionally if exercise calories are significant
+        let macroTargets;
+        if (caloriesBurnedToday > 0) {
+          const baseMacros = deriveMacrosFromCalories(baseCalories);
+          const scale = calorieTarget / baseCalories;
+          macroTargets = {
+            protein: Math.round(baseMacros.protein * scale),
+            carbs: Math.round(baseMacros.carbs * scale),
+            fat: Math.round(baseMacros.fat * scale)
+          };
+        } else {
+          macroTargets = deriveMacrosFromCalories(calorieTarget);
+        }
+        
+        console.log('📊 Meals targets with training adjustment:', {
+          bmr,
+          activityMultiplier,
+          baseCalories,
+          caloriesBurnedToday,
+          calorieTarget,
+          macroTargets
+        });
         
         setTargets({
           calories: calorieTarget,
