@@ -15,6 +15,9 @@ fi
 echo "🔨 Building PWA..."
 npm run build:pwa
 
+echo "📝 Injecting runtime configuration..."
+./inject-config.sh
+
 echo "🌐 Deploying to Cloudflare Pages (main) ..."
 CLOUDFLARE_ACCOUNT_ID=5a73505af9ed48e44ce4caeaa0fdf73f \
 npx wrangler pages deploy dist --project-name nutrisync --branch=main --commit-dirty=true
