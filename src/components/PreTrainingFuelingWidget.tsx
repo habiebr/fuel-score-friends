@@ -40,6 +40,24 @@ export function PreTrainingFuelingWidget() {
   useEffect(() => {
     if (!user) return;
     loadTomorrowTraining();
+    
+    // Setup realtime subscription to training_activities
+    const channel = supabase
+      .channel('pre-fueling-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'training_activities',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        console.log('🏃 Training schedule changed - refreshing pre-fueling widget');
+        loadTomorrowTraining();
+      })
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const loadTomorrowTraining = async () => {

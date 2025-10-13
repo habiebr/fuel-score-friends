@@ -431,6 +431,15 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
+          table: 'training_activities',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          console.log('🏃 Training schedule changed - refreshing nutrition calculations');
+          debouncedRefresh();
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
           table: 'google_fit_data',
           filter: `user_id=eq.${user.id}`
         }, async (payload) => {
