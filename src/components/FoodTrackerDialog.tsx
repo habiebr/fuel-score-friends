@@ -256,10 +256,15 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-[95vw] sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Track Your Meal</DialogTitle>
-          <DialogDescription>Take a photo or upload an image of your food</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <Camera className="h-5 w-5" />
+            Food Tracker
+          </DialogTitle>
+          <DialogDescription>
+            Take or upload a photo of your food to log it automatically
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

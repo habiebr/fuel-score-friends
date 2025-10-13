@@ -28,13 +28,12 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-[95vw] sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle className="text-2xl">Welcome to Nutrisync!</DialogTitle>
-          <DialogDescription>Let's get you started in 3 simple steps</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-6 py-4">
+          <DialogTitle className="text-2xl font-bold text-center">
+            Welcome to NutriSync! 🎉
+          </DialogTitle>
+        </DialogHeader>        <div className="space-y-6 py-4">
           {/* Progress indicator */}
           <div className="flex justify-center gap-2">
             {[1, 2, 3].map((i) => (
