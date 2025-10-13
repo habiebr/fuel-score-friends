@@ -620,12 +620,19 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           macroTargets = deriveMacrosFromCalories(targetCalories);
         }
         
-        console.log('📊 Nutrition targets calculated:', { 
+        console.log('📊 Dashboard - Nutrition Calculation:', { 
+          profile: {
+            age: profile.age,
+            sex: profile.sex,
+            weight_kg: profile.weight_kg,
+            height_cm: profile.height_cm,
+            activity_level: profile.activity_level
+          },
           bmr, 
           activityMultiplier, 
           baseCalories,
           caloriesBurnedToday,
-          targetCalories, 
+          finalTarget: targetCalories, 
           macroTargets 
         });
       }

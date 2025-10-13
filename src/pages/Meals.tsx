@@ -165,17 +165,18 @@ export default function Meals() {
       }
 
       if (profile) {
-        // Use the same accurate calculation as Dashboard
+        // Use the EXACT same calculation as Dashboard - must match perfectly!
         const bmr = calculateBMR({
-          age: (profile as any).age || 30,
-          sex: (profile as any).sex || 'male',
-          weightKg: (profile as any).weight_kg || 70,
-          heightCm: (profile as any).height_cm || 170
+          age: profile.age || 30,
+          sex: profile.sex || 'male',
+          weightKg: profile.weight_kg || 70,
+          heightCm: profile.height_cm || 170
         });
         
-        const activityMultiplier = (profile as any)?.activity_level 
-          ? getActivityMultiplier((profile as any).activity_level)
-          : 1.5;
+        // MUST use same default as Dashboard (1.55, not 1.5)
+        const activityMultiplier = profile.activity_level 
+          ? getActivityMultiplier(profile.activity_level)
+          : 1.55;
         
         const baseCalories = Math.round(bmr * activityMultiplier);
         
@@ -200,12 +201,19 @@ export default function Meals() {
           macroTargets = deriveMacrosFromCalories(calorieTarget);
         }
         
-        console.log('📊 Meals targets with training adjustment:', {
+        console.log('📊 Meals Page - Nutrition Calculation:', {
+          profile: {
+            age: profile.age,
+            sex: profile.sex,
+            weight_kg: profile.weight_kg,
+            height_cm: profile.height_cm,
+            activity_level: profile.activity_level
+          },
           bmr,
           activityMultiplier,
           baseCalories,
           caloriesBurnedToday,
-          calorieTarget,
+          finalTarget: calorieTarget,
           macroTargets
         });
         
