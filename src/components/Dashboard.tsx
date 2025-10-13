@@ -20,6 +20,7 @@ import { TodayNutritionCard } from '@/components/TodayNutritionCard';
 import { WeeklyKilometersCard } from '@/components/WeeklyMilesCard';
 import { UpcomingWorkouts } from '@/components/UpcomingWorkouts';
 import { TodayInsightsCard } from '@/components/TodayInsightsCard';
+import { PreTrainingFuelingWidget } from '@/components/PreTrainingFuelingWidget';
 import { format, startOfWeek, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { RecoverySuggestion } from '@/components/RecoverySuggestion';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
@@ -1049,6 +1050,11 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         {/* 2. Marathon Countdown */}
         <div className="mb-5">
           <RaceGoalWidget />
+        </div>
+
+        {/* 2.5. Pre-Training Fueling Reminder (appears day before training) */}
+        <div className="mb-5">
+          <PreTrainingFuelingWidget />
         </div>
 
         {/* 3. Today's Nutrition Score */}
