@@ -545,3 +545,15 @@ export function generateMealPlan(dayTarget: DayTarget, includeSnack: boolean = f
   
   return result;
 }
+
+/**
+ * Wrapper function for backward compatibility
+ * Alias for calculateDayTarget with reordered parameters to match meal-planner expectations
+ */
+export function generateDayTarget(
+  profile: UserProfile,
+  dateISO: string,
+  load: TrainingLoad
+): DayTarget {
+  return calculateDayTarget(profile, load, dateISO);
+}
