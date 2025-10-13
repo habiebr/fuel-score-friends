@@ -48,65 +48,137 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
       return;
     }
 
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload an image smaller than 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setStage('uploading');
     setProgress(10);
     setNutritionData(null);
 
-    try {
-      setProgress(30);
-      
-      // Upload original file to Supabase Storage and get a signed URL
-      setProgress(40);
-      const userId = user?.id || 'anonymous';
-      const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-      const bucket = supabase.storage.from('food-photos');
-      const uploadRes = await bucket.upload(path, file, { upsert: true, contentType: file.type });
-      if (uploadRes.error) throw uploadRes.error;
-      const signed = await bucket.createSignedUrl(path, 600); // 10 minutes
-      if (signed.error || !signed.data?.signedUrl) throw signed.error || new Error('Failed to create signed URL');
+    let retryCount = 0;
+    const maxRetries = 2;
 
-      setStage('analyzing');
-      setProgress(60);
-      
-      const session = (await supabase.auth.getSession()).data.session;
-      const { data, error } = await supabase.functions.invoke('nutrition-ai', {
-        body: { 
-          type: 'food_photo',
-          image: signed.data.signedUrl,
-          mealType
-        },
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
-      });
+    const attemptUpload = async (): Promise<void> => {
+      try {
+        setProgress(30);
+        
+        // Upload original file to Supabase Storage with timeout
+        setProgress(40);
+        const userId = user?.id || 'anonymous';
+        const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+        const bucket = supabase.storage.from('food-photos');
+        
+        // Upload with timeout
+        const uploadPromise = bucket.upload(path, file, { upsert: true, contentType: file.type });
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Upload timeout - please check your internet connection')), 30000)
+        );
+        
+        const uploadRes = await Promise.race([uploadPromise, timeoutPromise]) as any;
+        if (uploadRes.error) throw uploadRes.error;
+        
+        const signed = await bucket.createSignedUrl(path, 600); // 10 minutes
+        if (signed.error || !signed.data?.signedUrl) throw signed.error || new Error('Failed to create signed URL');
 
-      if (error) {
-        console.error('Nutrition AI error:', error);
-        throw new Error(error.message || 'Failed to analyze food');
-      }
-
-      setProgress(90);
-
-      if (data?.nutritionData) {
-        setNutritionData(data.nutritionData);
-        setStage('complete');
-        setProgress(100);
-        toast({
-          title: "Food analyzed!",
-          description: `Found: ${data.nutritionData.food_name}`,
+        setStage('analyzing');
+        setProgress(60);
+        
+        // Call edge function with timeout and retry logic
+        const session = (await supabase.auth.getSession()).data.session;
+        
+        const invokePromise = supabase.functions.invoke('nutrition-ai', {
+          body: { 
+            type: 'food_photo',
+            image: signed.data.signedUrl,
+            mealType
+          },
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         });
-      } else {
-        throw new Error('No nutrition data received from AI');
+        
+        const edgeFunctionTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Analysis timeout - AI is taking too long to respond')), 60000)
+        );
+        
+        const { data, error } = await Promise.race([invokePromise, edgeFunctionTimeout]) as any;
+
+        if (error) {
+          console.error('Nutrition AI error:', error);
+          
+          // Check for network errors that can be retried
+          const isNetworkError = error.message?.includes('Failed to send') || 
+                                 error.message?.includes('network') ||
+                                 error.message?.includes('fetch') ||
+                                 error.message?.includes('NetworkError');
+          
+          if (isNetworkError && retryCount < maxRetries) {
+            retryCount++;
+            console.log(`Retrying... Attempt ${retryCount + 1} of ${maxRetries + 1}`);
+            toast({
+              title: "Connection issue",
+              description: `Retrying... (${retryCount}/${maxRetries})`,
+            });
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
+            return attemptUpload();
+          }
+          
+          throw new Error(error.message || 'Failed to analyze food');
+        }
+
+        setProgress(90);
+
+        if (data?.nutritionData) {
+          setNutritionData(data.nutritionData);
+          setStage('complete');
+          setProgress(100);
+          toast({
+            title: "Food analyzed!",
+            description: `Found: ${data.nutritionData.food_name}`,
+          });
+        } else {
+          throw new Error('No nutrition data received from AI');
+        }
+      } catch (error) {
+        console.error('Error analyzing food:', error);
+        
+        // More specific error messages
+        let errorTitle = "Analysis failed";
+        let errorMessage = "Unknown error occurred";
+        
+        if (error instanceof Error) {
+          if (error.message.includes('timeout')) {
+            errorTitle = "Request timed out";
+            errorMessage = "The request took too long. Please check your internet connection and try again.";
+          } else if (error.message.includes('Failed to send') || error.message.includes('NetworkError')) {
+            errorTitle = "Connection error";
+            errorMessage = "Unable to reach the server. Please check your internet connection and try again.";
+          } else if (error.message.includes('Failed to fetch')) {
+            errorTitle = "Network error";
+            errorMessage = "Network request failed. Please check your connection and try again.";
+          } else {
+            errorMessage = error.message;
+          }
+        }
+        
+        toast({
+          title: errorTitle,
+          description: errorMessage,
+          variant: "destructive",
+        });
+        setStage('idle');
+        setProgress(0);
       }
-    } catch (error) {
-      console.error('Error analyzing food:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast({
-        title: "Analysis failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      setStage('idle');
-      setProgress(0);
+    };
+
+    try {
+      await attemptUpload();
     } finally {
       event.target.value = '';
     }

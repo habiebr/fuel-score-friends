@@ -90,36 +90,49 @@ Analyze this food image and return nutrition data in this exact JSON format: {"f
 
       console.log('Sending food photo to Gemini 2.5 Flash...');
       
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: contents,
-      });
-
-      console.log('Gemini response received for food photo');
-      const aiResponse = response.text;
-      console.log('Raw Gemini response:', aiResponse);
-
-      // Parse the JSON response
       try {
-        // Remove markdown code blocks if present
-        let cleanedResponse = aiResponse.trim();
-        if (cleanedResponse.startsWith('```json')) {
-          cleanedResponse = cleanedResponse.replace(/^```json\s*\n/, '').replace(/\n```\s*$/, '');
-        } else if (cleanedResponse.startsWith('```')) {
-          cleanedResponse = cleanedResponse.replace(/^```\s*\n/, '').replace(/\n```\s*$/, '');
-        }
-        
-        const nutritionData = JSON.parse(cleanedResponse);
-        return new Response(JSON.stringify({ 
-          nutritionData,
-          type: type 
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: contents,
         });
-      } catch (parseError) {
-        console.error('Failed to parse nutrition data:', aiResponse);
+
+        console.log('Gemini response received for food photo');
+        const aiResponse = response.text;
+        console.log('Raw Gemini response:', aiResponse);
+
+        // Parse the JSON response
+        try {
+          // Remove markdown code blocks if present
+          let cleanedResponse = aiResponse.trim();
+          if (cleanedResponse.startsWith('```json')) {
+            cleanedResponse = cleanedResponse.replace(/^```json\s*\n/, '').replace(/\n```\s*$/, '');
+          } else if (cleanedResponse.startsWith('```')) {
+            cleanedResponse = cleanedResponse.replace(/^```\s*\n/, '').replace(/\n```\s*$/, '');
+          }
+          
+          const nutritionData = JSON.parse(cleanedResponse);
+          return new Response(JSON.stringify({ 
+            nutritionData,
+            type: type 
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } catch (parseError) {
+          console.error('Failed to parse nutrition data:', aiResponse);
+          return new Response(JSON.stringify({ 
+            error: 'Failed to parse nutrition data from AI response',
+            details: 'The AI returned an invalid format'
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } catch (geminiError) {
+        console.error('Gemini API error:', geminiError);
+        const errorMsg = geminiError instanceof Error ? geminiError.message : 'Gemini API failed';
         return new Response(JSON.stringify({ 
-          error: 'Failed to parse nutrition data from AI response' 
+          error: 'Failed to analyze image with AI',
+          details: errorMsg
         }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
