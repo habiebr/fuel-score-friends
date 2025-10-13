@@ -598,41 +598,38 @@ export default function Goals() {
         console.log('No activities to insert');
       }
 
-      // 3. Regenerate meal plans for this week only
-      console.log('Starting meal plan generation...');
-
-      const startDate = format(startDateObj, 'yyyy-MM-dd');
-      const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-      
-      console.log('Invoking meal plan generation for:', {
-        startDate,
-        weeks: 1
-      });
-
-      const { data: mealPlanData, error: mealPlanError } = await supabase.functions.invoke('generate-meal-plan-range', {
-        body: { startDate, weeks: 1 },
-        headers: {
-          ...(apiKey ? { apikey: apiKey } : {}),
-          Authorization: `Bearer ${session.access_token}`
-        }
-      });
-
-      if (mealPlanError) {
-        console.error('Meal plan generation failed:', mealPlanError);
-        // Don't throw here as meal plan generation is not critical
-        toast({
-          title: "Note",
-          description: "Goals saved, but meal plan generation failed. Your meal plans may need to be regenerated.",
-          variant: "default",
-        });
-      } else {
-        console.log('Meal plan generation successful:', mealPlanData);
-      }
-
+      // Success! Goals and training plan saved
       toast({
         title: "Goals & Weekly Pattern saved!",
         description: "Your running goal and base weekly training pattern have been saved",
       });
+
+      // 3. OPTIONAL: Regenerate meal plans in background (non-blocking)
+      // This runs after the success toast, so failures won't affect user experience
+      console.log('Scheduling background meal plan generation...');
+      
+      setTimeout(async () => {
+        try {
+          const startDate = format(startDateObj, 'yyyy-MM-dd');
+          
+          console.log('Background: Invoking meal plan generation for:', {
+            startDate,
+            weeks: 1
+          });
+
+          const { data: mealPlanData, error: mealPlanError } = await supabase.functions.invoke('generate-meal-plan-range', {
+            body: { startDate, weeks: 1 }
+          });
+
+          if (mealPlanError) {
+            console.warn('Background meal plan generation failed (non-critical):', mealPlanError);
+          } else {
+            console.log('Background meal plan generation successful:', mealPlanData);
+          }
+        } catch (bgError) {
+          console.warn('Background meal plan generation error (non-critical):', bgError);
+        }
+      }, 500); // Run after 500ms delay
 
     } catch (error) {
       console.error('Error in handleSaveGoals:', error);
