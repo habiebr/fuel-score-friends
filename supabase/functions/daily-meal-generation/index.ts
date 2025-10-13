@@ -1,9 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { corsHeaders } from "../_shared/cors.ts";
-import { getSupabaseAdmin } from "../_shared/env.ts";
+import { getSupabaseAdmin, getGroqKey } from "../_shared/env.ts";
 import { generateUserMealPlan, mealPlanToDbRecords } from "../_shared/meal-planner.ts";
 import { UserProfile } from "../_shared/nutrition-unified.ts";
+import { shouldUseAIToday, getCurrentDayOfWeek } from "../_shared/meal-rotation.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -74,14 +75,22 @@ serve(async (req) => {
           .eq('date', today)
           .maybeSingle();
 
-        // Generate meal plan using unified service (no AI for batch)
+        // HYBRID APPROACH: AI on Sundays, rotation templates on other days
+        const useAI = shouldUseAIToday();
+        const rotationDay = getCurrentDayOfWeek();
+        
+        console.log(`Generation strategy: ${useAI ? '🤖 AI (Weekly Refresh)' : '🔄 Template Rotation (Day ' + rotationDay + ')'}`);
+
+        // Generate meal plan using unified service
         const plan = await generateUserMealPlan({
           userId: user.user_id,
           date: today,
           userProfile: profile,
           trainingActivity: 'rest',
           googleFitCalories: fit?.calories_burned || 0,
-          useAI: false,
+          useAI: useAI,  // AI on Sundays, templates on other days
+          groqApiKey: useAI ? getGroqKey() : undefined,
+          rotationDay: rotationDay,  // Pass rotation day for template selection
         });
 
         const records = mealPlanToDbRecords(user.user_id, plan);

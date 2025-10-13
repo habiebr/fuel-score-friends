@@ -113,6 +113,15 @@ export interface ScoreBreakdown {
     nutrition: number;
     training: number;
   };
+  // Data completeness tracking
+  dataCompleteness?: {
+    hasBodyMetrics: boolean;
+    hasMealPlan: boolean;
+    hasFoodLogs: boolean;
+    mealsLogged: number;
+    reliable: boolean;
+    missingData: string[];
+  };
 }
 
 export interface MealScore {
@@ -165,7 +174,9 @@ const LOAD_WEIGHTS: Record<TrainingLoad, { nutrition: number; training: number }
  * Calculate macro score using piecewise function
  */
 function calculateMacroScore(actual: number, target: number): number {
-  if (target <= 0) return 100;
+  // If target is 0 or missing, this indicates missing meal plan data
+  // Return 0 instead of 100 to avoid rewarding incomplete data
+  if (target <= 0) return 0;
   
   const errorPercent = Math.abs(actual - target) / target;
   
@@ -327,6 +338,11 @@ export function calculateUnifiedScore(context: ScoringContext): ScoreBreakdown {
   const config = SCORING_CONFIG[strategy];
   const weights = LOAD_WEIGHTS[load];
   
+  // Check data completeness
+  const hasMealPlan = nutrition.target.calories > 0;
+  const hasFoodLogs = nutrition.actual.calories > 0 || nutrition.mealsPresent.length > 0;
+  const mealsLogged = nutrition.mealsPresent.length;
+  
   // Calculate macro scores
   const calorieScore = calculateMacroScore(nutrition.actual.calories, nutrition.target.calories);
   const proteinScore = calculateMacroScore(nutrition.actual.protein, nutrition.target.protein);
@@ -386,11 +402,35 @@ export function calculateUnifiedScore(context: ScoringContext): ScoreBreakdown {
     overconsumptionPenalty = config.overconsumptionPenalty;
   }
   
+  // Apply incomplete data penalty
+  let incompletePenalty = 0;
+  const missingData: string[] = [];
+  
+  // NOTE: We do NOT penalize for missing meal plan!
+  // The science layer can calculate targets from body metrics + training load
+  // So a user with body metrics but no database meal plan should still get appropriate scores
+  
+  if (!hasFoodLogs) {
+    // User didn't log any food - this deserves a penalty
+    incompletePenalty -= 30;
+    missingData.push('food logs');
+  }
+  if (mealsLogged === 0 && hasFoodLogs) {
+    // User logged food but not in structured meals
+    incompletePenalty -= 10;
+    missingData.push('structured meals');
+  }
+  
   // Calculate final score
   const baseScore = (nutritionTotal * weights.nutrition) + (trainingTotal * weights.training);
   const total = Math.max(0, Math.min(100, Math.round(
-    baseScore + modifiers.bonuses + modifiers.penalties - overconsumptionPenalty
+    baseScore + modifiers.bonuses + modifiers.penalties - overconsumptionPenalty + incompletePenalty
   )));
+  
+  // Determine if score is reliable
+  // NOTE: Meal plan is NOT required for reliability!
+  // As long as user has body metrics (checked in service layer), targets can be calculated
+  const reliable = hasFoodLogs && mealsLogged > 0;
   
   return {
     total,
@@ -407,8 +447,16 @@ export function calculateUnifiedScore(context: ScoringContext): ScoreBreakdown {
       intensity: Math.round(intensity.score),
     },
     bonuses: modifiers.bonuses,
-    penalties: modifiers.penalties,
+    penalties: modifiers.penalties + incompletePenalty,
     weights,
+    dataCompleteness: {
+      hasBodyMetrics: true, // Will be set by service layer
+      hasMealPlan,
+      hasFoodLogs,
+      mealsLogged,
+      reliable,
+      missingData,
+    },
   };
 }
 

@@ -155,6 +155,41 @@ export default function MealPlans() {
     }
   };
 
+  const refreshTodayWithAI = async () => {
+    if (!user) return;
+    setGenerating(true);
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const session = (await supabase.auth.getSession()).data.session;
+      const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      
+      const { error } = await supabase.functions.invoke('generate-meal-plan', {
+        body: { date: today, useAI: true },
+        headers: {
+          ...(apiKey ? { apikey: apiKey } : {}),
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+      });
+      
+      if (error) throw error;
+
+      await loadWeeklyPlans();
+      toast({ 
+        title: '🤖 AI Menu Generated!', 
+        description: 'New meal suggestions created for today.' 
+      });
+    } catch (err) {
+      console.error('Failed to generate AI menu', err);
+      toast({ 
+        title: 'Generation failed', 
+        description: 'Could not generate AI menu.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-background pb-20">
@@ -201,6 +236,10 @@ export default function MealPlans() {
             <Button onClick={() => navigate(`/shopping-list?start=${format(startDate, 'yyyy-MM-dd')}`)} variant="outline" className="flex items-center gap-2">
               <ShoppingCart className="h-4 w-4" />
               Shopping List
+            </Button>
+            <Button onClick={refreshTodayWithAI} disabled={generating} variant="secondary" className="flex items-center gap-2">
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+              {generating ? 'Generating…' : '🤖 AI Menu'}
             </Button>
             <Button onClick={generateWeek} disabled={generating} className="flex items-center gap-2">
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}

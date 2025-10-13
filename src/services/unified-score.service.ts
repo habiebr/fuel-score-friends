@@ -18,6 +18,11 @@ import {
   type TrainingLoad,
   type ScoringStrategy
 } from '@/lib/unified-scoring';
+import { 
+  calculateTDEE, 
+  calculateMacros,
+  type UserProfile
+} from '@/lib/nutrition-engine';
 import { format } from 'date-fns';
 
 export interface ScoreResult {
@@ -59,6 +64,56 @@ export async function getDailyUnifiedScore(
 
   console.log('Profile data:', profile);
 
+  // Validate body metrics exist
+  const hasBodyMetrics = profile && 
+                        profile.weight_kg && profile.weight_kg > 0 &&
+                        profile.height_cm && profile.height_cm > 0 &&
+                        profile.age && profile.age > 0;
+
+  if (!hasBodyMetrics) {
+    console.warn('⚠️ User missing body metrics:', userId);
+    // Return low score with incomplete data flag
+    const breakdown: ScoreBreakdown = {
+      total: 0,
+      nutrition: { total: 0, macros: 0, timing: 0, structure: 0 },
+      training: { total: 0, completion: 0, typeMatch: 0, intensity: 0 },
+      bonuses: 0,
+      penalties: -100,
+      weights: { nutrition: 1, training: 0 },
+      dataCompleteness: {
+        hasBodyMetrics: false,
+        hasMealPlan: false,
+        hasFoodLogs: false,
+        mealsLogged: 0,
+        reliable: false,
+        missingData: ['body metrics (weight, height, age)'],
+      },
+    };
+    
+    return {
+      score: 0,
+      breakdown,
+      context: null as any,
+    };
+  }
+
+  // Determine training load FIRST (needed for targets calculation)
+  // We'll fetch fitness data early to determine if user did any training
+  const dateRange = getDateRangeForQuery(dateISO);
+  const { data: fitData } = await (supabase as any)
+    .from('google_fit_data')
+    .select('sessions, calories_burned, active_minutes, distance_meters, heart_rate_avg')
+    .eq('user_id', userId)
+    .eq('date', dateISO)
+    .not('sessions', 'is', null);
+
+  const actualDurationMin = (fitData || []).reduce((s: number, r: any) => s + (r.active_minutes || 0), 0);
+  
+  // Determine training load from actual activity (we'll refine with plan later if it exists)
+  const inferredLoad: TrainingLoad = actualDurationMin > 90 ? 'long' : 
+                                      actualDurationMin > 60 ? 'moderate' : 
+                                      actualDurationMin > 30 ? 'easy' : 'rest';
+
   // Fetch meal plans for the day
   const { data: mealPlans } = await supabase
     .from('daily_meal_plans')
@@ -67,12 +122,48 @@ export async function getDailyUnifiedScore(
     .eq('date', dateISO);
 
   // Calculate nutrition targets
-  const nutritionTargets = (mealPlans || []).reduce((acc, plan) => ({
-    calories: acc.calories + (plan.recommended_calories || 0),
-    protein: acc.protein + (plan.recommended_protein_grams || 0),
-    carbs: acc.carbs + (plan.recommended_carbs_grams || 0),
-    fat: acc.fat + (plan.recommended_fat_grams || 0),
-  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  // CRITICAL: Use science layer as fallback when no meal plan exists!
+  let nutritionTargets: { calories: number; protein: number; carbs: number; fat: number };
+  
+  const hasMealPlan = mealPlans && mealPlans.length > 0;
+  
+  if (hasMealPlan) {
+    // Use meal plan from database
+    nutritionTargets = (mealPlans || []).reduce((acc, plan) => ({
+      calories: acc.calories + (plan.recommended_calories || 0),
+      protein: acc.protein + (plan.recommended_protein_grams || 0),
+      carbs: acc.carbs + (plan.recommended_carbs_grams || 0),
+      fat: acc.fat + (plan.recommended_fat_grams || 0),
+    }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    
+    console.log('✅ Using meal plan from database');
+  } else {
+    // SCIENCE LAYER FALLBACK: Calculate targets based on BMR/TDEE
+    const userProfile: UserProfile = {
+      weightKg: profile.weight_kg!,
+      heightCm: profile.height_cm!,
+      age: profile.age!,
+      sex: profile.sex! as 'male' | 'female',
+    };
+    
+    const tdee = calculateTDEE(userProfile, inferredLoad);
+    const macros = calculateMacros(userProfile, inferredLoad, tdee);
+    
+    nutritionTargets = {
+      calories: tdee,
+      protein: macros.protein,
+      carbs: macros.cho,
+      fat: macros.fat,
+    };
+    
+    console.log('✅ Body metrics validated');
+    console.log('Nutrition targets:', nutritionTargets);
+    console.log('📊 Using SCIENCE LAYER fallback (no meal plan in database):', {
+      load: inferredLoad,
+      tdee,
+      macros,
+    });
+  }
 
   // Add fueling windows for runners
   const weight = profile?.weight_kg || 70;
@@ -88,7 +179,6 @@ export async function getDailyUnifiedScore(
   console.log('Nutrition targets with windows:', nutritionTargetsWithWindows);
 
   // Fetch food logs for the day
-  const dateRange = getDateRangeForQuery(dateISO);
   const { data: foodLogs } = await supabase
     .from('food_logs')
     .select('meal_type, calories, protein_grams, carbs_grams, fat_grams, logged_at')
@@ -104,24 +194,14 @@ export async function getDailyUnifiedScore(
     fat: acc.fat + (log.fat_grams || 0),
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-  // Fetch planned training activities (plan)
-  const { data: activities } = await supabase
+  // Fetch planned training activities (plan) - cast to any to bypass type errors
+  const { data: activities } = await (supabase as any)
     .from('training_activities')
     .select('activity_type, duration_minutes, intensity, start_time')
     .eq('user_id', userId)
     .eq('date', dateISO);
 
-  // Fetch actual session-linked activity for the day
-  // We only consider google_fit_data rows that have sessions (true exercise sessions)
-  const { data: fitData } = await (supabase as any)
-    .from('google_fit_data')
-    .select('sessions, calories_burned, active_minutes, distance_meters, heart_rate_avg')
-    .eq('user_id', userId)
-    .eq('date', dateISO)
-    .not('sessions', 'is', null);
-
-  // Aggregate actuals across sessions
-  const actualDurationMin = (fitData || []).reduce((s: number, r: any) => s + (r.active_minutes || 0), 0);
+  // fitData already fetched above - aggregate actuals across sessions
   const actualCalories = (fitData || []).reduce((s: number, r: any) => s + (r.calories_burned || 0), 0);
   const actualDistance = (fitData || []).reduce((s: number, r: any) => s + (Number(r.distance_meters) || 0), 0);
   const avgHr = (() => {
@@ -185,6 +265,12 @@ export async function getDailyUnifiedScore(
 
   // Calculate score
   const breakdown = calculateUnifiedScore(context);
+  
+  // Update data completeness with body metrics status
+  if (breakdown.dataCompleteness) {
+    breakdown.dataCompleteness.hasBodyMetrics = true;
+  }
+  
   console.log('============ SCORE CALCULATION DEBUG ============');
   console.log('📊 Calculated score:', {
     userId,

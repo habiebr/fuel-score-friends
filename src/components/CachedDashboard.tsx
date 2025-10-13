@@ -27,6 +27,8 @@ import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, compute
 import { calculateBMR } from '@/lib/nutrition-engine';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useWidgetCache, clearUserCache } from '@/hooks/useWidgetCache';
+import { IncompleteProfileAlert, DataCompletenessScoreDisplay } from '@/components/IncompleteProfileAlert';
+
 
 
 import { readDashboardCache, writeDashboardCache } from '@/lib/dashboard-cache';

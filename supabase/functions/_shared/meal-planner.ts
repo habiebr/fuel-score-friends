@@ -16,6 +16,7 @@ import {
   generateMealPlan,
   shouldIncludeSnack,
 } from './nutrition-unified.ts';
+import { getRotationTemplate, type DayMealPlan } from './meal-rotation.ts';
 
 export interface MealPlanOptions {
   userId: string;
@@ -29,6 +30,7 @@ export interface MealPlanOptions {
   groqApiKey?: string;
   dietaryRestrictions?: string[];
   eatingBehaviors?: string[];
+  rotationDay?: number; // Day of week (0-6) for template rotation
 }
 
 export interface MealPlanResult {
@@ -70,7 +72,10 @@ export async function generateUserMealPlan(
     trainingDistance,
     googleFitCalories,
     useAI = false,
-    groqApiKey
+    groqApiKey,
+    rotationDay = 0,
+    dietaryRestrictions,
+    eatingBehaviors
   } = options;
 
   // STEP 1: Determine training load
@@ -114,9 +119,11 @@ export async function generateUserMealPlan(
   const includeSnack = shouldIncludeSnack(trainingLoad);
   const unifiedMealPlan = generateMealPlan(adjustedDayTarget, includeSnack);
 
-  // STEP 5: Generate AI meal suggestions if enabled
+  // STEP 5: Generate meal suggestions
   let aiSuggestions: Record<string, any[]> = {};
+  
   if (useAI && groqApiKey) {
+    // AI-generated suggestions (Sundays or manual refresh)
     aiSuggestions = await generateAISuggestions({
       userProfile,
       dayTarget: adjustedDayTarget,
@@ -128,6 +135,53 @@ export async function generateUserMealPlan(
       dietaryRestrictions: dietaryRestrictions || [],
       eatingBehaviors: eatingBehaviors || []
     });
+  } else {
+    // Use rotation templates (weekdays)
+    const template = getRotationTemplate(trainingLoad, rotationDay, adjustedDayTarget.kcal);
+    
+    // Convert template format to meal suggestions format
+    aiSuggestions = {
+      breakfast: template.breakfast.map(meal => ({
+        name: meal.name,
+        foods: meal.foods,
+        description: meal.description || '',
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat
+      })),
+      lunch: template.lunch.map(meal => ({
+        name: meal.name,
+        foods: meal.foods,
+        description: meal.description || '',
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat
+      })),
+      dinner: template.dinner.map(meal => ({
+        name: meal.name,
+        foods: meal.foods,
+        description: meal.description || '',
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat
+      }))
+    };
+    
+    // Add snack if needed
+    if (includeSnack && template.snack) {
+      aiSuggestions.snack = template.snack.map(meal => ({
+        name: meal.name,
+        foods: meal.foods,
+        description: meal.description || '',
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat
+      }));
+    }
   }
 
   // STEP 6: Combine unified targets with AI suggestions

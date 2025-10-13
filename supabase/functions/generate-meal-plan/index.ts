@@ -58,7 +58,7 @@ serve(async (req) => {
     // Create admin client with service role key for database operations
     const supabaseAdmin = getSupabaseAdmin();
 
-    const { date } = await req.json();
+    const { date, useAI: forceAI } = await req.json();
     const requestDate = date || new Date().toISOString().split("T")[0];
     const requestDateObj = new Date(requestDate + 'T00:00:00');
     const requestWeekday = requestDateObj.toLocaleDateString('en-US', { weekday: 'long' });
@@ -116,7 +116,7 @@ serve(async (req) => {
       trainingDuration: dayPlan?.duration,
       trainingDistance: dayPlan?.distanceKm,
       googleFitCalories: googleFitData?.calories_burned,
-      useAI: true,
+      useAI: forceAI !== undefined ? forceAI : true, // Use AI by default, or honor forceAI flag
       groqApiKey: getGroqKey(),
       dietaryRestrictions,
       eatingBehaviors
