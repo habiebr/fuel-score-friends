@@ -37,7 +37,9 @@ const DialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         // Mobile-first: full-viewport dialog with scrollable content
-        "fixed inset-0 z-50 grid w-full h-full max-h-full overflow-y-auto gap-4 border bg-background p-4 shadow-lg duration-200",
+        "fixed inset-0 z-50 grid w-full h-full max-h-full overflow-y-auto gap-4 border bg-background shadow-lg duration-200",
+        // Mobile padding - smaller to prevent overflow
+        "p-3",
         // Animations
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         // Desktop styles: centered modal with bounded height
@@ -48,10 +50,10 @@ const DialogContent = React.forwardRef<
       )}
       // Add safe-area padding for PWA fullscreen and devices with notches
       style={{
-        paddingTop: `calc(env(safe-area-inset-top, 0px) + 1rem)`,
-        paddingRight: `calc(env(safe-area-inset-right, 0px) + 1rem)`,
-        paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + 1rem)`,
-        paddingLeft: `calc(env(safe-area-inset-left, 0px) + 1rem)`
+        paddingTop: `calc(env(safe-area-inset-top, 0px) + 0.75rem)`,
+        paddingRight: `calc(env(safe-area-inset-right, 0px) + 0.75rem)`,
+        paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + 0.75rem)`,
+        paddingLeft: `calc(env(safe-area-inset-left, 0px) + 0.75rem)`
       }}
       {...props}
     >
