@@ -25,6 +25,7 @@ import { RecoverySuggestion } from '@/components/RecoverySuggestion';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
 import { calculateBMR } from '@/lib/nutrition-engine';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
+import { getLocalDayBoundaries, getLocalDateString } from '@/lib/timezone';
 
 import { readDashboardCache, writeDashboardCache, clearDashboardCache } from '@/lib/dashboard-cache';
 
@@ -498,6 +499,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
+      const { start, end } = getLocalDayBoundaries(new Date());
 
       // Batch weekly data fetching - use direct queries instead of RPC
       const weeklyDataPromise = Promise.all([
@@ -523,8 +525,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           .from('food_logs')
           .select('*')
           .eq('user_id', user.id)
-          .gte('logged_at', `${today}T00:00:00`)
-          .lt('logged_at', `${today}T23:59:59.999`)
+          .gte('logged_at', start)
+          .lte('logged_at', end)
           .order('logged_at', { ascending: false }),
         supabase
           .from('daily_meal_plans')
@@ -606,6 +608,15 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
       const plannedNutrition = accumulatePlannedFromMealPlans(rawMealPlans);
       const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs);
+      
+      console.log('📊 Dashboard food logs:', {
+        count: foodLogs.length,
+        start,
+        end,
+        logs: foodLogs
+      });
+      console.log('📊 Dashboard consumed nutrition:', consumedNutrition);
+      console.log('📊 Dashboard targets:', { targetCalories, macroTargets });
       
       // Get today's unified score with error handling
       let unifiedScoreResult = null;
