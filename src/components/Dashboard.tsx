@@ -23,7 +23,7 @@ import { TodayInsightsCard } from '@/components/TodayInsightsCard';
 import { format, startOfWeek, differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { RecoverySuggestion } from '@/components/RecoverySuggestion';
 import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, computeDailyScore, getActivityMultiplier, deriveMacrosFromCalories } from '@/lib/nutrition';
-import { calculateBMR } from '@/lib/nutrition-engine';
+import { calculateBMR, calculateTDEE, calculateMacros, type TrainingLoad } from '@/lib/nutrition-engine';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { getLocalDayBoundaries, getLocalDateString } from '@/lib/timezone';
 
@@ -589,38 +589,70 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         sessions: todayGoogleFitData?.sessions || []
       };
 
-      // Calculate BMR and activity multiplier
+      // Determine training load from today's activity (science-based approach)
+      const determineTrainingLoad = (data: typeof exerciseData): TrainingLoad => {
+        const activeMinutes = data.active_minutes || 0;
+        const distanceKm = (data.distance_meters || 0) / 1000;
+        
+        // Rest day: minimal activity
+        if (activeMinutes < 15 && distanceKm < 2) return 'rest';
+        
+        // Easy day: light activity
+        if (activeMinutes < 45 || distanceKm < 8) return 'easy';
+        
+        // Long run: high distance
+        if (distanceKm >= 15) return 'long';
+        
+        // Quality/intense: moderate distance but high effort
+        if (activeMinutes >= 60 && distanceKm >= 10) return 'quality';
+        
+        // Moderate: everything else
+        return 'moderate';
+      };
+
+      const trainingLoad = determineTrainingLoad(exerciseData);
+
+      // Calculate nutrition targets using SCIENCE LAYER (runner-specific)
       let targetCalories = 0;
       let macroTargets = { protein: 0, carbs: 0, fat: 0 };
 
       if (profile && profile.weight_kg && profile.height_cm && profile.age && profile.sex) {
-        const bmr = calculateBMR({
+        // Create profile object for nutrition-engine
+        const userProfile = {
           weightKg: profile.weight_kg,
           heightCm: profile.height_cm,
           age: profile.age,
-          sex: profile.sex
-        });
-        const activityMultiplier = profile.activity_level ? getActivityMultiplier(profile.activity_level) : 1.55;
-        const baseCalories = Math.round(bmr * activityMultiplier);
+          sex: profile.sex as 'male' | 'female'
+        };
         
-        // Add calories burned from today's training to the target
+        // Use science layer: Calculate TDEE based on training load
+        const tdee = calculateTDEE(userProfile, trainingLoad);
+        
+        // Use science layer: Calculate macros based on body weight and training load
+        // This gives runner-specific CHO (g/kg) and protein (g/kg) targets!
+        const scienceMacros = calculateMacros(userProfile, trainingLoad, tdee);
+        
+        // Add calories burned from training (on top of TDEE)
         const caloriesBurnedToday = exerciseData.calories_burned || 0;
-        targetCalories = baseCalories + caloriesBurnedToday;
+        targetCalories = tdee + caloriesBurnedToday;
         
-        // Scale macros proportionally if exercise calories are significant
+        // Scale macros if we added exercise calories
         if (caloriesBurnedToday > 0) {
-          const baseMacros = deriveMacrosFromCalories(baseCalories);
-          const scale = targetCalories / baseCalories;
+          const scale = targetCalories / tdee;
           macroTargets = {
-            protein: Math.round(baseMacros.protein * scale),
-            carbs: Math.round(baseMacros.carbs * scale),
-            fat: Math.round(baseMacros.fat * scale)
+            protein: Math.round(scienceMacros.protein * scale),
+            carbs: Math.round(scienceMacros.cho * scale),
+            fat: Math.round(scienceMacros.fat * scale)
           };
         } else {
-          macroTargets = deriveMacrosFromCalories(targetCalories);
+          macroTargets = {
+            protein: scienceMacros.protein,
+            carbs: scienceMacros.cho,
+            fat: scienceMacros.fat
+          };
         }
         
-        console.log('📊 Dashboard - Nutrition Calculation:', { 
+        console.log('📊 Dashboard - Runner-Specific Nutrition (Science Layer):', { 
           profile: {
             age: profile.age,
             sex: profile.sex,
@@ -628,12 +660,16 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             height_cm: profile.height_cm,
             activity_level: profile.activity_level
           },
-          bmr, 
-          activityMultiplier, 
-          baseCalories,
+          trainingLoad,
+          tdee,
           caloriesBurnedToday,
           finalTarget: targetCalories, 
-          macroTargets 
+          macroTargets: {
+            protein: `${macroTargets.protein}g (${(macroTargets.protein / profile.weight_kg).toFixed(1)} g/kg)`,
+            carbs: `${macroTargets.carbs}g (${(macroTargets.carbs / profile.weight_kg).toFixed(1)} g/kg)`,
+            fat: `${macroTargets.fat}g`
+          },
+          scienceBasedMacros: scienceMacros
         });
       }
 
