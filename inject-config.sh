@@ -16,7 +16,7 @@ cat > dist/config.js << EOF
 // Runtime configuration - DO NOT EDIT
 // Generated during deployment
 window.__SUPABASE_URL__ = '${VITE_SUPABASE_URL:-https://eecdbddpzwedficnpenm.supabase.co}';
-window.__SUPABASE_ANON_KEY__ = '${VITE_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlY2RiZGRwendlZGZpY25wZW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjU5NTM3NjksImV4cCI6MjA0MTUyOTc2OX0.h_lzfpVzCR5xQXPKqVVwDAQ-FjQqy-GdANTj3G8DFjg}';
+window.__SUPABASE_ANON_KEY__ = '${VITE_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlY2RiZGRwendlZGZpY25wZW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU2NTczMjIsImV4cCI6MjA3MTIzMzMyMn0.DsT8hmM9CPW-0yrcchJAKOulyH6p_GnjoVIz1S0CbvI}';
 EOF
 
 echo "✅ Config.js updated with environment variables"
