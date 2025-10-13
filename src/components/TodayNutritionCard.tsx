@@ -30,10 +30,12 @@ export function TodayNutritionCard({
 }: TodayNutritionCardProps) {
   const [openTip, setOpenTip] = useState<null | "Calories" | "Protein" | "Carbs" | "Fat">(null);
 
+  const isLoading = !calories.target;
+
   const caloriePercentage = useMemo(() => {
-    if (!calories.target) return 0;
+    if (isLoading) return 0;
     return Math.min(Math.round((calories.current / calories.target) * 100), 999);
-  }, [calories]);
+  }, [calories, isLoading]);
 
   const tips: Record<"Protein" | "Carbs" | "Fat", { title: string; points: string[]; target: string }> = {
     Protein: {

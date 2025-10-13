@@ -9,6 +9,7 @@ import { Trophy, MapPin, Activity as ActivityIcon, Target, Users, Crown } from '
 import { getAllUsersWeeklyScoresFromCache } from '@/services/unified-score.service';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { PageHeading } from '@/components/PageHeading';
 import { startOfWeek, format } from 'date-fns';
 
@@ -30,6 +31,7 @@ const formatKilometers = (value: number): string => {
 
 export default function Community() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'challenges' | 'groups'>('leaderboard');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -48,13 +50,22 @@ export default function Community() {
 
     setLoading(true);
     try {
+      console.log('🔍 Loading global leaderboard...');
+      
       // Get ALL users from profiles (which links to auth.users via user_id)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, user_id, full_name');
 
+      console.log('📊 Profiles query result:', { profiles, error: profilesError });
+
       if (profilesError) {
         console.error('❌ Error loading profiles:', profilesError);
+        toast({
+          title: 'Error loading leaderboard',
+          description: `Failed to load profiles: ${profilesError.message}`,
+          variant: 'destructive',
+        });
         setLeaderboard([]);
         setLoading(false);
         return;
@@ -62,6 +73,10 @@ export default function Community() {
 
       if (!profiles || profiles.length === 0) {
         console.log('⚠️ No profiles found in database');
+        toast({
+          title: 'No users found',
+          description: 'No profiles found in the database.',
+        });
         setLeaderboard([]);
         setLoading(false);
         return;
@@ -70,8 +85,9 @@ export default function Community() {
       console.log(`Found ${profiles.length} total profiles in database`);
 
       // Get weekly scores from cached unified scoring system
+      console.log('🔍 Fetching weekly scores from cache...');
       const weeklyScores = await getAllUsersWeeklyScoresFromCache();
-      console.log(`Found ${weeklyScores.length} users with weekly scores from cache`);
+      console.log(`Found ${weeklyScores.length} users with weekly scores from cache:`, weeklyScores);
 
       // Get Google Fit data for current week (Mon-Sun)
       const today = new Date();

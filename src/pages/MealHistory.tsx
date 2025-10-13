@@ -57,8 +57,17 @@ export default function MealHistory() {
     if (!user) return;
     setLoading(true);
     try {
-      const startDate = format(currentWeekStart, 'yyyy-MM-dd');
-      const endDate = format(new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+      // Get user timezone from profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('timezone')
+        .eq('user_id', user.id)
+        .single();
+        
+      const userTimezone = profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      
+      const startDate = format(new Date(currentWeekStart.toLocaleString('en-US', { timeZone: userTimezone })), 'yyyy-MM-dd');
+      const endDate = format(new Date(new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleString('en-US', { timeZone: userTimezone })), 'yyyy-MM-dd');
 
       // Get date range in user's timezone
       const { start: startTime } = getDateRangeForQuery(startDate);
@@ -93,9 +102,11 @@ export default function MealHistory() {
       );
 
       const days = dates.map((dateStr) => {
-        const dayLogs = logs?.filter(log => 
-          utcToLocalDateString(log.logged_at) === dateStr
-        ) || [];
+        const dayLogs = logs?.filter(log => {
+          // Convert UTC timestamp to user's timezone
+          const logDate = new Date(log.logged_at).toLocaleString('en-US', { timeZone: userTimezone });
+          return format(new Date(logDate), 'yyyy-MM-dd') === dateStr;
+        }) || [];
 
         const totalCalories = dayLogs.reduce((sum, log) => sum + (log.calories || 0), 0);
         const totalProtein = dayLogs.reduce((sum, log) => sum + (log.protein_grams || 0), 0);

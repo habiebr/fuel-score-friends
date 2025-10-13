@@ -295,6 +295,10 @@ export async function getMealScores(
  * Week starts Monday 00:00 Indonesian time (WIB/UTC+7)
  */
 export async function getWeeklyActivityStats(weekStart?: Date): Promise<WeeklyActivityStats> {
+  // Get current user's ID
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No authenticated user');
+
   const startDate = weekStart || getWeekStart();
   
   const endDate = new Date(startDate);
@@ -303,7 +307,7 @@ export async function getWeeklyActivityStats(weekStart?: Date): Promise<WeeklyAc
   const { data: scores } = await supabase
     .from('nutrition_scores')
     .select('date, daily_score')
-    .eq('user_id', userId)
+    .eq('user_id', user.id)
     .gte('date', format(startDate, 'yyyy-MM-dd'))
     .lte('date', format(endDate, 'yyyy-MM-dd'))
     .order('date', { ascending: true });
@@ -342,8 +346,8 @@ export async function getWeeklyUnifiedScore(
 export async function getAllUsersWeeklyScoresFromCache(
   weekStart?: Date
 ): Promise<Array<{ user_id: string; weekly_score: number; daily_scores: Array<{ date: string; score: number }> }>> {
-  // Get Monday 00:00 in Indonesian timezone
-  const startDate = weekStart || getWeekStartIndonesian();
+  // Get Monday 00:00 in local timezone
+  const startDate = weekStart || getWeekStart();
   
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 6); // End of week (Sunday)

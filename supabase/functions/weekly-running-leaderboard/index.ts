@@ -86,6 +86,17 @@ serve(async (req) => {
       return { isRunning: true, hasDistance: false, distance: 0 };
     }
 
+    // First, get all users data
+    const { data: users, error: usersError } = await sb
+      .from('profiles')
+      .select('id, full_name, timezone');
+
+    if (usersError) {
+      throw new Error(`Error fetching users: ${usersError.message}`);
+    }
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+
     const dailyQuery = sb
       .from('google_fit_data')
       .select('user_id, date, sessions, distance_meters')
@@ -144,8 +155,10 @@ serve(async (req) => {
 
     const entries = Array.from(perUserSessions.entries()).map(([userId, sessions]) => {
       const totalMeters = Array.from(sessions.values()).reduce((sum, meters) => sum + meters, 0);
+      const userInfo = userMap.get(userId);
       return {
         user_id: userId,
+        full_name: userInfo?.full_name || 'Anonymous Runner',
         distance_meters: totalMeters,
         session_count: sessions.size,
       };

@@ -14,7 +14,7 @@ import { RaceGoalWidget } from '@/components/RaceGoalWidget';
 import { CombinedNutritionWidget } from '@/components/CombinedNutritionWidget';
 import { RunnerNutritionDashboard } from '@/components/RunnerNutritionDashboard';
 import { WeeklyScoreCard } from '@/components/WeeklyScoreCard';
-import { getTodayUnifiedScore, getWeeklyScoreFromCache } from '@/services/unified-score.service';
+import { getTodayUnifiedScore, getWeeklyActivityStats } from '@/services/unified-score.service';
 import { TodayMealScoreCard } from '@/components/TodayMealScoreCard';
 import { TodayNutritionCard } from '@/components/TodayNutritionCard';
 import { WeeklyKilometersCard } from '@/components/WeeklyMilesCard';
@@ -587,6 +587,23 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         sessions: todayGoogleFitData?.sessions || []
       };
 
+      // Calculate BMR and activity multiplier
+      let targetCalories = 0;
+      let macroTargets = { protein: 0, carbs: 0, fat: 0 };
+
+      if (profile && profile.weight_kg && profile.height_cm && profile.age && profile.sex) {
+        const bmr = calculateBMR({
+          weightKg: profile.weight_kg,
+          heightCm: profile.height_cm,
+          age: profile.age,
+          sex: profile.sex
+        });
+        const activityMultiplier = profile.activity_level ? getActivityMultiplier(profile.activity_level) : 1.55;
+        targetCalories = Math.round(bmr * activityMultiplier);
+        macroTargets = deriveMacrosFromCalories(targetCalories);
+        console.log('📊 Nutrition targets calculated:', { bmr, activityMultiplier, targetCalories, macroTargets });
+      }
+
       const plannedNutrition = accumulatePlannedFromMealPlans(rawMealPlans);
       const consumedNutrition = accumulateConsumedFromFoodLogs(foodLogs);
       
@@ -614,7 +631,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       try {
         const weekStart = new Date();
         weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Start of week (Monday)
-        weeklyScoreResult = await getWeeklyScoreFromCache(user.id, weekStart);
+        weeklyScoreResult = await getWeeklyActivityStats(weekStart);
         console.log('📊 WEEKLY SCORE DEBUG:', {
           weekStart: format(weekStart, 'yyyy-MM-dd'),
           result: weeklyScoreResult,
@@ -631,20 +648,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       console.log('📊 Setting weekly score to:', calculatedWeeklyScore);
       setWeeklyScore(calculatedWeeklyScore);
 
-      // Calculate BMR and targets
-      const bmr = profile ? calculateBMR({
-        age: profile.age || 30,
-        sex: profile.sex || 'male',
-        weightKg: profile.weight_kg || 70,
-        heightCm: profile.height_cm || 170
-      }) : 1800;
-      
-      const activityMultiplier = profile?.activity_level 
-        ? getActivityMultiplier(profile.activity_level)
-        : 1.5;
-      
-      const calorieTarget = Math.round(bmr * activityMultiplier);
-      const macroTargets = deriveMacrosFromCalories(calorieTarget);
+      // Use the already calculated values from above
 
       // Process activity data
       try {
@@ -690,7 +694,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         dinnerScore: unifiedScoreResult?.breakdown?.nutrition?.dinner_score || null,
         calories: {
           consumed: consumedNutrition.calories,
-          target: calorieTarget
+          target: targetCalories
         },
         macros: {
           protein: {
@@ -939,8 +943,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         {/* 3. Today's Nutrition Score */}
         <div className="mb-5">
           <TodayMealScoreCard
-            score={mealScore.score || 0}
-            rating={mealScore.rating || 'Needs Improvement'}
+            score={todayScore?.score || 0}
+            rating={todayScore?.rating || 'Needs Improvement'}
           />
         </div>
 
@@ -949,21 +953,21 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           <TodayNutritionCard
             calories={{
               current: data?.calories?.consumed || 0,
-              target: data?.calories?.target || 2400
+              target: data?.calories?.target || 0
             }}
             protein={{
               current: data?.macros?.protein?.consumed || 0,
-              target: data?.macros?.protein?.target || 120,
+              target: data?.calories?.target ? deriveMacrosFromCalories(data?.calories?.target).protein : 0,
               color: '#FF6B6B' // Vibrant red/coral for protein
             }}
             carbs={{
               current: data?.macros?.carbs?.consumed || 0,
-              target: data?.macros?.carbs?.target || 330,
+              target: data?.calories?.target ? deriveMacrosFromCalories(data?.calories?.target).carbs : 0,
               color: '#4ECDC4' // Vibrant teal/cyan for carbs
             }}
             fat={{
               current: data?.macros?.fat?.consumed || 0,
-              target: data?.macros?.fat?.target || 67,
+              target: data?.calories?.target ? deriveMacrosFromCalories(data?.calories?.target).fat : 0,
               color: '#FFD93D' // Vibrant yellow for fat
             }}
             showEducation={true}
