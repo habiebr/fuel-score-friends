@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
+import { FoodLogEditDialog } from '@/components/FoodLogEditDialog';
 import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { PageHeading } from '@/components/PageHeading';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,7 @@ interface FoodLog {
   protein_grams: number;
   carbs_grams: number;
   fat_grams: number;
+  serving_size: string;
   logged_at: string;
 }
 
@@ -62,6 +64,8 @@ export default function Meals() {
   const { getTodayData, lastSync } = useGoogleFitSync();
   const [activeTab, setActiveTab] = useState<Tab>('diary');
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedFoodLog, setSelectedFoodLog] = useState<FoodLog | null>(null);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   
@@ -382,6 +386,29 @@ export default function Meals() {
       }
     } catch (error) {
       console.error('Error loading user preferences:', error);
+    }
+  };
+
+  const handleEditFoodLog = (log: FoodLog) => {
+    setSelectedFoodLog(log);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveFoodLog = () => {
+    setEditDialogOpen(false);
+    setSelectedFoodLog(null);
+    loadDiaryData(); // Refresh the diary
+    if (activeTab === 'history') {
+      loadWeekData(historyWeekStart); // Refresh history if viewing it
+    }
+  };
+
+  const handleDeleteFoodLog = () => {
+    setEditDialogOpen(false);
+    setSelectedFoodLog(null);
+    loadDiaryData(); // Refresh the diary
+    if (activeTab === 'history') {
+      loadWeekData(historyWeekStart); // Refresh history if viewing it
     }
   };
 
@@ -934,7 +961,11 @@ export default function Meals() {
                     {logs.length > 0 ? (
                       <div className="space-y-2">
                         {logs.map((log) => (
-                          <div key={log.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                          <div 
+                            key={log.id} 
+                            className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors active:scale-98"
+                            onClick={() => handleEditFoodLog(log)}
+                          >
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="font-medium">{log.food_name}</div>
@@ -1130,6 +1161,13 @@ export default function Meals() {
         onUploadActivity={() => setFitnessScreenshotOpen(true)}
       />
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
+      <FoodLogEditDialog 
+        open={editDialogOpen} 
+        onOpenChange={setEditDialogOpen}
+        foodLog={selectedFoodLog}
+        onSave={handleSaveFoodLog}
+        onDelete={handleDeleteFoodLog}
+      />
       <FitnessScreenshotDialog open={fitnessScreenshotOpen} onOpenChange={setFitnessScreenshotOpen} />
     </>
   );
