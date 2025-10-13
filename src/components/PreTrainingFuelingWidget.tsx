@@ -202,19 +202,19 @@ export function PreTrainingFuelingWidget() {
   }
 
   return (
-    <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50">
+    <Card className="shadow-card mb-4 border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-orange-100 p-2">
-              <Flame className="h-5 w-5 text-orange-600" />
+            <div className="rounded-full bg-orange-100 dark:bg-orange-800 p-2">
+              <Flame className="h-5 w-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <CardTitle className="text-lg">Pre-Training Fueling Reminder</CardTitle>
-              <CardDescription>Tomorrow's training requires carb-loading</CardDescription>
+              <CardTitle className="text-lg text-orange-900 dark:text-orange-100">Pre-Training Fueling Reminder</CardTitle>
+              <CardDescription className="dark:text-orange-200/70">Tomorrow's training requires carb-loading</CardDescription>
             </div>
           </div>
-          <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+          <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-800 text-orange-700 dark:text-orange-200">
             Tomorrow
           </Badge>
         </div>
@@ -224,47 +224,47 @@ export function PreTrainingFuelingWidget() {
         {/* Training Info */}
         <div className="flex flex-wrap gap-3">
           <div className="flex items-center gap-1.5 text-sm">
-            <TrendingUp className="h-4 w-4 text-orange-600" />
-            <span className="font-medium">{advice.trainingType}</span>
+            <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <span className="font-medium dark:text-orange-100">{advice.trainingType}</span>
             {advice.trainingDistance && (
-              <span className="text-muted-foreground">• {advice.trainingDistance}km</span>
+              <span className="text-muted-foreground dark:text-orange-200/60">• {advice.trainingDistance}km</span>
             )}
             {advice.trainingDuration && (
-              <span className="text-muted-foreground">• {advice.trainingDuration} min</span>
+              <span className="text-muted-foreground dark:text-orange-200/60">• {advice.trainingDuration} min</span>
             )}
           </div>
           
           {advice.trainingTime && (
             <div className="flex items-center gap-1.5 text-sm">
-              <Clock className="h-4 w-4 text-orange-600" />
-              <span className="text-muted-foreground">Starts at {advice.trainingTime}</span>
+              <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <span className="text-muted-foreground dark:text-orange-200/60">Starts at {advice.trainingTime}</span>
             </div>
           )}
         </div>
         
         {/* Reasoning */}
-        <Alert className="border-orange-200 bg-white">
-          <AlertDescription className="text-sm">{advice.reasoning}</AlertDescription>
+        <Alert className="border-orange-200 dark:border-orange-700 bg-white dark:bg-gray-800">
+          <AlertDescription className="text-sm dark:text-orange-100">{advice.reasoning}</AlertDescription>
         </Alert>
         
         {/* Carb Target */}
-        <div className="rounded-lg bg-white border border-orange-200 p-4">
+        <div className="rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 p-4">
           <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-3xl font-bold text-orange-600">{advice.preFuelingCHO_g}g</span>
-            <span className="text-sm text-muted-foreground">carbohydrates</span>
+            <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">{advice.preFuelingCHO_g}g</span>
+            <span className="text-sm text-muted-foreground dark:text-orange-200/60">carbohydrates</span>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground dark:text-orange-200/60">
             Science-based: 1.5g CHO per kg body weight
           </p>
         </div>
         
         {/* Timing Window */}
-        <div className="rounded-lg bg-white border border-orange-200 p-3">
+        <div className="rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 p-3">
           <div className="flex items-center gap-2 mb-1">
-            <Clock className="h-4 w-4 text-orange-600" />
-            <span className="text-sm font-medium">Optimal Fueling Window</span>
+            <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <span className="text-sm font-medium dark:text-orange-100">Optimal Fueling Window</span>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground dark:text-orange-200/60">
             {advice.windowStart} - {advice.windowEnd}
           </p>
         </div>
@@ -272,12 +272,12 @@ export function PreTrainingFuelingWidget() {
         {/* Food Suggestions */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Apple className="h-4 w-4 text-orange-600" />
-            <span className="text-sm font-medium">Suggested Meals</span>
+            <Apple className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <span className="text-sm font-medium dark:text-orange-100">Suggested Meals</span>
           </div>
           <ul className="space-y-1.5">
             {advice.foods.map((food, idx) => (
-              <li key={idx} className="text-sm text-muted-foreground flex items-start gap-2">
+              <li key={idx} className="text-sm text-muted-foreground dark:text-orange-200/70 flex items-start gap-2">
                 <span className="text-orange-400">•</span>
                 <span>{food}</span>
               </li>
@@ -286,9 +286,9 @@ export function PreTrainingFuelingWidget() {
         </div>
         
         {/* Footer Tip */}
-        <div className="pt-2 border-t border-orange-100">
-          <p className="text-xs text-muted-foreground">
-            💡 <strong>Pro tip:</strong> Choose easily digestible foods and avoid high fiber/fat to prevent GI distress.
+        <div className="pt-2 border-t border-orange-100 dark:border-orange-800">
+          <p className="text-xs text-muted-foreground dark:text-orange-200/60">
+            💡 <strong className="dark:text-orange-100">Pro tip:</strong> Choose easily digestible foods and avoid high fiber/fat to prevent GI distress.
           </p>
         </div>
       </CardContent>
