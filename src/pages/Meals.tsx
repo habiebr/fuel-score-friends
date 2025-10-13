@@ -227,16 +227,40 @@ export default function Meals() {
     if (!user) return;
     setHistoryLoading(true);
     try {
-      const startISO = format(weekStartDate, 'yyyy-MM-dd');
-      const endISO = format(addDays(weekStartDate, 6), 'yyyy-MM-dd');
+      // Generate array of dates for the week
+      const days: string[] = [];
+      const dayBoundaries: Array<{ date: string; start: string; end: string }> = [];
+      
+      for (let i = 0; i < 7; i++) {
+        const date = addDays(weekStartDate, i);
+        const dateStr = format(date, 'yyyy-MM-dd');
+        days.push(dateStr);
+        
+        // Get timezone-aware boundaries for each day
+        const { start, end } = getLocalDayBoundaries(date);
+        dayBoundaries.push({ date: dateStr, start, end });
+      }
+
+      console.log('📊 Loading week data with timezone boundaries:', dayBoundaries);
+
+      // Fetch all logs for the week using timezone-aware boundaries
+      const weekStart = dayBoundaries[0].start;
+      const weekEnd = dayBoundaries[6].end;
 
       const { data: logs, error } = await supabase
         .from('food_logs')
         .select('*')
         .eq('user_id', user.id)
-        .gte('logged_at', `${startISO}T00:00:00`)
-        .lte('logged_at', `${endISO}T23:59:59`)
+        .gte('logged_at', weekStart)
+        .lte('logged_at', weekEnd)
         .order('logged_at', { ascending: false });
+
+      console.log('📊 Week logs fetched:', {
+        count: logs?.length,
+        weekStart,
+        weekEnd,
+        logs
+      });
 
       if (error) {
         console.error('Error fetching week logs:', error);
@@ -257,16 +281,13 @@ export default function Meals() {
         totalsByDay[day] = accumulateConsumedFromFoodLogs(grouped[day]);
       });
 
-      const days: string[] = [];
-      for (let i = 0; i < 7; i++) {
-        const date = addDays(weekStartDate, i);
-        const dateStr = format(date, 'yyyy-MM-dd');
-        days.push(dateStr);
+      // Ensure all days exist in the map
+      days.forEach((dateStr) => {
         if (!grouped[dateStr]) grouped[dateStr] = [];
         if (!totalsByDay[dateStr]) {
           totalsByDay[dateStr] = { calories: 0, protein: 0, carbs: 0, fat: 0 };
         }
-      }
+      });
 
       setWeekDays(days);
       setWeekLogs(grouped);
