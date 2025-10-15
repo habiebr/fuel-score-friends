@@ -327,6 +327,14 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           {/* Upload Area */}
           <div className="space-y-3">
             <Label>Upload Food Photo</Label>
+            {/* Notice: 1 plate per meal */}
+            <div className="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-1">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <div>
+                <span className="font-medium">Upload 1 plate per meal</span>
+                <p className="mt-1">For best results, please upload a photo showing only one plate per meal. This helps us identify your food more accurately.</p>
+              </div>
+            </div>
             <div className="relative">
               <label htmlFor="food-image">
                 <div className={`
