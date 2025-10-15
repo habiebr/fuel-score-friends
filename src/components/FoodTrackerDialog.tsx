@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Camera, Upload, Loader2, Check } from 'lucide-react';
+import { Camera, Upload, Loader2, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +24,32 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
   const [progress, setProgress] = useState(0);
   const [mealType, setMealType] = useState('lunch');
   const [nutritionData, setNutritionData] = useState<any>(null);
+
+  // Detect if we're on Android
+  const isAndroid = () => {
+    if (typeof navigator === 'undefined') return false;
+    return /Android/i.test(navigator.userAgent);
+  };
+
+  // Detect if running as PWA (installed app)
+  const isPWA = () => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(display-mode: standalone)').matches || 
+           (window.navigator as any).standalone === true ||
+           document.referrer.includes('android-app://');
+  };
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      // Only reset if we're not in the middle of processing
+      if (stage !== 'uploading' && stage !== 'analyzing' && stage !== 'saving') {
+        setStage('idle');
+        setProgress(0);
+        setNutritionData(null);
+      }
+    }
+  }, [open, stage]);
 
   const getStageMessage = (currentStage: ProcessStage) => {
     switch (currentStage) {
@@ -339,12 +365,24 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
                 id="food-image"
                 type="file"
                 accept="image/*"
-                capture="environment"
+                {... (isAndroid() && !isPWA() ? {} : { capture: "environment" as const })}
                 className="hidden"
                 onChange={handleImageUpload}
                 disabled={stage !== 'idle' && stage !== 'complete'}
               />
             </div>
+            
+            {/* Android User Guidance */}
+            {stage === 'idle' && isAndroid() && !isPWA() && (
+              <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">📱 Android Browser Tip</p>
+                  <p className="mt-1">For best results: Take photo with your camera app first, then click "Gallery" to select it. This prevents page reloads.</p>
+                  <p className="mt-1 font-medium text-blue-700 dark:text-blue-400">💡 Or install this app for a better camera experience!</p>
+                </div>
+              </div>
+            )}
             
             {/* Alternative upload methods */}
             {stage === 'idle' && (
@@ -356,7 +394,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
                   onClick={() => document.getElementById('food-image')?.click()}
                 >
                   <Camera className="h-4 w-4 mr-2" />
-                  Camera
+                  {isAndroid() ? 'Take Photo' : 'Camera'}
                 </Button>
                 <Button
                   variant="outline"

@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { addDays, format } from 'date-fns';
 import { getLocalDateString } from '@/lib/timezone';
-import { Flame, Clock, TrendingUp, Apple } from 'lucide-react';
+import { Flame, Clock, TrendingUp, Apple, ChevronDown } from 'lucide-react';
 
 interface TrainingActivity {
   id: string;
@@ -36,6 +37,7 @@ export function PreTrainingFuelingWidget() {
   const { user } = useAuth();
   const [advice, setAdvice] = useState<FuelingAdvice | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -202,25 +204,34 @@ export function PreTrainingFuelingWidget() {
   }
 
   return (
-    <Card className="shadow-card mb-4 border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <div className="rounded-full bg-orange-100 dark:bg-orange-800 p-2">
-              <Flame className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card className="shadow-card mb-4 border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10">
+        <CollapsibleTrigger className="w-full">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-full bg-orange-100 dark:bg-orange-800 p-2">
+                  <Flame className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="text-left">
+                  <CardTitle className="text-lg text-orange-900 dark:text-orange-100">Pre-Training Fueling Reminder</CardTitle>
+                  <CardDescription className="dark:text-orange-200/70">
+                    {isOpen ? "Tomorrow's training requires carb-loading" : `${advice.preFuelingCHO_g}g carbs • ${advice.windowStart} - ${advice.windowEnd}`}
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-800 text-orange-700 dark:text-orange-200">
+                  Tomorrow
+                </Badge>
+                <ChevronDown className={`h-4 w-4 text-orange-600 dark:text-orange-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+              </div>
             </div>
-            <div>
-              <CardTitle className="text-lg text-orange-900 dark:text-orange-100">Pre-Training Fueling Reminder</CardTitle>
-              <CardDescription className="dark:text-orange-200/70">Tomorrow's training requires carb-loading</CardDescription>
-            </div>
-          </div>
-          <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-800 text-orange-700 dark:text-orange-200">
-            Tomorrow
-          </Badge>
-        </div>
-      </CardHeader>
-      
-      <CardContent className="space-y-4">
+          </CardHeader>
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent>
+          <CardContent className="space-y-4 pt-0">
         {/* Training Info */}
         <div className="flex flex-wrap gap-3">
           <div className="flex items-center gap-1.5 text-sm">
@@ -291,7 +302,9 @@ export function PreTrainingFuelingWidget() {
             💡 <strong className="dark:text-orange-100">Pro tip:</strong> Choose easily digestible foods and avoid high fiber/fat to prevent GI distress.
           </p>
         </div>
-      </CardContent>
-    </Card>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }

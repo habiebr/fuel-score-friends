@@ -23,6 +23,7 @@ interface TrainingActivity {
   id?: string;
   date: string; // yyyy-MM-dd
   activity_type: ActivityType;
+  user_activity_label?: string | null; // User's explicit selection: long_run, interval, etc.
   start_time?: string | null; // HH:mm
   duration_minutes: number; // for non-run
   distance_km?: number | null; // for run
@@ -65,6 +66,9 @@ const deriveUiActivityType = (activity: TrainingActivity): UiActivityType => {
 
 const applyUiActivityType = (uiType: UiActivityType, activity: TrainingActivity): TrainingActivity => {
   const next = { ...activity };
+  // Store user's explicit activity label
+  next.user_activity_label = uiType;
+  
   switch (uiType) {
     case 'rest':
       next.activity_type = 'rest';
@@ -338,6 +342,7 @@ export default function Goals() {
         user_id: user.id,
         date: dateStr,
         activity_type: act.activity_type,
+        user_activity_label: act.user_activity_label || null,
         start_time: act.start_time,
         duration_minutes: act.duration_minutes,
         distance_km: act.distance_km,

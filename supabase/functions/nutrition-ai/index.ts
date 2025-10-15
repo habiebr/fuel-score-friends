@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GoogleGenAI } from "npm:@google/genai";
 import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
@@ -45,33 +44,64 @@ serve(async (req) => {
         throw new Error('GEMINI_API_KEY is required for food photo analysis');
       }
 
-      // Initialize Google GenAI
-      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
+      // Debug logging for Samsung Browser issues
+      console.log('=== Image Analysis Debug ===');
+      console.log('Image type:', typeof image);
+      console.log('Image preview:', typeof image === 'string' ? image.substring(0, 50) + '...' : 'non-string');
+      console.log('GEMINI_API_KEY exists:', !!GEMINI_API_KEY);
+      
       // Prepare the image data (support data URLs, raw base64, or HTTP(S) URLs)
       let mimeType = "image/jpeg";
       let base64Data = "";
-      if (typeof image === 'string' && image.startsWith('http')) {
-        const imgResp = await fetch(image);
-        if (!imgResp.ok) {
-          throw new Error(`Failed to fetch image from URL: ${imgResp.status}`);
+      
+      try {
+        if (typeof image === 'string' && image.startsWith('http')) {
+          console.log('Fetching image from URL:', image.substring(0, 80));
+          const imgResp = await fetch(image);
+          console.log('Image fetch response status:', imgResp.status);
+          console.log('Image fetch response headers:', Object.fromEntries(imgResp.headers.entries()));
+          
+          if (!imgResp.ok) {
+            throw new Error(`Failed to fetch image from URL: ${imgResp.status} ${imgResp.statusText}`);
+          }
+          
+          mimeType = imgResp.headers.get('content-type') || 'image/jpeg';
+          console.log('Image MIME type from header:', mimeType);
+          
+          const buf = new Uint8Array(await imgResp.arrayBuffer());
+          console.log('Image buffer size:', buf.length, 'bytes');
+          
+          let binary = '';
+          for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+          base64Data = btoa(binary);
+          console.log('Base64 encoding complete, length:', base64Data.length);
+        } else if (typeof image === 'string' && image.startsWith('data:')) {
+          console.log('Processing data URL');
+          const commaIdx = image.indexOf(',');
+          const header = image.substring(0, commaIdx);
+          base64Data = image.substring(commaIdx + 1);
+          const mtMatch = header.match(/data:(.*?);base64/);
+          if (mtMatch) {
+            mimeType = mtMatch[1];
+            console.log('Detected MIME type from data URL:', mimeType);
+          }
+          console.log('Base64 data extracted, length:', base64Data.length);
+        } else if (typeof image === 'string') {
+          console.log('Processing raw base64 string, length:', image.length);
+          base64Data = image;
+        } else {
+          const errorMsg = `Unsupported image format: ${typeof image}`;
+          console.error(errorMsg);
+          throw new Error(errorMsg);
         }
-        mimeType = imgResp.headers.get('content-type') || 'image/jpeg';
-        const buf = new Uint8Array(await imgResp.arrayBuffer());
-        let binary = '';
-        for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
-        base64Data = btoa(binary);
-      } else if (typeof image === 'string' && image.startsWith('data:')) {
-        const commaIdx = image.indexOf(',');
-        const header = image.substring(0, commaIdx);
-        base64Data = image.substring(commaIdx + 1);
-        const mtMatch = header.match(/data:(.*?);base64/);
-        if (mtMatch) mimeType = mtMatch[1];
-      } else if (typeof image === 'string') {
-        base64Data = image;
-      } else {
-        throw new Error('Unsupported image format');
+      } catch (imageError) {
+        console.error('=== Image Processing Error ===');
+        console.error('Error:', imageError);
+        throw new Error(`Image processing failed: ${imageError instanceof Error ? imageError.message : 'Unknown error'}`);
       }
+
+      // Initialize Google GenAI after successful image processing
+      console.log('Preparing to call Gemini API directly via REST...');
 
       const contents = [
         {
@@ -87,29 +117,88 @@ Analyze this food image and return nutrition data in this exact JSON format: {"f
         },
       ];
 
-      console.log('Sending food photo to Gemini 2.5 Flash...');
+      console.log('Calling Gemini REST API...');
+      console.log('Contents structure:', JSON.stringify({ 
+        inlineDataMimeType: mimeType, 
+        base64Length: base64Data.length,
+        hasText: true 
+      }));
       
       try {
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: contents,
-        });
+        // Use direct REST API instead of SDK for better browser compatibility
+        const geminiResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  {
+                    inline_data: {
+                      mime_type: mimeType,
+                      data: base64Data
+                    }
+                  },
+                  {
+                    text: `You are an expert nutritionist. Analyze the food in the image and provide detailed nutritional information. Be as accurate as possible based on typical serving sizes.
 
-        console.log('Gemini response received for food photo');
-        const aiResponse = response.text;
-        console.log('Raw Gemini response:', aiResponse);
+Analyze this food image and return nutrition data in this exact JSON format: {"food_name": "name of the food", "serving_size": "estimated serving size", "calories": number, "protein_grams": number, "carbs_grams": number, "fat_grams": number}. Only return the JSON, no other text.`
+                  }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.4,
+                topK: 32,
+                topP: 1,
+                maxOutputTokens: 2048,
+              }
+            })
+          }
+        );
+
+        console.log('Gemini REST API response status:', geminiResponse.status);
+        
+        if (!geminiResponse.ok) {
+          const errorText = await geminiResponse.text();
+          console.error('Gemini API error response:', errorText);
+          throw new Error(`Gemini API returned ${geminiResponse.status}: ${errorText}`);
+        }
+
+        const geminiData = await geminiResponse.json();
+        console.log('Gemini API response structure:', JSON.stringify(Object.keys(geminiData)));
+
+        const aiResponse = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!aiResponse) {
+          console.error('No text in Gemini response:', JSON.stringify(geminiData));
+          throw new Error('No response text from Gemini API');
+        }
+
+        console.log('✅ Gemini response received successfully');
+        console.log('Response text length:', aiResponse?.length || 0);
+        console.log('Response preview:', aiResponse?.substring?.(0, 200) || 'empty');
 
         // Parse the JSON response
         try {
           // Remove markdown code blocks if present
           let cleanedResponse = aiResponse.trim();
+          console.log('Cleaning response, original length:', cleanedResponse.length);
+          
           if (cleanedResponse.startsWith('```json')) {
             cleanedResponse = cleanedResponse.replace(/^```json\s*\n/, '').replace(/\n```\s*$/, '');
+            console.log('Removed ```json markers');
           } else if (cleanedResponse.startsWith('```')) {
             cleanedResponse = cleanedResponse.replace(/^```\s*\n/, '').replace(/\n```\s*$/, '');
+            console.log('Removed ``` markers');
           }
           
+          console.log('Cleaned response:', cleanedResponse);
+          
           const nutritionData = JSON.parse(cleanedResponse);
+          console.log('✅ Successfully parsed nutrition data:', nutritionData);
+          
           return new Response(JSON.stringify({ 
             nutritionData,
             type: type 
@@ -117,21 +206,39 @@ Analyze this food image and return nutrition data in this exact JSON format: {"f
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         } catch (parseError) {
-          console.error('Failed to parse nutrition data:', aiResponse);
+          console.error('=== JSON Parse Error ===');
+          console.error('Parse error:', parseError);
+          console.error('Attempted to parse:', aiResponse);
           return new Response(JSON.stringify({ 
             error: 'Failed to parse nutrition data from AI response',
-            details: 'The AI returned an invalid format'
+            details: 'The AI returned an invalid format',
+            raw_response: aiResponse.substring(0, 500)
           }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
       } catch (geminiError) {
-        console.error('Gemini API error:', geminiError);
+        console.error('=== Gemini API Error ===');
+        console.error('Error name:', (geminiError as any)?.name);
+        console.error('Error message:', (geminiError as any)?.message);
+        console.error('Error cause:', (geminiError as any)?.cause);
+        console.error('Error stack:', (geminiError as any)?.stack);
+        
+        // Try to extract more details
+        const errorDetails = {
+          name: (geminiError as any)?.name || 'Unknown',
+          message: (geminiError as any)?.message || 'Unknown error',
+          cause: (geminiError as any)?.cause || null,
+          type: typeof geminiError
+        };
+        console.error('Structured error details:', JSON.stringify(errorDetails, null, 2));
+        
         const errorMsg = geminiError instanceof Error ? geminiError.message : 'Gemini API failed';
         return new Response(JSON.stringify({ 
           error: 'Failed to analyze image with AI',
-          details: errorMsg
+          details: errorMsg,
+          error_type: (geminiError as any)?.name || 'UnknownError'
         }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -20,7 +20,7 @@ export default function ProfileNew() {
   const [profile, setProfile] = useState<any>(null);
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
-  const { isIOS, isInstalled } = usePWA();
+  const { isIOS, isAndroid, isInstalled } = usePWA();
 
   const handleLogout = async () => {
     await signOut();
@@ -124,12 +124,25 @@ export default function ProfileNew() {
             <PWAInstallPrompt />
             {isIOS && !isInstalled && (
               <div className="mt-3 p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 text-sm">
-                <div className="font-semibold mb-1">Install on iOS</div>
+                <div className="font-semibold mb-1">📱 Install on iOS</div>
                 <ol className="list-decimal list-inside space-y-1 text-blue-900 dark:text-blue-100">
                   <li>Tap the Share button in Safari</li>
                   <li>Scroll down and tap "Add to Home Screen"</li>
                   <li>Tap "Add" to confirm</li>
                 </ol>
+              </div>
+            )}
+            {isAndroid && !isInstalled && (
+              <div className="mt-3 p-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 text-sm">
+                <div className="font-semibold mb-1">🤖 Install on Android</div>
+                <ol className="list-decimal list-inside space-y-1 text-green-900 dark:text-green-100">
+                  <li>Tap the menu (⋮) in your browser</li>
+                  <li>Select "Install app" or "Add to Home screen"</li>
+                  <li>Tap "Install" to confirm</li>
+                </ol>
+                <div className="mt-2 text-xs text-green-700 dark:text-green-300">
+                  💡 <strong>Tip:</strong> Installing the app gives you better camera access for food photos and a smoother experience!
+                </div>
               </div>
             )}
           </div>

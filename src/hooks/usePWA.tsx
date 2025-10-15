@@ -8,6 +8,7 @@ export function usePWA() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
   // Register service worker with auto-update
@@ -40,17 +41,22 @@ export function usePWA() {
   // Handle PWA install prompt and platform detection
   useEffect(() => {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-    setIsIOS(/iPad|iPhone|iPod/.test(ua));
+    const isIOSDevice = /iPad|iPhone|iPod/.test(ua);
+    const isAndroidDevice = /Android/i.test(ua);
+    setIsIOS(isIOSDevice);
+    setIsAndroid(isAndroidDevice);
     const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window as any).navigator?.standalone === true;
     setIsStandalone(!!standalone);
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
+      console.log('beforeinstallprompt event fired!');
       setDeferredPrompt(e);
       setCanInstall(true);
     };
 
     const handleAppInstalled = () => {
+      console.log('App installed successfully!');
       setIsInstalled(true);
       setCanInstall(false);
       setDeferredPrompt(null);
@@ -71,17 +77,32 @@ export function usePWA() {
   }, []);
 
   const installPWA = async () => {
-    if (!deferredPrompt) return;
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setIsInstalled(true);
+    if (!deferredPrompt) {
+      console.warn('No deferred prompt available for PWA installation');
+      return false;
     }
-    
-    setDeferredPrompt(null);
-    setCanInstall(false);
+
+    try {
+      console.log('Showing PWA install prompt...');
+      deferredPrompt.prompt();
+      
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log('User choice:', outcome);
+      
+      if (outcome === 'accepted') {
+        console.log('PWA installation accepted!');
+        setIsInstalled(true);
+        setDeferredPrompt(null);
+        setCanInstall(false);
+        return true;
+      } else {
+        console.log('PWA installation dismissed');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error during PWA installation:', error);
+      return false;
+    }
   };
 
   const updatePWA = () => {
@@ -182,6 +203,7 @@ export function usePWA() {
     notificationsEnabled,
     enablePushNotifications,
     isIOS,
+    isAndroid,
     isStandalone,
     isPushSupported: (typeof window !== 'undefined') && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
   };

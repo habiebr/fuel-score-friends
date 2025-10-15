@@ -17,6 +17,24 @@ export function TodayMealScoreCard({ score, rating }: TodayMealScoreCardProps) {
     }
   };
 
+  const getProgressBarColor = () => {
+    switch (rating) {
+      case 'Excellent': return 'bg-gradient-to-r from-green-500 to-emerald-600';
+      case 'Good': return 'bg-gradient-to-r from-blue-500 to-cyan-600';
+      case 'Fair': return 'bg-gradient-to-r from-yellow-500 to-amber-600';
+      default: return 'bg-gradient-to-r from-orange-500 to-red-500';
+    }
+  };
+
+  const getScoreTextColor = () => {
+    switch (rating) {
+      case 'Excellent': return 'text-green-600 dark:text-green-400';
+      case 'Good': return 'text-blue-600 dark:text-blue-400';
+      case 'Fair': return 'text-yellow-600 dark:text-yellow-400';
+      default: return 'text-orange-600 dark:text-orange-400';
+    }
+  };
+
   return (
     <Card className="bg-white dark:bg-gray-800">
       <CardContent className="p-4">
@@ -32,10 +50,10 @@ export function TodayMealScoreCard({ score, rating }: TodayMealScoreCardProps) {
 
         <div className="flex items-end justify-between">
           <div>
-            <div className="text-4xl font-bold mb-2">{score}%</div>
+            <div className={`text-4xl font-bold mb-2 ${getScoreTextColor()}`}>{score}%</div>
             <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
               <div
-                className="bg-black dark:bg-white h-2.5 rounded-full transition-all duration-500"
+                className={`${getProgressBarColor()} h-2.5 rounded-full transition-all duration-500 shadow-sm`}
                 style={{ width: `${score}%` }}
               />
             </div>

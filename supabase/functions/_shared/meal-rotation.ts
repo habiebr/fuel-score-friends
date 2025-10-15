@@ -329,19 +329,44 @@ export function getRotationTemplate(
   // For now, use REST templates as base
   // TODO: Create specific templates for easy, moderate, long, quality
   const templates = REST_TEMPLATES;
-  const template = templates[dayOfWeek % templates.length];
+  const baseTemplate = templates[dayOfWeek % templates.length];
   
   // Scale meals to match target calories
-  const currentTotal = template.breakfast[0].calories + 
-                      template.lunch[0].calories + 
-                      template.dinner[0].calories;
+  const currentTotal = baseTemplate.breakfast[0].calories + 
+                      baseTemplate.lunch[0].calories + 
+                      baseTemplate.dinner[0].calories;
   const scaleFactor = targetCalories / currentTotal;
+  
+  // Apply scaling to create a new scaled template
+  const scaledTemplate: DayMealPlan = {
+    breakfast: baseTemplate.breakfast.map(meal => ({
+      ...meal,
+      calories: Math.round(meal.calories * scaleFactor),
+      protein: Math.round(meal.protein * scaleFactor),
+      carbs: Math.round(meal.carbs * scaleFactor),
+      fat: Math.round(meal.fat * scaleFactor)
+    })),
+    lunch: baseTemplate.lunch.map(meal => ({
+      ...meal,
+      calories: Math.round(meal.calories * scaleFactor),
+      protein: Math.round(meal.protein * scaleFactor),
+      carbs: Math.round(meal.carbs * scaleFactor),
+      fat: Math.round(meal.fat * scaleFactor)
+    })),
+    dinner: baseTemplate.dinner.map(meal => ({
+      ...meal,
+      calories: Math.round(meal.calories * scaleFactor),
+      protein: Math.round(meal.protein * scaleFactor),
+      carbs: Math.round(meal.carbs * scaleFactor),
+      fat: Math.round(meal.fat * scaleFactor)
+    }))
+  };
   
   // If need snack (high calorie days)
   const needsSnack = trainingLoad === 'long' || trainingLoad === 'quality';
   
-  if (needsSnack && !template.snack) {
-    template.snack = [
+  if (needsSnack) {
+    scaledTemplate.snack = [
       {
         name: "Pisang + Susu Kedelai",
         description: "Snack pemulihan pasca lari",
@@ -354,7 +379,7 @@ export function getRotationTemplate(
     ];
   }
   
-  return template;
+  return scaledTemplate;
 }
 
 /**

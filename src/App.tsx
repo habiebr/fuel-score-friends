@@ -37,6 +37,8 @@ import NotFound from "./pages/NotFound";
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 import { PWAUpdateNotification } from "@/components/PWAUpdateNotification";
 import OnboardingWizard from "./pages/OnboardingWizard";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 // import HistoricalScoresPage from "./pages/HistoricalScoresPage";
 
 const queryClient = new QueryClient({
@@ -97,6 +99,10 @@ function App() {
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route path="/offline" element={<Offline />} />
+                  
+                  {/* Legal Pages - Public */}
+                  <Route path="/terms-of-service" element={<TermsOfService />} />
+                  <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
                   {/* Protected Routes */}
                   <Route path="/" element={

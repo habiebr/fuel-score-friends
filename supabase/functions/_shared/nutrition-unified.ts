@@ -117,10 +117,15 @@ export function determineRacePhase(dateISO: string, raceDateISO?: string | null)
 /**
  * Aggregate multiple activities to an overall TrainingLoad for the day.
  */
-export function aggregateActivitiesToLoad(activities: Array<{ activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other'; duration_minutes?: number | null; distance_km?: number | null; intensity?: 'low' | 'moderate' | 'high' | null; }>): TrainingLoad {
+export function aggregateActivitiesToLoad(activities: Array<{ activity_type: 'rest' | 'run' | 'strength' | 'cardio' | 'other'; duration_minutes?: number | null; distance_km?: number | null; intensity?: 'low' | 'moderate' | 'high' | null; user_activity_label?: string | null; }>): TrainingLoad {
   if (!activities || activities.length === 0) return 'rest';
   const priority: TrainingLoad[] = ['rest', 'easy', 'moderate', 'long', 'quality'];
   const classify = (a: any): TrainingLoad => {
+    // Priority 1: User's explicit activity designation
+    if (a.user_activity_label === 'long_run') return 'long';
+    if (a.user_activity_label === 'interval') return 'quality';
+    
+    // Priority 2: Automatic classification based on parameters
     if (a.activity_type === 'run') {
       if (typeof a.distance_km === 'number' && a.distance_km >= 15) return 'long';
       if ((a.intensity || 'moderate') === 'high') return 'quality';

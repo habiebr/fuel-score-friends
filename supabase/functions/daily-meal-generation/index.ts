@@ -75,18 +75,46 @@ serve(async (req) => {
           .eq('date', today)
           .maybeSingle();
 
+        // DETERMINE TRAINING LOAD - Check planned training first!
+        let trainingActivity = 'rest';
+        let trainingDuration = 0;
+        let trainingDistance = 0;
+        
+        // 1. Check for planned training from training_activities table
+        const { data: plannedActivities } = await supabaseAdmin
+          .from('training_activities')
+          .select('*')
+          .eq('user_id', user.user_id)
+          .eq('date', today);
+        
+        if (plannedActivities && plannedActivities.length > 0) {
+          // Use the first/main activity for training type
+          const mainActivity = plannedActivities[0];
+          trainingActivity = mainActivity.activity_type || 'rest';
+          
+          // Sum up total duration and distance from all activities
+          trainingDuration = plannedActivities.reduce((sum: number, act: any) => sum + (act.duration_minutes || 0), 0);
+          trainingDistance = plannedActivities.reduce((sum: number, act: any) => sum + (act.distance_km || 0), 0);
+          
+          console.log(`✅ Using PLANNED training: ${trainingActivity} (${trainingDuration}min, ${trainingDistance}km)`);
+        } else {
+          console.log(`⚠️ No planned training, using: ${trainingActivity} (rest)`);
+        }
+
         // HYBRID APPROACH: AI on Sundays, rotation templates on other days
         const useAI = shouldUseAIToday();
         const rotationDay = getCurrentDayOfWeek();
         
         console.log(`Generation strategy: ${useAI ? '🤖 AI (Weekly Refresh)' : '🔄 Template Rotation (Day ' + rotationDay + ')'}`);
 
-        // Generate meal plan using unified service
+        // Generate meal plan using unified service with planned training details
         const plan = await generateUserMealPlan({
           userId: user.user_id,
           date: today,
           userProfile: profile,
-          trainingActivity: 'rest',
+          trainingActivity: trainingActivity,  // ✅ Pass activity type (run, rest, etc.)
+          trainingDuration: trainingDuration,  // ✅ Pass duration in minutes
+          trainingDistance: trainingDistance,  // ✅ Pass distance in km
           googleFitCalories: fit?.calories_burned || 0,
           useAI: useAI,  // AI on Sundays, templates on other days
           groqApiKey: useAI ? getGroqKey() : undefined,

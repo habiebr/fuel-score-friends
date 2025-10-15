@@ -15,7 +15,7 @@ export function PWAInstallButton({
   className = '',
   children 
 }: PWAInstallButtonProps) {
-  const { canInstall, installPWA, isInstalled, isIOS, isStandalone, enablePushNotifications, isPushSupported } = usePWA();
+  const { canInstall, installPWA, isInstalled, isIOS, isAndroid, isStandalone, enablePushNotifications, isPushSupported } = usePWA();
 
   const handleInstallFlow = async () => {
     try {
@@ -37,11 +37,16 @@ export function PWAInstallButton({
         return;
       }
 
-      // For other platforms: ask notifications first (if supported), then install
-      if (isPushSupported) {
-        await enablePushNotifications();
-      }
+      // Install PWA first (most important!)
       await installPWA();
+      
+      // AFTER installation, optionally ask for notifications
+      // Only do this if the user successfully installed
+      // if (isPushSupported) {
+      //   setTimeout(() => {
+      //     enablePushNotifications();
+      //   }, 1000); // Small delay to let installation complete
+      // }
     } catch (error) {
       console.error('Install flow error:', error);
     }
@@ -65,7 +70,7 @@ export function PWAInstallButton({
 }
 
 export function PWAInstallPrompt() {
-  const { canInstall, installPWA, isInstalled, isIOS, isStandalone, enablePushNotifications, isPushSupported } = usePWA();
+  const { canInstall, installPWA, isInstalled, isIOS, isAndroid, isStandalone, enablePushNotifications, isPushSupported } = usePWA();
 
   const handlePromptFlow = async () => {
     try {
@@ -87,20 +92,35 @@ export function PWAInstallPrompt() {
         return;
       }
 
-      // For other platforms: ask notifications first (if supported), then install
-      if (isPushSupported) {
-        await enablePushNotifications();
+      // Install PWA first (most important!)
+      const installed = await installPWA();
+      
+      if (!installed) {
+        console.warn('PWA installation was not successful');
       }
-      await installPWA();
+      
+      // AFTER installation, optionally ask for notifications
+      // Only do this if the user successfully installed
+      // if (isPushSupported && installed) {
+      //   setTimeout(() => {
+      //     enablePushNotifications();
+      //   }, 1000); // Small delay to let installation complete
+      // }
     } catch (error) {
       console.error('Install flow error:', error);
     }
   };
 
-  // For debugging - always show the prompt for now
-  // if (isInstalled || !canInstall) {
-  //   return null;
-  // }
+  // Don't show if already installed or in standalone mode
+  if (isInstalled || isStandalone) {
+    return null;
+  }
+
+  // Show for iOS even without canInstall (manual instructions)
+  // For Android/Desktop, only show if canInstall is true
+  if (!isIOS && !canInstall) {
+    return null;
+  }
 
   return (
     <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-white">
@@ -116,10 +136,10 @@ export function PWAInstallPrompt() {
           onClick={handlePromptFlow}
           variant="secondary"
           size="sm"
-          className="bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
+          className="bg-white/90 text-blue-600 hover:bg-white hover:text-blue-700 font-semibold"
           disabled={!isIOS && !canInstall}
         >
-          {isIOS ? 'Install on iOS' : 'Install'}
+          {isIOS ? 'How to Install' : 'Install'}
         </Button>
       </div>
     </div>

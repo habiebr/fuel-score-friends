@@ -284,10 +284,14 @@ T        // Fetch sessions (handle pagination)
                 }
               }
               const heartRateAvg = hrCount > 0 ? Math.round(hrSum / hrCount) : null;
-              // Attach sessions that overlap this day (simple by date)
+              // Attach sessions that overlap this day (robust overlap logic)
+              const dayStart = new Date(day + 'T00:00:00Z');
+              const dayEnd = new Date(day + 'T23:59:59Z');
               const daySessions = (exerciseSessions || []).filter((s: any) => {
-                const sDate = new Date(parseInt(s.startTimeMillis)).toISOString().slice(0, 10);
-                return sDate === day;
+                const sessionStart = new Date(Number(s.startTimeMillis));
+                const sessionEnd = new Date(Number(s.endTimeMillis));
+                // Include session if it overlaps any part of the day
+                return sessionStart <= dayEnd && sessionEnd >= dayStart;
               }).map((s: any) => {
                 const numericType = Number(s._activityTypeNumeric ?? s.activityType ?? s.activity);
                 const friendly = (!Number.isNaN(numericType) && activityTypeNames[numericType]) || null;
