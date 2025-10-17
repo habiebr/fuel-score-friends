@@ -251,22 +251,23 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           setTimeout(() => reject(new Error('Analysis timeout - AI is taking too long to respond')), 60000)
         );
         
-        const { data, error } = await Promise.race([invokePromise, edgeFunctionTimeout]) as any;
+        const result = await Promise.race([invokePromise, edgeFunctionTimeout]) as any;
 
-        if (error) {
-          console.error('❌ Nutrition AI error:', error);
+        // Handle edge function errors (status 500 when AI fails)
+        if (result.error) {
+          console.error('❌ Nutrition AI error:', result.error);
           console.error('Error details:', {
-            message: error.message,
-            status: error.status,
-            statusText: error.statusText,
-            context: error.context
+            message: result.error.message,
+            status: result.error.status,
+            statusText: result.error.statusText,
+            context: result.error.context
           });
           
-          // Check for auth errors (non-2xx like 401, 403)
-          const isAuthError = error.status === 401 || 
-                             error.status === 403 || 
-                             error.message?.includes('Unauthorized') ||
-                             error.message?.includes('Authentication');
+          // Check for auth errors (401, 403)
+          const isAuthError = result.error.status === 401 || 
+                             result.error.status === 403 || 
+                             result.error.message?.includes('Unauthorized') ||
+                             result.error.message?.includes('Authentication');
           
           if (isAuthError) {
             console.error('🔐 Auth error detected - session may have expired during upload');
@@ -274,10 +275,10 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           }
           
           // Check for network errors that can be retried
-          const isNetworkError = error.message?.includes('Failed to send') || 
-                                 error.message?.includes('network') ||
-                                 error.message?.includes('fetch') ||
-                                 error.message?.includes('NetworkError');
+          const isNetworkError = result.error.message?.includes('Failed to send') || 
+                                 result.error.message?.includes('network') ||
+                                 result.error.message?.includes('fetch') ||
+                                 result.error.message?.includes('NetworkError');
           
           if (isNetworkError && retryCount < maxRetries) {
             retryCount++;
@@ -290,7 +291,37 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
             return attemptUpload();
           }
           
-          throw new Error(error.message || `Failed to analyze food (${error.status || 'unknown error'})`);
+          throw new Error(result.error.message || `Failed to analyze food (${result.error.status || 'unknown error'})`);
+        }
+        
+        // If status code is not 2xx but no error object, check response data
+        const { data, error } = result;
+        
+        if (error || (data && data.error)) {
+          const errorDetails = error || data.error;
+          console.error('❌ Edge function returned error:', errorDetails);
+          
+          // Extract meaningful error message
+          let errorMsg = 'Failed to analyze food';
+          if (typeof errorDetails === 'string') {
+            errorMsg = errorDetails;
+          } else if (errorDetails.details) {
+            errorMsg = errorDetails.details;
+          } else if (errorDetails.error) {
+            errorMsg = errorDetails.error;
+          } else if (errorDetails.message) {
+            errorMsg = errorDetails.message;
+          }
+          
+          // Log additional context
+          if (errorDetails.error_type) {
+            console.error('Error type:', errorDetails.error_type);
+          }
+          if (errorDetails.raw_response) {
+            console.error('Raw AI response:', errorDetails.raw_response);
+          }
+          
+          throw new Error(errorMsg);
         }
 
         setProgress(90);
@@ -320,12 +351,21 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
             errorTitle = "Authentication error";
             errorMessage = "Authentication failed. Please refresh the page and log in again.";
+          } else if (error.message.includes('AI returned an invalid format') || error.message.includes('parse nutrition data')) {
+            errorTitle = "AI analysis failed";
+            errorMessage = "The AI couldn't understand the food in this image. Try taking a clearer photo with better lighting.";
+          } else if (error.message.includes('Gemini') || error.message.includes('analyze image')) {
+            errorTitle = "AI service error";
+            errorMessage = "The AI service is temporarily unavailable. Please try again in a moment.";
+          } else if (error.message.includes('Image processing failed') || error.message.includes('fetch image')) {
+            errorTitle = "Image error";
+            errorMessage = "Unable to process the image. Please try taking a new photo.";
           } else if (error.message.includes('compress')) {
             errorTitle = "Image processing failed";
             errorMessage = "Unable to process the image. Please try taking a new photo or selecting a different image.";
           } else if (error.message.includes('timeout')) {
             errorTitle = "Request timed out";
-            errorMessage = "The request took too long. The image has been optimized, but upload failed. Please check your internet connection and try again.";
+            errorMessage = "The request took too long. Please check your internet connection and try again.";
           } else if (error.message.includes('Failed to send') || error.message.includes('NetworkError')) {
             errorTitle = "Connection error";
             errorMessage = "Unable to reach the server. Please check your internet connection and try again.";
