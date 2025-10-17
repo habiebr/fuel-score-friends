@@ -211,10 +211,12 @@ export function useGoogleFitSync() {
     try {
       const accessToken = await getGoogleAccessToken();
       if (!accessToken) {
-        toast({
-          title: 'Google Fit not connected',
-          description: 'Please connect Google Fit to sync your activity.',
-        });
+        if (!silent) {
+          toast({
+            title: 'Google Fit not connected',
+            description: 'Please connect Google Fit to sync your activity.',
+          });
+        }
         setIsConnected(false);
         setSyncStatus('error');
         return null;
