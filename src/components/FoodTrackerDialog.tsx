@@ -457,7 +457,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         console.log('☁️ Uploading to Supabase Storage:', fileName);
         
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('food-images')
+          .from('food-photos')
           .upload(fileName, compressedFile, {
             contentType: compressedFile.type,
             upsert: false
@@ -473,7 +473,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
-          .from('food-images')
+          .from('food-photos')
           .getPublicUrl(uploadData.path);
 
         console.log('🔗 Public URL:', publicUrl);
