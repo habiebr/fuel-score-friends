@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -24,6 +24,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
   const [progress, setProgress] = useState(0);
   const [mealType, setMealType] = useState('lunch');
   const [nutritionData, setNutritionData] = useState<any>(null);
+  const isProcessingRef = useRef(false); // Prevent race conditions on Android
 
   // Detect if we're on Android
   const isAndroid = () => {
@@ -43,7 +44,8 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
   useEffect(() => {
     if (!open) {
       // Only reset if we're not in the middle of processing
-      if (stage !== 'uploading' && stage !== 'analyzing' && stage !== 'saving') {
+      // Check both state AND ref to prevent Android race conditions
+      if (!isProcessingRef.current && stage !== 'uploading' && stage !== 'analyzing' && stage !== 'saving') {
         setStage('idle');
         setProgress(0);
         setNutritionData(null);
@@ -63,9 +65,13 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      isProcessingRef.current = false; // Reset if no file selected
+      return;
+    }
 
     if (!file.type.startsWith('image/')) {
+      isProcessingRef.current = false;
       toast({
         title: "Invalid file",
         description: "Please upload an image file",
@@ -76,6 +82,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
     // Check file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
+      isProcessingRef.current = false;
       toast({
         title: "File too large",
         description: "Please upload an image smaller than 10MB",
@@ -84,6 +91,10 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
       return;
     }
 
+    // Set ref immediately to prevent dialog from resetting on Android
+    console.log('📸 Android fix: Setting isProcessingRef to prevent dialog reset');
+    isProcessingRef.current = true;
+    
     setStage('uploading');
     setProgress(10);
     setNutritionData(null);
@@ -200,6 +211,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         });
         setStage('idle');
         setProgress(0);
+        isProcessingRef.current = false; // Reset on error
       }
     };
 
@@ -207,6 +219,10 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
       await attemptUpload();
     } finally {
       event.target.value = '';
+      // Only reset ref if not in a processing state (to allow saving after analysis)
+      if (stage !== 'complete') {
+        isProcessingRef.current = false;
+      }
     }
   };
 
@@ -265,11 +281,13 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         setNutritionData(null);
         setStage('idle');
         setProgress(0);
+        isProcessingRef.current = false; // Reset after save complete
         onOpenChange(false);
       }, 1000);
     } catch (error) {
       console.error('Error saving food log:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      isProcessingRef.current = false; // Reset on save error
       toast({
         title: "Save failed",
         description: errorMessage,
