@@ -482,21 +482,45 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
         // Call Edge Function to analyze the image
         console.log('🤖 Calling AI nutrition analysis...');
-        const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-food-image', {
-          body: { imageUrl: publicUrl }
-        });
-
-        if (analysisError) {
-          console.error('Analysis error:', analysisError);
-          throw analysisError;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error('Not signed in');
         }
 
-        console.log('🎯 Analysis complete:', analysisData);
+        const invokePromise = supabase.functions.invoke('nutrition-ai', {
+          body: { 
+            type: 'food_photo',
+            image: publicUrl,
+            mealType
+          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        
+        const edgeFunctionTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Analysis timeout - AI is taking too long to respond')), 60000)
+        );
+        
+        const result = await Promise.race([invokePromise, edgeFunctionTimeout]) as any;
+
+        if (result.error) {
+          console.error('❌ Nutrition AI error:', result.error);
+          throw new Error(result.error.message || 'Failed to analyze food');
+        }
+
+        const { data, error } = result;
+        
+        if (error || (data && data.error)) {
+          const errorDetails = error || data.error;
+          console.error('❌ Edge function returned error:', errorDetails);
+          throw new Error(typeof errorDetails === 'string' ? errorDetails : errorDetails.message || 'Failed to analyze food');
+        }
+
+        console.log('🎯 Analysis complete:', data);
         setProgress(90);
 
-        if (analysisData?.nutrition) {
+        if (data?.nutritionData) {
           setNutritionData({
-            ...analysisData.nutrition,
+            ...data.nutritionData,
             imageUrl: publicUrl,
             imagePath: uploadData.path
           });
@@ -504,7 +528,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           setProgress(100);
           console.log('✨ Food analysis ready for user review');
         } else {
-          throw new Error('Invalid analysis response');
+          throw new Error('No nutrition data received from AI');
         }
 
       } catch (error: any) {
