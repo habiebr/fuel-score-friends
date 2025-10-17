@@ -338,6 +338,101 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     }
   }, [user]);
 
+  // HYBRID RECOVERY DETECTION: Check for recent workouts on app open
+  useEffect(() => {
+    if (!user) return;
+
+    const detectRecentWorkout = async () => {
+      console.log('🔍 Hybrid recovery detection started...');
+      
+      try {
+        // STEP 1: Check training_notifications first (backend detection cache)
+        // This is instant for Android users who got background detection
+        const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+        
+        const { data: notification, error: notifError } = await supabase
+          .from('training_notifications')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('type', 'recovery')
+          .eq('is_read', false)
+          .gt('scheduled_for', thirtyMinutesAgo.toISOString())
+          .order('scheduled_for', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!notifError && notification?.notes) {
+          // Found cached notification from backend detection
+          try {
+            const workoutData = JSON.parse(notification.notes);
+            console.log('✅ Found cached recovery notification (backend):', workoutData);
+            
+            setNewActivity({
+              actual: `${workoutData.name || 'Workout'} ${workoutData.distance ? workoutData.distance + ' km' : ''}`,
+              sessionId: workoutData.session_id
+            });
+            return; // Early exit - already detected by backend
+          } catch (parseError) {
+            console.error('Failed to parse notification data:', parseError);
+          }
+        }
+
+        // STEP 2: No cached notification - trigger fresh sync (foreground detection)
+        // This is the primary path for iOS users
+        console.log('📡 No cached notification, triggering fresh sync...');
+        
+        // Trigger sync with 3-second timeout
+        const syncPromise = syncGoogleFit(true); // Silent sync
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
+        
+        await Promise.race([syncPromise, timeoutPromise]);
+        console.log('✅ Fresh sync completed');
+        
+        // STEP 3: Get fresh data and check for recent workouts
+        const { getTodayData } = useGoogleFitSync();
+        const freshData = await getTodayData();
+        
+        if (freshData?.sessions && Array.isArray(freshData.sessions)) {
+          const sessions = [...freshData.sessions];
+          sessions.sort((a, b) => parseInt(b.endTimeMillis || '0') - parseInt(a.endTimeMillis || '0'));
+          
+          const now = Date.now();
+          const recentWorkout = sessions.find(session => {
+            const ended = parseInt(session.endTimeMillis || '0');
+            const timeSinceEnd = now - ended;
+            // Only workouts in last 30 minutes
+            return timeSinceEnd > 0 && timeSinceEnd < 30 * 60 * 1000;
+          });
+          
+          if (recentWorkout) {
+            const sessionId = `${recentWorkout.startTimeMillis}-${recentWorkout.endTimeMillis}`;
+            const lastAck = localStorage.getItem('lastAckSessionId');
+            
+            if (sessionId !== lastAck) {
+              console.log('✅ Recent workout detected (foreground):', recentWorkout);
+              
+              const activityType = (recentWorkout.activityType || recentWorkout.name || 'Workout').toString();
+              const distance = recentWorkout.distance ? ` ${(recentWorkout.distance / 1000).toFixed(1)} km` : '';
+              
+              setNewActivity({
+                actual: `${activityType}${distance}`,
+                sessionId
+              });
+            }
+          } else {
+            console.log('ℹ️ No recent workouts found in last 30 minutes');
+          }
+        }
+        
+      } catch (error) {
+        console.error('❌ Hybrid recovery detection failed:', error);
+      }
+    };
+
+    // Run detection on mount (when user opens app)
+    detectRecentWorkout();
+    
+  }, [user, syncGoogleFit]);
 
   // Helper function to wait for session confirmation
   const waitForSessionConfirmation = async (): Promise<boolean> => {
@@ -794,7 +889,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           const id = `${latest.startTimeMillis}-${latest.endTimeMillis}`;
           const lastAck = localStorage.getItem('lastAckSessionId');
           const ended = parseInt(latest.endTimeMillis || '0');
-          const isRecent = Date.now() - ended < 6 * 60 * 60 * 1000;
+          // CHANGED: Detection window from 6 hours to 30 minutes for more accurate recovery timing
+          const isRecent = Date.now() - ended < 30 * 60 * 1000; // 30 minutes
           const activityType = (latest.activityType || latest.application || latest.name || 'activity').toString();
           const actualText = `${activityType}${latest?.distance ? ` ${(latest.distance / 1000).toFixed(1)} km` : ''}`;
           if (isRecent && id !== lastAck) {

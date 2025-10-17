@@ -236,6 +236,102 @@ T        // Fetch sessions (handle pagination)
               results.errors.push(`User ${token.user_id}: Failed to save sessions`);
               continue;
             }
+
+            // HYBRID RECOVERY DETECTION: Check for recent workouts (< 30 min)
+            try {
+              const now = Date.now();
+              const thirtyMinutesAgo = now - (30 * 60 * 1000);
+              
+              // Find workouts that ended in last 30 minutes
+              const recentWorkouts = exerciseSessions.filter((session: any) => {
+                const endTime = new Date(parseInt(session.endTimeMillis)).getTime();
+                const timeSinceEnd = now - endTime;
+                return timeSinceEnd > 0 && timeSinceEnd < 30 * 60 * 1000;
+              });
+              
+              if (recentWorkouts.length > 0) {
+                // Take most recent workout
+                const mostRecent = recentWorkouts.sort((a: any, b: any) => 
+                  parseInt(b.endTimeMillis) - parseInt(a.endTimeMillis)
+                )[0];
+                
+                const endTime = new Date(parseInt(mostRecent.endTimeMillis)).getTime();
+                const minutesSinceEnd = Math.floor((now - endTime) / (60 * 1000));
+                const remainingMinutes = 30 - minutesSinceEnd;
+                
+                const numericType = Number(mostRecent._activityTypeNumeric ?? mostRecent.activityType ?? mostRecent.activity);
+                const friendlyName = (!Number.isNaN(numericType) && activityTypeNames[numericType]) || null;
+                const workoutName = mostRecent.name || friendlyName || mostRecent.description || 'Workout';
+                
+                console.log(`🏃 Recent workout detected for user ${token.user_id}: ${workoutName} (${minutesSinceEnd} min ago)`);
+                
+                // Create recovery notification
+                const { error: notifError } = await supabaseClient
+                  .from('training_notifications')
+                  .upsert({
+                    user_id: token.user_id,
+                    type: 'recovery',
+                    title: 'Recovery Window Active! ⏰',
+                    message: `${workoutName} completed ${minutesSinceEnd} min ago. ${remainingMinutes} min remaining for optimal recovery nutrition.`,
+                    scheduled_for: new Date().toISOString(),
+                    training_date: new Date().toISOString().split('T')[0],
+                    activity_type: workoutName,
+                    is_read: false,
+                    notes: JSON.stringify({
+                      session_id: mostRecent.id,
+                      end_time: new Date(endTime).toISOString(),
+                      name: workoutName,
+                      minutes_since_end: minutesSinceEnd,
+                      remaining_minutes: remainingMinutes,
+                      distance: mostRecent.distance ? (mostRecent.distance / 1000).toFixed(1) : null
+                    })
+                  }, {
+                    onConflict: 'user_id,training_date,type'
+                  });
+                
+                if (notifError) {
+                  console.error(`Failed to create recovery notification for user ${token.user_id}:`, notifError);
+                } else {
+                  console.log(`✅ Recovery notification created for user ${token.user_id}`);
+                  
+                  // Send push notification (Android users)
+                  try {
+                    const pushResult = await fetch(
+                      `${supabaseUrl}/functions/v1/push-send`,
+                      {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${supabaseServiceKey}`,
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                          user_id: token.user_id,
+                          title: 'Recovery Window Active! ⏰',
+                          body: `${workoutName} - ${remainingMinutes} minutes remaining`,
+                          data: {
+                            type: 'recovery_window',
+                            session_id: mostRecent.id,
+                            remaining_minutes: remainingMinutes
+                          }
+                        })
+                      }
+                    );
+                    
+                    if (pushResult.ok) {
+                      console.log(`📱 Push notification sent to user ${token.user_id}`);
+                    } else {
+                      console.log(`⚠️ Push notification failed for user ${token.user_id}: ${await pushResult.text()}`);
+                    }
+                  } catch (pushError) {
+                    console.warn(`Push notification error for user ${token.user_id}:`, pushError);
+                    // Non-critical error, continue
+                  }
+                }
+              }
+            } catch (detectionError) {
+              console.error(`Workout detection error for user ${token.user_id}:`, detectionError);
+              // Non-critical error, continue with sync
+            }
         }
 
         // Fetch daily aggregates for last N days and upsert into google_fit_data
