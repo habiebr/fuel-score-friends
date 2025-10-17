@@ -30,7 +30,7 @@ serve(async (req) => {
 
     if (profilesError) throw profilesError;
 
-    const generationResults = [];
+    const generationResults: any[] = [];
     const today = new Date();
     const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 });
 
@@ -38,32 +38,64 @@ serve(async (req) => {
       try {
         const weeklyPattern = JSON.parse(profile.activity_level) as WeeklyPattern[];
 
-        // Delete any existing activities for next week
+        // Check for Runna activities for next week
+        const { data: runnaActivities } = await supabaseAdmin
+          .from("training_activities")
+          .select("date")
+          .eq("user_id", profile.user_id)
+          .eq("is_from_runna", true)
+          .eq("is_actual", false)
+          .gte("date", format(nextWeekStart, "yyyy-MM-dd"))
+          .lte("date", format(addDays(nextWeekStart, 6), "yyyy-MM-dd"));
+
+        // Create Set of dates that have Runna activities
+        const runnaDates = new Set(
+          (runnaActivities || []).map(a => a.date)
+        );
+
+        console.log(`User ${profile.user_id}: Runna has ${runnaDates.size} activities for next week`);
+
+        // Delete ONLY pattern-generated activities (not Runna, not actual, not manual)
         await supabaseAdmin
           .from("training_activities")
           .delete()
           .eq("user_id", profile.user_id)
+          .eq("is_from_runna", false)
+          .eq("is_actual", false)
           .gte("date", format(nextWeekStart, "yyyy-MM-dd"))
           .lte("date", format(addDays(nextWeekStart, 6), "yyyy-MM-dd"));
 
-        // Generate activities for next week based on pattern
+        // Generate activities for next week, skipping Runna dates
         const activities = [];
+        let skippedCount = 0;
+        
         for (let i = 0; i < 7; i++) {
           const date = addDays(nextWeekStart, i);
+          const dateStr = format(date, "yyyy-MM-dd");
           const pattern = weeklyPattern[i];
           
+          // Skip if Runna has an activity for this date
+          if (runnaDates.has(dateStr)) {
+            console.log(`⏭️  Skipping ${dateStr} - has Runna activity`);
+            skippedCount++;
+            continue;
+          }
+          
+          // Generate pattern activity for this date (Runna doesn't have it)
           if (pattern && pattern.activities.length > 0) {
             for (const act of pattern.activities) {
               activities.push({
                 user_id: profile.user_id,
-                date: format(date, "yyyy-MM-dd"),
+                date: dateStr,
                 activity_type: act.activity_type,
                 duration_minutes: act.duration_minutes,
                 distance_km: act.distance_km,
                 intensity: act.intensity,
                 estimated_calories: act.estimated_calories,
                 start_time: null,
-                notes: null
+                notes: null,
+                is_from_runna: false,
+                is_actual: false
               });
             }
           }
@@ -80,7 +112,8 @@ serve(async (req) => {
         generationResults.push({
           user_id: profile.user_id,
           success: true,
-          activities_generated: activities.length
+          activities_generated: activities.length,
+          skipped_for_runna: skippedCount
         });
 
       } catch (error) {

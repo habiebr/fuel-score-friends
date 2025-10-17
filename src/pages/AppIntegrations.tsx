@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronLeft, Activity, Download, History } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ChevronLeft, Activity, Download, History, Calendar, Check, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
@@ -16,19 +18,26 @@ import { StravaConnectButton, StravaDisconnectButton } from '@/components/Strava
 import { GoogleFitConnectButton, GoogleFitDisconnectButton } from '@/components/GoogleFitConnectButton';
 import { useStravaAuth } from '@/hooks/useStravaAuth';
 import { useStravaSync } from '@/hooks/useStravaSync';
+import { supabase } from '@/integrations/supabase/client';
+import { formatDistanceToNow } from 'date-fns';
 
 export default function AppIntegrations() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { syncGoogleFit, isSyncing, lastSync, connectGoogleFit, syncHistoricalData, isHistoricalSyncing, historicalSyncProgress } = useGoogleFitSync();
-  const { signInWithGoogle, getGoogleAccessToken } = useAuth();
+  const { signInWithGoogle, getGoogleAccessToken, user } = useAuth();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [syncLabel, setSyncLabel] = useState<string>('');
   
+  // Runna calendar integration
+  const [runnaUrl, setRunnaUrl] = useState('');
+  const [isRunnaSyncing, setIsRunnaSyncing] = useState(false);
+  const [runnaLastSync, setRunnaLastSync] = useState<Date | null>(null);
+  
   // Strava integration
-  const { isConnected: isStravaConnected, connectStrava, disconnectStrava, checkConnectionStatus } = useStravaAuth();
+  const { isConnected: isStravaConnected, connectStrava, disconnectStrava, checkConnectionStatus} = useStravaAuth();
   const { syncActivities, isSyncing: isStravaSyncing, lastSync: stravaLastSync } = useStravaSync();
 
   // Handle Strava OAuth callback
@@ -96,6 +105,96 @@ export default function AppIntegrations() {
       title: "Google Fit disconnected",
       description: "Your fitness data will no longer sync",
     });
+  };
+
+  // Load Runna calendar data
+  useEffect(() => {
+    if (!user) return;
+    
+    const loadRunnaData = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('runna_calendar_url, runna_last_synced_at')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (!error && data) {
+        setRunnaUrl(data.runna_calendar_url || '');
+        if (data.runna_last_synced_at) {
+          setRunnaLastSync(new Date(data.runna_last_synced_at));
+        }
+      }
+    };
+    
+    loadRunnaData();
+  }, [user]);
+
+  const handleSyncRunna = async () => {
+    if (!runnaUrl || !user) return;
+    
+    setIsRunnaSyncing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const { data, error } = await supabase.functions.invoke('sync-runna-calendar', {
+        body: { calendar_url: runnaUrl },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
+      
+      if (error) throw error;
+      
+      setRunnaLastSync(new Date());
+      toast({
+        title: "Runna calendar synced!",
+        description: data.message || `Synced ${data.activities_synced} activities`,
+      });
+    } catch (error) {
+      console.error('Runna sync error:', error);
+      toast({
+        title: "Sync failed",
+        description: error instanceof Error ? error.message : "Could not sync Runna calendar",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRunnaSyncing(false);
+    }
+  };
+
+  const handleDisconnectRunna = async () => {
+    if (!user) return;
+    
+    try {
+      // Delete all Runna activities
+      await supabase
+        .from('training_activities')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('is_from_runna', true);
+      
+      // Clear profile fields
+      await supabase
+        .from('profiles')
+        .update({
+          runna_calendar_url: null,
+          runna_last_synced_at: null
+        })
+        .eq('user_id', user.id);
+      
+      setRunnaUrl('');
+      setRunnaLastSync(null);
+      
+      toast({
+        title: "Runna disconnected",
+        description: "Your pattern generator will now fill your training plan",
+      });
+    } catch (error) {
+      console.error('Disconnect error:', error);
+      toast({
+        title: "Disconnect failed",
+        description: "Could not disconnect Runna calendar",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -257,9 +356,116 @@ export default function AppIntegrations() {
                 </CardContent>
               </Card>
 
-              {/* Strava */}
+              {/* Runna Calendar */}
               <Card className="shadow-card mt-4">
                 <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Calendar className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-foreground">Runna Training Calendar</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {runnaUrl 
+                          ? (runnaLastSync ? `Last synced ${formatDistanceToNow(runnaLastSync)} ago` : 'Connected') 
+                          : 'Import your Runna training plan'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {runnaUrl ? (
+                    <>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Check className="h-4 w-4 text-success" />
+                        <span className="text-success font-medium">Calendar connected</span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleSyncRunna}
+                          disabled={isRunnaSyncing}
+                          variant="outline"
+                          className="flex-1"
+                        >
+                          {isRunnaSyncing ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Syncing...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Sync Now
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          onClick={handleDisconnectRunna}
+                          disabled={isRunnaSyncing}
+                          variant="outline"
+                        >
+                          Disconnect
+                        </Button>
+                      </div>
+
+                      <div className="pt-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <div>
+                            Runna activities take priority. Pattern generator fills gaps for days without Runna workouts.
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="runna-url">Calendar URL (ICS)</Label>
+                        <Input
+                          id="runna-url"
+                          placeholder="https://cal.runna.com/xxx.ics"
+                          value={runnaUrl}
+                          onChange={(e) => setRunnaUrl(e.target.value)}
+                          disabled={isRunnaSyncing}
+                        />
+                        <p className="text-xs text-muted-foreground flex items-start gap-2">
+                          <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          <span>
+                            Find this in Runna app → Settings → Export Calendar
+                          </span>
+                        </p>
+                      </div>
+                      
+                      <Button
+                        onClick={handleSyncRunna}
+                        disabled={!runnaUrl || isRunnaSyncing}
+                        className="w-full"
+                      >
+                        {isRunnaSyncing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <Calendar className="h-4 w-4 mr-2" />
+                            Connect Calendar
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Strava - Coming Soon */}
+              <Card className="shadow-card mt-4 relative">
+                {/* Coming Soon Badge */}
+                <div className="absolute top-4 right-4 px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-semibold rounded-full">
+                  Coming Soon
+                </div>
+                
+                <CardContent className="p-6 space-y-4 opacity-60">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-[#FC5200] rounded-full flex items-center justify-center flex-shrink-0">
                       {/* Strava Logo */}
@@ -273,58 +479,23 @@ export default function AppIntegrations() {
                     <div className="flex-1 min-w-0">
                       <h3 className="text-lg font-semibold text-foreground">Strava</h3>
                       <p className="text-sm text-muted-foreground">
-                        {isStravaConnected 
-                          ? (stravaLastSync ? `Last sync ${new Date(stravaLastSync).toLocaleTimeString()}` : 'Connected') 
-                          : 'Track runs, rides, and workouts'}
+                        Track runs, rides, and workouts
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    {isStravaConnected ? (
-                      <>
-                        <Button
-                          onClick={() => syncActivities()}
-                          disabled={isStravaSyncing}
-                          variant="outline"
-                          className="flex-1"
-                        >
-                          {isStravaSyncing ? 'Syncing...' : 'Sync Now'}
-                        </Button>
-                        <StravaDisconnectButton
-                          onClick={async () => {
-                            await disconnectStrava();
-                            toast({
-                              title: "Strava disconnected",
-                              description: "Your Strava activities will no longer sync",
-                            });
-                          }}
-                          disabled={isStravaSyncing}
-                          size="default"
-                        />
-                      </>
-                    ) : (
-                      <StravaConnectButton
-                        onClick={() => {
-                          connectStrava();
-                        }}
-                        variant="orange"
-                        size="default"
-                        className="w-full"
-                      />
-                    )}
-                  </div>
+                  <Button disabled className="w-full opacity-50 cursor-not-allowed">
+                    Connect to Strava
+                  </Button>
 
-                  {isStravaConnected && (
-                    <div className="pt-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <Activity className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                        <div>
-                          Strava provides detailed activity data including GPS tracks, heart rate zones, power metrics, and elevation profiles for comprehensive training analysis.
-                        </div>
+                  <div className="pt-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <Activity className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        Strava integration is coming soon! You'll be able to sync detailed activity data including GPS tracks, heart rate zones, power metrics, and elevation profiles.
                       </div>
                     </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
 
