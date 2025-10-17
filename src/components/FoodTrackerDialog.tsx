@@ -173,6 +173,18 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
     const attemptUpload = async (): Promise<void> => {
       try {
+        // Get and validate session BEFORE starting (prevent auth race condition)
+        console.log('🔐 Getting fresh session before upload...');
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !sessionData.session) {
+          console.error('Session error:', sessionError);
+          throw new Error('Authentication expired. Please refresh the page and try again.');
+        }
+        
+        const session = sessionData.session;
+        console.log('✅ Session valid, token expires:', new Date(session.expires_at! * 1000).toLocaleString());
+        
         // Compress image first (especially important for Samsung gallery photos)
         setProgress(20);
         console.log('📸 Compressing image for faster upload...');
@@ -224,16 +236,15 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         setStage('analyzing');
         setProgress(60);
         
-        // Call edge function with timeout and retry logic
-        const session = (await supabase.auth.getSession()).data.session;
-        
+        // Call edge function with session token from the start (no race condition)
+        console.log('🔐 Using session token for edge function...');
         const invokePromise = supabase.functions.invoke('nutrition-ai', {
           body: { 
             type: 'food_photo',
             image: signed.data.signedUrl,
             mealType
           },
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+          headers: { Authorization: `Bearer ${session.access_token}` },
         });
         
         const edgeFunctionTimeout = new Promise((_, reject) => 
@@ -243,7 +254,24 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         const { data, error } = await Promise.race([invokePromise, edgeFunctionTimeout]) as any;
 
         if (error) {
-          console.error('Nutrition AI error:', error);
+          console.error('❌ Nutrition AI error:', error);
+          console.error('Error details:', {
+            message: error.message,
+            status: error.status,
+            statusText: error.statusText,
+            context: error.context
+          });
+          
+          // Check for auth errors (non-2xx like 401, 403)
+          const isAuthError = error.status === 401 || 
+                             error.status === 403 || 
+                             error.message?.includes('Unauthorized') ||
+                             error.message?.includes('Authentication');
+          
+          if (isAuthError) {
+            console.error('🔐 Auth error detected - session may have expired during upload');
+            throw new Error('Authentication expired. Please refresh the page and try again.');
+          }
           
           // Check for network errors that can be retried
           const isNetworkError = error.message?.includes('Failed to send') || 
@@ -253,7 +281,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           
           if (isNetworkError && retryCount < maxRetries) {
             retryCount++;
-            console.log(`Retrying... Attempt ${retryCount + 1} of ${maxRetries + 1}`);
+            console.log(`🔄 Retrying... Attempt ${retryCount + 1} of ${maxRetries + 1}`);
             toast({
               title: "Connection issue",
               description: `Retrying... (${retryCount}/${maxRetries})`,
@@ -262,7 +290,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
             return attemptUpload();
           }
           
-          throw new Error(error.message || 'Failed to analyze food');
+          throw new Error(error.message || `Failed to analyze food (${error.status || 'unknown error'})`);
         }
 
         setProgress(90);
@@ -286,7 +314,13 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         let errorMessage = "Unknown error occurred";
         
         if (error instanceof Error) {
-          if (error.message.includes('compress')) {
+          if (error.message.includes('Authentication') || error.message.includes('expired')) {
+            errorTitle = "Session expired";
+            errorMessage = "Your session has expired. Please refresh the page and try again.";
+          } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+            errorTitle = "Authentication error";
+            errorMessage = "Authentication failed. Please refresh the page and log in again.";
+          } else if (error.message.includes('compress')) {
             errorTitle = "Image processing failed";
             errorMessage = "Unable to process the image. Please try taking a new photo or selecting a different image.";
           } else if (error.message.includes('timeout')) {
