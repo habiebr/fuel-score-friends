@@ -796,9 +796,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
                     } else {
                       // iOS/Desktop: Use native file input with camera capture
                       const input = document.getElementById('food-image') as HTMLInputElement;
-                      if (input.attributes as any) {
-                        (input.attributes as any).capture = 'environment';
-                      }
+                      input.setAttribute('capture', 'environment');
                       input.click();
                     }
                   }}
