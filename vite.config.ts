@@ -19,9 +19,7 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         mode: 'development',
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webp}'],
-        additionalManifestEntries: [
-          { url: '/sw-health-sync.js', revision: '2' }
-        ],
+        additionalManifestEntries: [],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
@@ -112,7 +110,6 @@ export default defineConfig(({ mode }) => ({
         navigateFallback: '/offline',
         navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
         offlineGoogleAnalytics: false,
-        importScripts: ['/sw-health-sync.js'],
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
