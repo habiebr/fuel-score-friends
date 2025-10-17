@@ -55,12 +55,78 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
   const getStageMessage = (currentStage: ProcessStage) => {
     switch (currentStage) {
-      case 'uploading': return 'Uploading image...';
+      case 'uploading': return 'Preparing image...';
       case 'analyzing': return 'Analyzing food with AI...';
       case 'saving': return 'Saving to your log...';
       case 'complete': return 'Complete!';
       default: return '';
     }
+  };
+
+  // Compress image for faster upload (especially for Samsung gallery photos)
+  const compressImage = async (file: File, maxSizeMB: number = 2): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Resize if too large (Samsung photos can be 4000x3000+)
+          const maxDimension = 1920; // Max 1920px for food photos
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = (height / width) * maxDimension;
+              width = maxDimension;
+            } else {
+              width = (width / height) * maxDimension;
+              height = maxDimension;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Try different quality levels to hit target size
+          let quality = 0.85;
+          const tryCompress = () => {
+            canvas.toBlob((blob) => {
+              if (!blob) {
+                reject(new Error('Failed to compress image'));
+                return;
+              }
+              
+              const sizeMB = blob.size / (1024 * 1024);
+              console.log(`📸 Compressed to ${sizeMB.toFixed(2)}MB at quality ${quality}`);
+              
+              // If still too large and we can reduce quality more, try again
+              if (sizeMB > maxSizeMB && quality > 0.5) {
+                quality -= 0.1;
+                tryCompress();
+              } else {
+                resolve(blob);
+              }
+            }, 'image/jpeg', quality);
+          };
+          
+          tryCompress();
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+    });
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,6 +159,9 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
     // Set ref immediately to prevent dialog from resetting on Android
     console.log('📸 Android fix: Setting isProcessingRef to prevent dialog reset');
+    const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    console.log(`📸 Original file size: ${originalSizeMB}MB`);
+    
     isProcessingRef.current = true;
     
     setStage('uploading');
@@ -104,19 +173,46 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
     const attemptUpload = async (): Promise<void> => {
       try {
+        // Compress image first (especially important for Samsung gallery photos)
+        setProgress(20);
+        console.log('📸 Compressing image for faster upload...');
+        
+        // Show toast for large files so user knows we're working on it
+        if (file.size > 3 * 1024 * 1024) {
+          toast({
+            title: "Optimizing image...",
+            description: `Large file detected (${originalSizeMB}MB), compressing for faster upload`,
+          });
+        }
+        
+        const compressedBlob = await compressImage(file, 2); // Max 2MB
+        const compressedSizeMB = (compressedBlob.size / (1024 * 1024)).toFixed(2);
+        console.log(`📸 Compressed: ${originalSizeMB}MB → ${compressedSizeMB}MB`);
+        
+        // Show success for large compressions
+        if (parseFloat(originalSizeMB) > 5) {
+          toast({
+            title: "Image optimized!",
+            description: `Reduced from ${originalSizeMB}MB to ${compressedSizeMB}MB`,
+          });
+        }
+        
         setProgress(30);
         
-        // Upload original file to Supabase Storage with timeout
+        // Upload compressed file to Supabase Storage with timeout
         setProgress(40);
         const userId = user?.id || 'anonymous';
-        const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const fileExt = 'jpg'; // Always save as JPEG after compression
         const path = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
         const bucket = supabase.storage.from('food-photos');
         
-        // Upload with timeout
-        const uploadPromise = bucket.upload(path, file, { upsert: true, contentType: file.type });
+        // Upload with longer timeout for slower connections
+        const uploadPromise = bucket.upload(path, compressedBlob, { 
+          upsert: true, 
+          contentType: 'image/jpeg' 
+        });
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Upload timeout - please check your internet connection')), 30000)
+          setTimeout(() => reject(new Error('Upload timeout - please check your internet connection')), 45000)
         );
         
         const uploadRes = await Promise.race([uploadPromise, timeoutPromise]) as any;
@@ -190,15 +286,21 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         let errorMessage = "Unknown error occurred";
         
         if (error instanceof Error) {
-          if (error.message.includes('timeout')) {
+          if (error.message.includes('compress')) {
+            errorTitle = "Image processing failed";
+            errorMessage = "Unable to process the image. Please try taking a new photo or selecting a different image.";
+          } else if (error.message.includes('timeout')) {
             errorTitle = "Request timed out";
-            errorMessage = "The request took too long. Please check your internet connection and try again.";
+            errorMessage = "The request took too long. The image has been optimized, but upload failed. Please check your internet connection and try again.";
           } else if (error.message.includes('Failed to send') || error.message.includes('NetworkError')) {
             errorTitle = "Connection error";
             errorMessage = "Unable to reach the server. Please check your internet connection and try again.";
           } else if (error.message.includes('Failed to fetch')) {
             errorTitle = "Network error";
             errorMessage = "Network request failed. Please check your connection and try again.";
+          } else if (error.message.includes('load image') || error.message.includes('read file')) {
+            errorTitle = "Image error";
+            errorMessage = "Unable to read the image file. Please try a different photo.";
           } else {
             errorMessage = error.message;
           }
