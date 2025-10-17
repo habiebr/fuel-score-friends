@@ -432,6 +432,18 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
       return;
     }
 
+    // Get session FIRST before starting upload
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+      toast({
+        title: "Authentication error",
+        description: "Please refresh the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const session = sessionData.session;
+
     isProcessingRef.current = true;
     const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
     console.log(`📸 Processing image: ${originalSizeMB}MB`);
@@ -453,44 +465,37 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         setProgress(20);
 
         // Upload to Supabase Storage
-        const fileName = `${user?.id}/${Date.now()}_${compressedFile.name}`;
-        console.log('☁️ Uploading to Supabase Storage:', fileName);
+        const userId = user?.id || 'anonymous';
+        const fileExt = 'jpg';
+        const path = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+        const bucket = supabase.storage.from('food-photos');
         
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('food-photos')
-          .upload(fileName, compressedFile, {
-            contentType: compressedFile.type,
-            upsert: false
-          });
+        console.log('☁️ Uploading to Supabase Storage:', path);
+        const uploadPromise = bucket.upload(path, compressedFile, { 
+          upsert: true, 
+          contentType: 'image/jpeg' 
+        });
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Upload timeout - please check your internet connection')), 45000)
+        );
+        
+        const uploadRes = await Promise.race([uploadPromise, timeoutPromise]) as any;
+        if (uploadRes.error) throw uploadRes.error;
+        
+        console.log('✅ Upload successful:', uploadRes.data.path);
+        setProgress(30);
+        
+        const signed = await bucket.createSignedUrl(uploadRes.data.path, 600);
+        if (signed.error || !signed.data?.signedUrl) throw signed.error || new Error('Failed to create signed URL');
 
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw uploadError;
-        }
-
-        console.log('✅ Upload successful:', uploadData.path);
-        setProgress(40);
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('food-photos')
-          .getPublicUrl(uploadData.path);
-
-        console.log('🔗 Public URL:', publicUrl);
-        setProgress(50);
         setStage('analyzing');
-
-        // Call Edge Function to analyze the image
+        setProgress(60);
+        
         console.log('🤖 Calling AI nutrition analysis...');
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-          throw new Error('Not signed in');
-        }
-
         const invokePromise = supabase.functions.invoke('nutrition-ai', {
           body: { 
             type: 'food_photo',
-            image: publicUrl,
+            image: signed.data.signedUrl,
             mealType
           },
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -504,6 +509,21 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
 
         if (result.error) {
           console.error('❌ Nutrition AI error:', result.error);
+          console.error('Error details:', {
+            message: result.error.message,
+            status: result.error.status,
+            statusText: result.error.statusText,
+          });
+          
+          const isAuthError = result.error.status === 401 || 
+                             result.error.status === 403 || 
+                             result.error.message?.includes('Unauthorized') ||
+                             result.error.message?.includes('Authentication');
+          
+          if (isAuthError) {
+            throw new Error('Authentication expired. Please refresh the page and try again.');
+          }
+          
           throw new Error(result.error.message || 'Failed to analyze food');
         }
 
@@ -515,43 +535,63 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           throw new Error(typeof errorDetails === 'string' ? errorDetails : errorDetails.message || 'Failed to analyze food');
         }
 
-        console.log('🎯 Analysis complete:', data);
         setProgress(90);
 
         if (data?.nutritionData) {
-          setNutritionData({
-            ...data.nutritionData,
-            imageUrl: publicUrl,
-            imagePath: uploadData.path
-          });
+          setNutritionData(data.nutritionData);
           setStage('complete');
           setProgress(100);
           console.log('✨ Food analysis ready for user review');
+          toast({
+            title: "Food analyzed!",
+            description: `Found: ${data.nutritionData.food_name}`,
+          });
         } else {
           throw new Error('No nutrition data received from AI');
         }
 
-      } catch (error: any) {
-        console.error(`❌ Upload attempt ${retryCount + 1} failed:`, error);
-
-        if (retryCount < maxRetries && (
-          error.message?.includes('timeout') || 
-          error.message?.includes('network') ||
-          error.message?.includes('fetch')
-        )) {
-          retryCount++;
-          console.log(`🔄 Retrying... (${retryCount}/${maxRetries})`);
-          setProgress(10);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          return attemptUpload();
+      } catch (error) {
+        console.error('Error analyzing food:', error);
+        
+        let errorTitle = "Analysis failed";
+        let errorMessage = "Unknown error occurred";
+        
+        if (error instanceof Error) {
+          if (error.message.includes('Authentication') || error.message.includes('expired')) {
+            errorTitle = "Session expired";
+            errorMessage = "Your session has expired. Please refresh the page and try again.";
+          } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+            errorTitle = "Authentication error";
+            errorMessage = "Authentication failed. Please refresh the page and log in again.";
+          } else if (error.message.includes('timeout')) {
+            errorTitle = "Request timed out";
+            errorMessage = "The request took too long. Please check your internet connection and try again.";
+          } else if (error.message.includes('Failed to send') || error.message.includes('NetworkError')) {
+            errorTitle = "Connection error";
+            errorMessage = "Unable to reach the server. Please check your internet connection and try again.";
+          } else {
+            errorMessage = error.message;
+          }
         }
-
-        const errorMessage = error?.message || "Could not process the image";
+        
         toast({
-          title: "Upload failed",
+          title: errorTitle,
           description: errorMessage,
           variant: "destructive",
         });
+
+        if (retryCount < maxRetries && (
+          error instanceof Error && (
+            error.message?.includes('timeout') || 
+            error.message?.includes('network') ||
+            error.message?.includes('fetch')
+          )
+        )) {
+          retryCount++;
+          console.log(`🔄 Retrying... Attempt ${retryCount + 1} of ${maxRetries + 1}`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          return attemptUpload();
+        }
 
         setStage('idle');
         setProgress(0);
