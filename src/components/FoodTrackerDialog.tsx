@@ -784,21 +784,32 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
             {/* Upload Methods */}
             {stage === 'idle' && (
               <div className="space-y-2">
-                {/* In-app camera for Android only (iOS doesn't need this workaround) */}
-                {isAndroid() && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setShowInAppCamera(true)}
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    Camera
-                  </Button>
-                )}
-                
+                {/* Camera button - platform-specific behavior */}
                 <Button
-                  variant={isAndroid() ? "outline" : "default"}
+                  variant="default"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    if (isAndroid()) {
+                      // Android: Use in-app camera to avoid page reloads
+                      setShowInAppCamera(true);
+                    } else {
+                      // iOS/Desktop: Use native file input with camera capture
+                      const input = document.getElementById('food-image') as HTMLInputElement;
+                      if (input.attributes as any) {
+                        (input.attributes as any).capture = 'environment';
+                      }
+                      input.click();
+                    }
+                  }}
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  Camera
+                </Button>
+                
+                {/* Gallery button - same for all platforms */}
+                <Button
+                  variant="outline"
                   size="sm"
                   className="w-full"
                   onClick={() => {
