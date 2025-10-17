@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Camera, Upload, Loader2, Check, AlertCircle } from 'lucide-react';
+import { Camera, Upload, Loader2, Check, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { InAppCamera } from '@/components/InAppCamera';
 
 interface FoodTrackerDialogProps {
   open: boolean;
@@ -24,6 +25,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
   const [progress, setProgress] = useState(0);
   const [mealType, setMealType] = useState('lunch');
   const [nutritionData, setNutritionData] = useState<any>(null);
+  const [showInAppCamera, setShowInAppCamera] = useState(false);
   const isProcessingRef = useRef(false); // Prevent race conditions on Android
 
   // Detect if we're on Android
@@ -402,6 +404,146 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
     }
   };
 
+  const handleInAppCameraCapture = async (file: File) => {
+    // Close in-app camera
+    setShowInAppCamera(false);
+    
+    // Process the captured image
+    await processImageFile(file);
+  };
+
+  const processImageFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file",
+        description: "Please upload an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload an image smaller than 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    isProcessingRef.current = true;
+    const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    console.log(`📸 Processing image: ${originalSizeMB}MB`);
+    
+    setStage('uploading');
+    setProgress(10);
+    setNutritionData(null);
+
+    let retryCount = 0;
+    const maxRetries = 2;
+
+    const attemptUpload = async (): Promise<void> => {
+      try {
+        console.log('🗜️ Compressing image...');
+        const compressedFile = await compressImage(file);
+        const compressedSizeMB = (compressedFile.size / (1024 * 1024)).toFixed(2);
+        console.log(`📦 Compressed size: ${compressedSizeMB}MB (${((compressedFile.size / file.size) * 100).toFixed(1)}% of original)`);
+
+        setProgress(20);
+
+        // Upload to Supabase Storage
+        const fileName = `${user?.id}/${Date.now()}_${compressedFile.name}`;
+        console.log('☁️ Uploading to Supabase Storage:', fileName);
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('food-images')
+          .upload(fileName, compressedFile, {
+            contentType: compressedFile.type,
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          throw uploadError;
+        }
+
+        console.log('✅ Upload successful:', uploadData.path);
+        setProgress(40);
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('food-images')
+          .getPublicUrl(uploadData.path);
+
+        console.log('🔗 Public URL:', publicUrl);
+        setProgress(50);
+        setStage('analyzing');
+
+        // Call Edge Function to analyze the image
+        console.log('🤖 Calling AI nutrition analysis...');
+        const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-food-image', {
+          body: { imageUrl: publicUrl }
+        });
+
+        if (analysisError) {
+          console.error('Analysis error:', analysisError);
+          throw analysisError;
+        }
+
+        console.log('🎯 Analysis complete:', analysisData);
+        setProgress(90);
+
+        if (analysisData?.nutrition) {
+          setNutritionData({
+            ...analysisData.nutrition,
+            imageUrl: publicUrl,
+            imagePath: uploadData.path
+          });
+          setStage('complete');
+          setProgress(100);
+          console.log('✨ Food analysis ready for user review');
+        } else {
+          throw new Error('Invalid analysis response');
+        }
+
+      } catch (error: any) {
+        console.error(`❌ Upload attempt ${retryCount + 1} failed:`, error);
+
+        if (retryCount < maxRetries && (
+          error.message?.includes('timeout') || 
+          error.message?.includes('network') ||
+          error.message?.includes('fetch')
+        )) {
+          retryCount++;
+          console.log(`🔄 Retrying... (${retryCount}/${maxRetries})`);
+          setProgress(10);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return attemptUpload();
+        }
+
+        const errorMessage = error?.message || "Could not process the image";
+        toast({
+          title: "Upload failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+
+        setStage('idle');
+        setProgress(0);
+        isProcessingRef.current = false;
+      }
+    };
+
+    try {
+      await attemptUpload();
+    } finally {
+      if (stage !== 'complete') {
+        isProcessingRef.current = false;
+      }
+    }
+  };
+
   const handleSaveLog = async () => {
     if (!user || !nutritionData) return;
 
@@ -475,7 +617,8 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -576,41 +719,55 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
             
             {/* Android User Guidance */}
             {stage === 'idle' && isAndroid() && !isPWA() && (
-              <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              <div className="flex items-start gap-2 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3">
                 <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="font-medium">📱 Android Browser Tip</p>
-                  <p className="mt-1">For best results: Take photo with your camera app first, then click "Gallery" to select it. This prevents page reloads.</p>
-                  <p className="mt-1 font-medium text-blue-700 dark:text-blue-400">💡 Or install this app for a better camera experience!</p>
+                  <p className="font-medium">✨ New: In-App Camera Available!</p>
+                  <p className="mt-1">Use "In-App Camera" below for the best Android experience - no page reloads, no app switching!</p>
                 </div>
               </div>
             )}
             
             {/* Alternative upload methods */}
             {stage === 'idle' && (
-              <div className="flex gap-2">
+              <div className="space-y-2">
+                {/* In-App Camera (Primary for Android) */}
                 <Button
-                  variant="outline"
+                  variant={isAndroid() ? "default" : "outline"}
                   size="sm"
-                  className="flex-1"
-                  onClick={() => document.getElementById('food-image')?.click()}
+                  className="w-full"
+                  onClick={() => setShowInAppCamera(true)}
                 >
                   <Camera className="h-4 w-4 mr-2" />
-                  {isAndroid() ? 'Take Photo' : 'Camera'}
+                  In-App Camera
+                  {isAndroid() && <span className="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded">Recommended</span>}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    const input = document.getElementById('food-image') as HTMLInputElement;
-                    input.removeAttribute('capture');
-                    input.click();
-                  }}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Gallery
-                </Button>
+                
+                {/* Traditional file inputs */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      const input = document.getElementById('food-image') as HTMLInputElement;
+                      input.removeAttribute('capture');
+                      input.click();
+                    }}
+                  >
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Gallery
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => document.getElementById('food-image')?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -663,5 +820,13 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
         </div>
       </DialogContent>
     </Dialog>
+    
+    {/* In-App Camera Modal */}
+    <InAppCamera
+      open={showInAppCamera}
+      onClose={() => setShowInAppCamera(false)}
+      onCapture={handleInAppCameraCapture}
+    />
+    </>
   );
 }
