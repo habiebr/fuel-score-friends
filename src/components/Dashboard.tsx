@@ -381,16 +381,27 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         // This is the primary path for iOS users
         console.log('📡 No cached notification, triggering fresh sync...');
         
-        // Trigger sync with 3-second timeout
+        // Trigger sync with 5-second timeout
         const syncPromise = syncGoogleFit(true); // Silent sync
-        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 5000));
         
         await Promise.race([syncPromise, timeoutPromise]);
         console.log('✅ Fresh sync completed');
         
-        // STEP 3: Get fresh data and check for recent workouts
-        const { getTodayData } = useGoogleFitSync();
-        const freshData = await getTodayData();
+        // STEP 3: Get fresh data from database after sync
+        const { data: freshGoogleFitData, error: fitError } = await supabase
+          .from('google_fit_data')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('date', new Date().toISOString().split('T')[0])
+          .maybeSingle();
+        
+        if (fitError) {
+          console.error('Failed to fetch Google Fit data:', fitError);
+          return;
+        }
+        
+        const freshData = freshGoogleFitData;
         
         if (freshData?.sessions && Array.isArray(freshData.sessions)) {
           const sessions = [...freshData.sessions];

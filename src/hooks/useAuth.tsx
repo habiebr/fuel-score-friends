@@ -60,19 +60,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (sessionLike.user?.id && providerToken && providerRefreshToken) {
         // Store token in database for better management
         try {
-          // expiresIn already calculated above
-          await (supabase as any).functions.invoke('store-google-token', {
-            method: 'POST',
-            body: {
-              user_id: sessionLike.user.id,
-              access_token: providerToken,
-              refresh_token: providerRefreshToken,
-              expires_in: expiresIn,
-              token_type: 'Bearer',
-              scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read'
-            },
-          });
-          console.log('Google token stored in database successfully');
+          // Get current session for authorization
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session?.access_token) {
+            // expiresIn already calculated above
+            await (supabase as any).functions.invoke('store-google-token', {
+              method: 'POST',
+              body: {
+                user_id: sessionLike.user.id,
+                access_token: providerToken,
+                refresh_token: providerRefreshToken,
+                expires_in: expiresIn,
+                token_type: 'Bearer',
+                scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read'
+              },
+              headers: {
+                Authorization: `Bearer ${session.access_token}`
+              }
+            });
+            console.log('Google token stored in database successfully');
+          } else {
+            console.warn('No valid session found, skipping token storage');
+          }
         } catch (dbError) {
           console.warn('Failed to store Google token in database:', dbError);
         }

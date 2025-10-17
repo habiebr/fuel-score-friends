@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { GoogleGenAI } from "npm:@google/genai";
 import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
@@ -101,7 +102,9 @@ serve(async (req) => {
       }
 
       // Initialize Google GenAI after successful image processing
-      console.log('Preparing to call Gemini API directly via REST...');
+      console.log('Initializing Google GenAI...');
+      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+      console.log('Google GenAI initialized successfully');
 
       const contents = [
         {
@@ -117,7 +120,7 @@ Analyze this food image and return nutrition data in this exact JSON format: {"f
         },
       ];
 
-      console.log('Calling Gemini REST API...');
+      console.log('Sending food photo to Gemini 2.5 Flash...');
       console.log('Contents structure:', JSON.stringify({ 
         inlineDataMimeType: mimeType, 
         base64Length: base64Data.length,
@@ -125,58 +128,13 @@ Analyze this food image and return nutrition data in this exact JSON format: {"f
       }));
       
       try {
-        // Use direct REST API instead of SDK for better browser compatibility
-        const geminiResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  {
-                    inline_data: {
-                      mime_type: mimeType,
-                      data: base64Data
-                    }
-                  },
-                  {
-                    text: `You are an expert nutritionist. Analyze the food in the image and provide detailed nutritional information. Be as accurate as possible based on typical serving sizes.
-
-Analyze this food image and return nutrition data in this exact JSON format: {"food_name": "name of the food", "serving_size": "estimated serving size", "calories": number, "protein_grams": number, "carbs_grams": number, "fat_grams": number}. Only return the JSON, no other text.`
-                  }
-                ]
-              }],
-              generationConfig: {
-                temperature: 0.4,
-                topK: 32,
-                topP: 1,
-                maxOutputTokens: 2048,
-              }
-            })
-          }
-        );
-
-        console.log('Gemini REST API response status:', geminiResponse.status);
-        
-        if (!geminiResponse.ok) {
-          const errorText = await geminiResponse.text();
-          console.error('Gemini API error response:', errorText);
-          throw new Error(`Gemini API returned ${geminiResponse.status}: ${errorText}`);
-        }
-
-        const geminiData = await geminiResponse.json();
-        console.log('Gemini API response structure:', JSON.stringify(Object.keys(geminiData)));
-
-        const aiResponse = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!aiResponse) {
-          console.error('No text in Gemini response:', JSON.stringify(geminiData));
-          throw new Error('No response text from Gemini API');
-        }
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: contents,
+        });
 
         console.log('✅ Gemini response received successfully');
+        const aiResponse = response.text;
         console.log('Response text length:', aiResponse?.length || 0);
         console.log('Response preview:', aiResponse?.substring?.(0, 200) || 'empty');
 
