@@ -217,10 +217,31 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Sync error:', error);
-    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error('===== Sync Error Details =====');
+    console.error('Error type:', typeof error);
+    console.error('Error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'N/A');
+    
+    let message = "Unknown error";
+    let details = null;
+    
+    if (error instanceof Error) {
+      message = error.message;
+      details = error.stack;
+    } else if (typeof error === 'string') {
+      message = error;
+    } else if (error && typeof error === 'object') {
+      message = JSON.stringify(error);
+    }
+    
+    console.error('Returning error message:', message);
+    
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ 
+        error: message,
+        details: details,
+        type: typeof error
+      }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500
