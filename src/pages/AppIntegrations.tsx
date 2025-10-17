@@ -134,11 +134,20 @@ export default function AppIntegrations() {
     
     setIsRunnaSyncing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get fresh session and validate
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        throw new Error('Session expired. Please refresh the page and try again.');
+      }
+      
+      console.log('🔐 Syncing Runna calendar with valid session');
       
       const { data, error } = await supabase.functions.invoke('sync-runna-calendar', {
         body: { calendar_url: runnaUrl },
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        },
       });
       
       if (error) throw error;
