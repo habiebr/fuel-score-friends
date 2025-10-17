@@ -54,8 +54,9 @@ export function InAppCamera({ open, onClose, onCapture }: InAppCameraProps) {
       // Stop any existing stream
       stopCamera();
 
-      // Request camera access
-      const constraints: MediaStreamConstraints = {
+      // Try with preferred constraints first
+      let stream;
+      const preferredConstraints: MediaStreamConstraints = {
         video: {
           facingMode: facingMode,
           width: { ideal: 1920 },
@@ -64,18 +65,60 @@ export function InAppCamera({ open, onClose, onCapture }: InAppCameraProps) {
         audio: false
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
+      } catch (err) {
+        // Fallback to basic constraints for emulators
+        console.log('Preferred constraints failed, trying basic constraints...');
+        const basicConstraints: MediaStreamConstraints = {
+          video: { facingMode: facingMode },
+          audio: false
+        };
+        stream = await navigator.mediaDevices.getUserMedia(basicConstraints);
+      }
+
       streamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        
+        // Set a timeout in case video never loads
+        const loadTimeout = setTimeout(() => {
+          if (videoRef.current && videoRef.current.readyState === 0) {
+            console.warn('Camera stream appears frozen, may be emulator issue');
+          }
+        }, 3000);
+        
         // Wait for video to be ready
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
           if (videoRef.current) {
-            videoRef.current.onloadedmetadata = resolve;
+            const handleLoadedMetadata = () => {
+              clearTimeout(loadTimeout);
+              if (videoRef.current) {
+                videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+              }
+              resolve(null);
+            };
+            
+            videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
+            
+            // Timeout if video doesn't load
+            setTimeout(() => {
+              clearTimeout(loadTimeout);
+              if (videoRef.current) {
+                videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+              }
+              reject(new Error('Camera stream timed out - may be emulator limitation'));
+            }, 5000);
           }
         });
-        await videoRef.current.play();
+        
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Auto-play failed:', playErr);
+          // Some browsers/emulators may not support autoplay
+        }
       }
 
       setIsLoading(false);
@@ -89,8 +132,10 @@ export function InAppCamera({ open, onClose, onCapture }: InAppCameraProps) {
         setError('No camera found on this device.');
       } else if (err.name === 'NotReadableError') {
         setError('Camera is already in use by another app.');
+      } else if (err.message?.includes('timed out') || err.message?.includes('emulator')) {
+        setError('Camera not available on this device/emulator. Please use Gallery instead.');
       } else {
-        setError('Unable to access camera. Please try again.');
+        setError('Unable to access camera. Please use Gallery instead.');
       }
     }
   };
