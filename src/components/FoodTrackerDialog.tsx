@@ -781,17 +781,6 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
               />
             </div>
             
-            {/* Android User Guidance */}
-            {stage === 'idle' && isAndroid() && !isPWA() && (
-              <div className="flex items-start gap-2 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-medium">✨ New: In-App Camera Available!</p>
-                  <p className="mt-1">Use "In-App Camera" below for the best Android experience - no page reloads, no app switching!</p>
-                </div>
-              </div>
-            )}
-            
             {/* Alternative upload methods */}
             {stage === 'idle' && (
               <div className="space-y-2">
