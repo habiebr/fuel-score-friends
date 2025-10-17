@@ -781,46 +781,35 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
               />
             </div>
             
-            {/* Alternative upload methods */}
+            {/* Upload Methods */}
             {stage === 'idle' && (
               <div className="space-y-2">
-                {/* In-App Camera (Primary for Android) */}
+                {/* In-app camera for Android only (iOS doesn't need this workaround) */}
+                {isAndroid() && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setShowInAppCamera(true)}
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    Camera
+                  </Button>
+                )}
+                
                 <Button
-                  variant={isAndroid() ? "default" : "outline"}
+                  variant={isAndroid() ? "outline" : "default"}
                   size="sm"
                   className="w-full"
-                  onClick={() => setShowInAppCamera(true)}
+                  onClick={() => {
+                    const input = document.getElementById('food-image') as HTMLInputElement;
+                    input.removeAttribute('capture');
+                    input.click();
+                  }}
                 >
-                  <Camera className="h-4 w-4 mr-2" />
-                  In-App Camera
-                  {isAndroid() && <span className="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded">Recommended</span>}
+                  <ImageIcon className="h-4 w-4 mr-2" />
+                  Gallery
                 </Button>
-                
-                {/* Traditional file inputs */}
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => {
-                      const input = document.getElementById('food-image') as HTMLInputElement;
-                      input.removeAttribute('capture');
-                      input.click();
-                    }}
-                  >
-                    <ImageIcon className="h-4 w-4 mr-2" />
-                    Gallery
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => document.getElementById('food-image')?.click()}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload
-                  </Button>
-                </div>
               </div>
             )}
           </div>
