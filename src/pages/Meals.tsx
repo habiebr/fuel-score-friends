@@ -757,43 +757,9 @@ export default function Meals() {
                     <div className="flex items-center justify-center py-8 text-muted-foreground">
                       <Loader2 className="h-5 w-5 animate-spin" />
                     </div>
-                  ) : (
-                    <>
-                      <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-                        <div className="grid grid-cols-7 gap-3 min-w-[600px] sm:min-w-0">
-                          {weekDays.map((day) => {
-                          const isToday = day === format(new Date(), 'yyyy-MM-dd');
-                          const hasMeals = (weekTotals[day]?.calories || 0) > 0;
-                          return (
-                            <div 
-                              key={day} 
-                              className={`p-3 rounded-xl transition-all ${
-                                isToday 
-                                  ? 'bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 ring-2 ring-blue-500 dark:ring-blue-400' 
-                                  : hasMeals
-                                  ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 hover:shadow-md'
-                                  : 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800'
-                              }`}
-                            >
-                              <div className={`text-xs font-bold mb-2 ${isToday ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>
-                                {format(new Date(day), 'EEE')}
-                              </div>
-                              <div className={`text-lg font-bold mb-1 ${isToday ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>
-                                {Math.round(weekTotals[day]?.calories || 0)}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground font-medium mb-2">kcal</div>
-                              <div className="text-[9px] text-muted-foreground leading-tight">
-                                <div>P: {Math.round(weekTotals[day]?.protein || 0)}g</div>
-                                <div>C: {Math.round(weekTotals[day]?.carbs || 0)}g</div>
-                                <div>F: {Math.round(weekTotals[day]?.fat || 0)}g</div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
+                ) : (
+                  <>
+                    <div className="space-y-3">
                         {weekDays.map((day) => {
                           const isToday = day === format(new Date(), 'yyyy-MM-dd');
                           const hasMeals = (weekTotals[day]?.calories || 0) > 0;

@@ -863,7 +863,7 @@ export default function Goals() {
                     const key = format(d, 'yyyy-MM-dd');
                     const list = activitiesByDate[key] || [];
                     return (
-                      <div key={key} className="rounded-lg border bg-muted/20 overflow-visible">
+                      <div key={key} className="rounded-lg border bg-muted/20">
                         <div className="flex flex-wrap items-center justify-between border-b px-4 py-2 gap-2">
                           <div className="text-sm font-semibold">{DAYS[idx]}</div>
                           <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
@@ -924,7 +924,7 @@ export default function Goals() {
                                 {isExpanded && (
                                   <div className="space-y-3">
                                     <div className="grid gap-2 sm:grid-cols-2">
-                                      <div className="space-y-1 overflow-visible">
+                                      <div className="space-y-1">
                                         <Label className="text-xs">Activity</Label>
                                         <Select
                                           value={uiType}
@@ -946,7 +946,7 @@ export default function Goals() {
                                           </SelectContent>
                                         </Select>
                                       </div>
-                                      <div className="space-y-1 overflow-visible">
+                                      <div className="space-y-1">
                                         <Label className="text-xs">Intensity</Label>
                                         <Select
                                           value={a.intensity}
