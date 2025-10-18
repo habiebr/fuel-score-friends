@@ -206,7 +206,7 @@ export function DailyNutritionAdvisor() {
         )}
 
         <p className="text-sm text-muted-foreground">
-          Get AI-powered daily nutrition recommendations based on your wearable data, body metrics, and fitness goals
+          Get smart daily nutrition recommendations based on your wearable data, body metrics, and fitness goals
         </p>
 
         {!advice ? (

@@ -84,7 +84,7 @@ export default function TermsOfService() {
             <p>NutriSync provides the following services:</p>
             <ul className="list-disc list-inside space-y-2 ml-4">
               <li>Nutrition tracking and analysis for endurance athletes</li>
-              <li>AI-powered meal planning and recommendations</li>
+              <li>Smart meal planning and recommendations</li>
               <li>Training activity logging and monitoring</li>
               <li>Integration with wearable devices (Apple Health, Google Fit, Strava, Garmin)</li>
               <li>Fitness screenshot analysis powered by AI</li>
@@ -169,7 +169,7 @@ export default function TermsOfService() {
             <CardTitle className="text-lg">5. AI Features and Data Processing</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>NutriSync uses artificial intelligence and machine learning for:</p>
+            <p>NutriSync uses advanced algorithms and data analysis for:</p>
             <ul className="list-disc list-inside space-y-2 ml-4">
               <li><strong>Fitness Screenshot Analysis:</strong> Extracting workout data from images using AI vision models</li>
               <li><strong>Meal Planning:</strong> Generating personalized meal recommendations based on your goals and preferences</li>

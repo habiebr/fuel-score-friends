@@ -1161,7 +1161,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
                   <div className="p-2 bg-muted/30 rounded">
                     <p className="font-medium mb-1">💡 Tip:</p>
                     <p className="text-muted-foreground">
-                      <a href="/scores" className="text-primary underline">See the scoring explainer</a> for more details.
+                      <a href="/score-explainer" className="text-primary underline">See the scoring explainer</a> for more details.
                     </p>
                   </div>
                 </div>

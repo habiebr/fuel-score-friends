@@ -86,9 +86,9 @@ export default function Auth() {
           <div className="flex justify-center mb-4">
             <NutriSyncLogo size="lg" />
           </div>
-          <p className="text-muted-foreground mt-2">
-            AI-powered nutrition for peak performance
-          </p>
+              <p className="text-muted-foreground mt-2">
+                Smart nutrition for peak performance
+              </p>
         </div>
 
         <Card className="shadow-card">

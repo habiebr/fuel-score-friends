@@ -351,7 +351,7 @@ export default function NutritionExplainerPage() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">How We Calculate Your Nutrition Plan</h1>
           <p className="text-muted-foreground">
-            Our AI-powered meal planner uses science-based formulas to create personalized daily nutrition targets based on your body composition and training schedule.
+            Our smart meal planner uses science-based formulas to create personalized daily nutrition targets based on your body composition and training schedule.
           </p>
         </div>
 
@@ -375,7 +375,7 @@ export default function NutritionExplainerPage() {
                   <li>Recalculates your BMR based on your latest weight and profile data</li>
                   <li>Adjusts your TDEE based on the day's training load</li>
                   <li>Distributes calories and macros optimally across meals</li>
-                  <li>Generates AI-powered Indonesian meal suggestions</li>
+                  <li>Generates smart Indonesian meal suggestions</li>
                   <li>Adds fueling window targets for long runs and quality sessions</li>
                 </ul>
                 <p className="text-sm font-medium text-primary mt-3">

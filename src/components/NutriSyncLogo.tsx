@@ -22,12 +22,12 @@ export function NutriSyncLogo({ size = 'md', className = '' }: NutriSyncLogoProp
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      {/* NutriSync PNG Logo */}
-      <img 
-        src="/logo-source.png" 
-        alt="NutriSync Logo" 
-        className={`${sizeClasses[size]} object-contain`}
-      />
+          {/* NutriSync PNG Logo */}
+          <img 
+            src="/nutrisync-logo.png" 
+            alt="NutriSync Logo" 
+            className={`${sizeClasses[size]} object-contain`}
+          />
       
       {/* NutriSync text */}
       <span className={`font-bold text-white ${textSizes[size]}`}>

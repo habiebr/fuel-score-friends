@@ -343,7 +343,7 @@ export default function Community() {
                       Your rank is based on your weekly score, which combines nutrition and training performance. Keep logging meals and completing workouts to climb the leaderboard!
                     </p>
                     <p className="text-sm text-muted-foreground mb-3">
-                      Curious how we grade each day? <a href="/scores" className="text-primary underline underline-offset-2">See the scoring explainer</a>.
+                      Curious how we grade each day? <a href="/score-explainer" className="text-primary underline underline-offset-2">See the scoring explainer</a>.
                     </p>
                   </CardContent>
                 </Card>

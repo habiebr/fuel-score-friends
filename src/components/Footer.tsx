@@ -17,7 +17,7 @@ export default function Footer() {
               <span className="font-semibold">NutriSync</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Your AI-powered nutrition and training companion for marathon success.
+              Your smart nutrition and training companion for marathon success.
             </p>
           </div>
 
