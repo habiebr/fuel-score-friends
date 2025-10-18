@@ -340,7 +340,9 @@ export type Database = {
           id: string
           location_lat: number | null
           location_lng: number | null
+          onboarding_completed: boolean | null
           preferred_cuisine: string[] | null
+          sex: string | null
           target_date: string | null
           updated_at: string
           user_id: string
@@ -364,7 +366,9 @@ export type Database = {
           id?: string
           location_lat?: number | null
           location_lng?: number | null
+          onboarding_completed?: boolean | null
           preferred_cuisine?: string[] | null
+          sex?: string | null
           target_date?: string | null
           updated_at?: string
           user_id: string
@@ -388,7 +392,9 @@ export type Database = {
           id?: string
           location_lat?: number | null
           location_lng?: number | null
+          onboarding_completed?: boolean | null
           preferred_cuisine?: string[] | null
+          sex?: string | null
           target_date?: string | null
           updated_at?: string
           user_id?: string

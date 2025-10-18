@@ -82,6 +82,15 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
     }, { onConflict: 'user_id,key' });
   };
 
+  const markOnboardingCompleted = async () => {
+    if (!user) return;
+    await (supabase as any).from('profiles').upsert({
+      user_id: user.id,
+      onboarding_completed: true,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+  };
+
   const next = async () => {
     // Validate required fields for step 1 (Basic Profile)
     if (step === 1) {
