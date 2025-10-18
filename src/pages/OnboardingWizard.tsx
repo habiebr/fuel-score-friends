@@ -293,8 +293,12 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                   <h2 className="text-3xl font-bold text-white">Training Plan Setup</h2>
                 </div>
                 <div className="w-full max-w-md px-4">
-                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
-                    <span className="text-muted-foreground text-lg">Image 1: Training Plan</span>
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6 overflow-hidden">
+                    <img 
+                      src="/onboarding-training-plan.jpg" 
+                      alt="Training Plan Setup" 
+                      className="w-full h-full object-cover rounded-lg"
+                    />
                   </div>
                 </div>
                     <p className="text-lg text-gray-300 text-center max-w-md px-4">To get pre-training meal suggestions, please complete your training plan. Go to <span className="font-semibold text-white">Profile &gt; Training Goals</span>.</p>
@@ -311,8 +315,12 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                   <h2 className="text-3xl font-bold text-white">Meal Logging</h2>
                 </div>
                 <div className="w-full max-w-md px-4">
-                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
-                    <span className="text-muted-foreground text-lg">Image 2: Meal Logging</span>
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6 overflow-hidden">
+                    <img 
+                      src="/onboarding-meal-logging.jpg" 
+                      alt="Meal Logging" 
+                      className="w-full h-full object-cover rounded-lg"
+                    />
                   </div>
                 </div>
                     <p className="text-lg text-gray-300 text-center max-w-md px-4">To log your meal, please <span className="font-semibold text-white">click the button on the right bottom corner</span>.</p>
@@ -329,8 +337,12 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                   <h2 className="text-3xl font-bold text-white">Add to Home Screen</h2>
                 </div>
                 <div className="w-full max-w-md px-4">
-                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
-                    <span className="text-muted-foreground text-lg">Image 3: Home Screen</span>
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6 overflow-hidden">
+                    <img 
+                      src="/onboarding-home-screen.jpg" 
+                      alt="Add to Home Screen" 
+                      className="w-full h-full object-cover rounded-lg"
+                    />
                   </div>
                 </div>
                     <p className="text-lg text-gray-300 text-center max-w-md px-4">Add this site to your home screen for easy access. Go to <span className="font-semibold text-white">Profile</span> and follow the prompt under your <span className="font-semibold text-white">Profile Name</span>.</p>
