@@ -55,6 +55,11 @@ export default function TermsOfService() {
                 please do not use NutriSync.
               </p>
             </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>Important:</strong> NutriSync is an AI-based product that uses artificial intelligence for nutrition analysis, meal planning, and fitness tracking. By using our service, you acknowledge and agree to the AI-powered features described in these terms.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -169,7 +174,7 @@ export default function TermsOfService() {
             <CardTitle className="text-lg">5. AI Features and Data Processing</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>NutriSync uses advanced algorithms and data analysis for:</p>
+            <p>NutriSync is an AI-based product that uses artificial intelligence and advanced algorithms for:</p>
             <ul className="list-disc list-inside space-y-2 ml-4">
               <li><strong>Fitness Screenshot Analysis:</strong> Extracting workout data from images using AI vision models</li>
               <li><strong>Meal Planning:</strong> Generating personalized meal recommendations based on your goals and preferences</li>

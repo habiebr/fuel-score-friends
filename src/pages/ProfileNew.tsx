@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomNav } from '@/components/BottomNav';
-import { ChevronRight, User as UserIcon, Utensils, Bell, Smartphone, Shield, Download, X, Target, LogOut } from 'lucide-react';
+import { ChevronRight, User as UserIcon, Utensils, Bell, Smartphone, Shield, Download, X, Target, LogOut, Heart } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
@@ -194,6 +194,21 @@ export default function ProfileNew() {
           {/* Account Section */}
           <h2 className="text-xl font-bold text-foreground mb-3">Account</h2>
           <div className="space-y-3">
+            <Card className="shadow-card cursor-pointer" onClick={() => navigate('/about')}>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
+                    <Heart className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium">About NutriSync</div>
+                    <div className="text-sm text-muted-foreground">Learn about our mission and development</div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="shadow-card">
               <CardContent className="p-6">
                 <div className="flex items-center gap-3">
