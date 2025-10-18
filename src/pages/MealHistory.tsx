@@ -151,7 +151,7 @@ export default function MealHistory() {
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-none mx-auto p-4">
+        <div className="max-w-none mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mb-2">
             <Button variant="ghost" onClick={() => navigate('/meals')} className="-ml-2">
@@ -168,7 +168,7 @@ export default function MealHistory() {
           {/* Week Navigation */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold">This Week</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"

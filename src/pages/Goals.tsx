@@ -605,9 +605,14 @@ export default function Goals() {
 
       // Success! Goals and training plan saved
       toast({
-        title: "Goals & Weekly Pattern saved!",
-        description: "Your running goal and base weekly training pattern have been saved",
+        title: "All set! 🎉",
+        description: "Your race goal and training plan are ready to go.",
       });
+
+      // Navigate back to previous page after a short delay to show the toast
+      setTimeout(() => {
+        navigate(-1);
+      }, 1500);
 
       // 3. OPTIONAL: Regenerate meal plans in background (non-blocking)
       // This runs after the success toast, so failures won't affect user experience
@@ -700,7 +705,7 @@ export default function Goals() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/')}
+              onClick={() => navigate(-1)}
               className="-ml-2 flex-shrink-0"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -712,7 +717,7 @@ export default function Goals() {
             </div>
             <PageHeading
               title="Set Your Goals & Training Plan"
-              description="Define your running goal and create your weekly training schedule."
+              description="Tell us about your race and we'll help you build the perfect training schedule."
               className="!mb-0 flex-1"
             />
           </div>
@@ -753,10 +758,10 @@ export default function Goals() {
               <CardContent className="space-y-6">
                 {/* Race Type */}
                 <div className="space-y-2">
-                  <Label htmlFor="race-type">Race Distance or Event</Label>
+                  <Label htmlFor="race-type">What race are you targeting?</Label>
                   <Select value={raceGoal} onValueChange={setRaceGoal}>
                     <SelectTrigger id="race-type">
-                      <SelectValue placeholder="Select your target race distance or event" />
+                      <SelectValue placeholder="Pick a distance or custom event" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="5k">5K (5 km)</SelectItem>
@@ -771,23 +776,23 @@ export default function Goals() {
 
                 {/* Race/Event Name - always shown for consistency */}
                 <div className="space-y-2">
-                  <Label htmlFor="custom-goal-name">Race/Event Name *</Label>
+                  <Label htmlFor="custom-goal-name">Give it a name *</Label>
                   <Input
                     id="custom-goal-name"
                     type="text"
-                    placeholder="e.g., Jakarta Marathon 2025, Personal Best 5K, Trail Run Challenge, etc."
+                    placeholder="e.g., Jakarta Marathon 2025, My First 5K, Trail Adventure"
                     value={customGoalName}
                     onChange={(e) => setCustomGoalName(e.target.value)}
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    A readable name for your specific race or running event
+                    Something meaningful to you
                   </p>
                 </div>
 
                 {/* Target Date */}
                 <div className="space-y-2">
-                  <Label htmlFor="target-date">Target Race Date</Label>
+                  <Label htmlFor="target-date">When's the race?</Label>
                   <Input
                     id="target-date"
                     type="date"
@@ -799,10 +804,10 @@ export default function Goals() {
 
                 {/* Fitness Level */}
                 <div className="space-y-2">
-                  <Label htmlFor="fitness-level">Current Fitness Level</Label>
+                  <Label htmlFor="fitness-level">Where are you now?</Label>
                   <Select value={fitnessLevel} onValueChange={setFitnessLevel}>
                     <SelectTrigger id="fitness-level">
-                      <SelectValue placeholder="Select your current fitness level" />
+                      <SelectValue placeholder="Pick your running experience" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="beginner">Beginner (0-6 months running)</SelectItem>
@@ -848,14 +853,14 @@ export default function Goals() {
                   Step 2: Create Your Weekly Training Plan
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Plan your base weekly training pattern. This will be used by our weekly generator to create your full training plan.
+                  Map out your typical training week. We'll use this as a template to create your personalized training plan.
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Controls */}
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
-                    Base weekly pattern (Monday–Sunday) - One week only
+                    Your typical week (Monday–Sunday)
                   </div>
                   <div className="flex items-center gap-2"></div>
                 </div>
@@ -866,7 +871,7 @@ export default function Goals() {
                     const list = activitiesByDate[key] || [];
                     return (
                       <div key={key} className="rounded-lg border bg-muted/20 overflow-visible">
-                        <div className="flex items-center justify-between border-b px-4 py-2">
+                        <div className="flex flex-wrap items-center justify-between border-b px-4 py-2 gap-2">
                           <div className="text-sm font-semibold">{DAYS[idx]}</div>
                           <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
                         </div>

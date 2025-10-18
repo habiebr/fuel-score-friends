@@ -62,20 +62,15 @@ export default function NotificationsSettings() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-2">
+          <div className="flex items-center gap-3 sm:gap-4 mb-6">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate(-1)}
               className="-ml-2 flex-shrink-0"
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
-          </div>
-          <div className="flex items-center gap-3 sm:gap-4 mb-6">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-lg sm:h-12 sm:w-12">
-              <Bell className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
             <PageHeading
               title="Notifications"
               description="Manage your notification preferences"

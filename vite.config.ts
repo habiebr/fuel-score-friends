@@ -119,9 +119,9 @@ export default defineConfig(({ mode }) => ({
         theme_color: '#07101f',
         background_color: '#04070c',
         display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
+  orientation: 'portrait',
+  scope: '/',
+  start_url: 'https://app.nutrisync.id/',
         id: '/',
         lang: 'en',
         dir: 'ltr',
@@ -235,10 +235,21 @@ export default defineConfig(({ mode }) => ({
           ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],
           supabase: ['@supabase/supabase-js'],
           charts: ['recharts'],
-          utils: ['date-fns', 'clsx', 'tailwind-merge']
+          utils: ['date-fns', 'clsx', 'tailwind-merge'],
         }
       }
-    }
+    },
+    // Additional optimization settings
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: mode === 'production',
+      },
+    },
+    // Enable CSS code splitting
+    cssCodeSplit: true,
+    // Increase chunk size warning threshold since we've optimized chunks
+    chunkSizeWarningLimit: 1000,
   },
   define: {
     // Ensure environment variables are available at build time

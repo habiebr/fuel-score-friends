@@ -267,7 +267,7 @@ export default function Training() {
           <div className="mb-6">
             <Card className="shadow-card">
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
                   <div>
                     <CardTitle>Training Nutrition</CardTitle>
                     <CardDescription>Get personalized nutrition recommendations for your training</CardDescription>
@@ -369,12 +369,12 @@ export default function Training() {
                               >
                                 {!isExpanded && (
                                   <div className="flex flex-col gap-2">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
                                       <div className="flex items-center gap-2">
                                         <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(49,255,176,0.5)]" />
                                         <span className="text-sm font-semibold capitalize">{a.activity_type}</span>
                                       </div>
-                                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                         <span className="uppercase tracking-wide">{a.intensity}</span>
                                         <span>{primaryMetric}</span>
                                         <span>{a.estimated_calories} kcal</span>

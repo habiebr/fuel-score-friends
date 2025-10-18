@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { PageHeading } from '@/components/PageHeading';
 import { startOfWeek, format } from 'date-fns';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface LeaderboardEntry {
   user_id: string;
@@ -55,7 +56,7 @@ export default function Community() {
       // Get ALL users from profiles (which links to auth.users via user_id)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, user_id, full_name');
+        .select('id, user_id, full_name, city');
 
       console.log('📊 Profiles query result:', { profiles, error: profilesError });
 
@@ -154,7 +155,7 @@ export default function Community() {
         return {
           user_id: userId,
           full_name: displayName,
-          location: 'New York, NY', // Placeholder: should be from profile
+          location: profile.city || 'New York, NY', // Use profile full_name if available
           total_kilometers: totalKilometers,
           weekly_kilometers: weeklyKilometers,
           weekly_score: weeklyScore,
@@ -248,47 +249,31 @@ export default function Community() {
 
           {/* Content */}
           <div className="space-y-4">
-            {/* Beta Badge */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">BETA</div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Community Features</h3>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Connect with fellow runners and compete on our weekly leaderboard!
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Tabs - horizontal scroll on small screens */}
-            <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto">
-              <div className="inline-flex gap-2 whitespace-nowrap">
+            <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+              <div className="flex flex-wrap gap-2 justify-center">
                 <Button
                   variant={activeTab === 'leaderboard' ? 'default' : 'ghost'}
-                  size="sm"
+                  size="sm" className="px-2 sm:px-4"
                   onClick={() => setActiveTab('leaderboard')}
-                  className="flex-shrink-0"
                 >
-                  <Trophy className="w-4 h-4 mr-2" />
+                  <Trophy className="w-4 h-4 mr-1 sm:mr-2" />
                   Leaderboard
                 </Button>
                 <Button
                   variant={activeTab === 'challenges' ? 'default' : 'ghost'}
-                  size="sm"
+                  size="sm" className="px-2 sm:px-4"
                   onClick={() => setActiveTab('challenges')}
-                  className="flex-shrink-0"
                 >
-                  <Target className="w-4 h-4 mr-2" />
+                  <Target className="w-4 h-4 mr-1 sm:mr-2" />
                   Challenges
                 </Button>
                 <Button
                   variant={activeTab === 'groups' ? 'default' : 'ghost'}
-                  size="sm"
+                  size="sm" className="px-2 sm:px-4"
                   onClick={() => setActiveTab('groups')}
-                  className="flex-shrink-0"
                 >
-                  <Users className="w-4 h-4 mr-2" />
+                  <Users className="w-4 h-4 mr-1 sm:mr-2" />
                   Groups
                 </Button>
               </div>
@@ -298,10 +283,10 @@ export default function Community() {
               <>
                 {/* Your Rank Card */}
                 {userRank && (
-                  <Card className="shadow-card">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
+                  <Card className="shadow-card w-full">
+                    <CardContent className="p-3 sm:p-6">
+                      <div className="flex flex-wrap items-center justify-between mb-4">
+                        <div className="flex flex-wrap items-center gap-3">
                           <div className="w-12 h-12 bg-black dark:bg-white rounded-full flex items-center justify-center font-bold text-white dark:text-black text-lg">
                             {userRank.full_name.substring(0, 2).toUpperCase()}
                           </div>
@@ -314,7 +299,7 @@ export default function Community() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="text-2xl font-bold">#{userRank.rank}</span>
                           </div>
                           <div className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getScoreBadge(userRank.weekly_score).color}`}>
@@ -322,18 +307,25 @@ export default function Community() {
                           </div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 text-center">
                         <div>
-                          <div className="text-2xl font-bold">{formatKilometers(userRank.total_kilometers)}</div>
-                          <div className="text-xs text-muted-foreground">Total Kilometers</div>
-                        </div>
-                        <div>
-                          <div className="text-2xl font-bold text-orange-500">{userRank.weekly_score}</div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="text-2xl font-bold text-orange-500 cursor-help hover:text-orange-600 transition-colors">
+                                  {userRank.weekly_score}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs max-w-[200px]">Average of daily scores (nutrition + training + bonuses - penalties) from unified scoring system over the past 7 days.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           <div className="text-xs text-muted-foreground">Weekly Score</div>
                         </div>
                         <div>
                           <div className="text-2xl font-bold">{formatKilometers(userRank.weekly_kilometers)}</div>
-                          <div className="text-xs text-muted-foreground">This Week</div>
+                          <div className="text-xs text-muted-foreground">Weekly km</div>
                         </div>
                       </div>
                     </CardContent>
@@ -341,30 +333,24 @@ export default function Community() {
                 )}
 
                 {/* Ranking Info */}
-                <Card className="shadow-card">
-                  <CardContent className="p-6">
+                <Card className="shadow-card w-full">
+                  <CardContent className="p-3 sm:p-6">
                     <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
                       <span className="text-blue-600">⭐</span>
                       Weekly Score
                     </h3>
-                    <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
-                      Average of daily scores (nutrition + training + bonuses - penalties) from unified scoring system over the past 7 days.
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Your rank is based on your weekly score, which combines nutrition and training performance. Keep logging meals and completing workouts to climb the leaderboard!
                     </p>
                     <p className="text-sm text-muted-foreground mb-3">
                       Curious how we grade each day? <a href="/scores" className="text-primary underline underline-offset-2">See the scoring explainer</a>.
                     </p>
-                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-muted-foreground">
-                        <strong>Ranking Formula:</strong> Your rank is based on your weekly score, which combines nutrition and training performance. 
-                        Keep logging meals and completing workouts to climb the leaderboard!
-                      </p>
-                    </div>
                   </CardContent>
                 </Card>
 
                 {/* Weekly Leaderboard */}
-                <Card className="shadow-card">
-                  <CardContent className="p-6">
+                <Card className="shadow-card w-full">
+                  <CardContent className="p-3 sm:p-6">
                     <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-yellow-500" />
                       Global Leaderboard
@@ -415,15 +401,24 @@ export default function Community() {
                           </div>
 
                           {/* Stats */}
-                          <div className="text-right flex-shrink-0">
-                            <div className="font-bold">{formatKilometers(entry.weekly_kilometers)} km</div>
+                          <div className="text-right flex-shrink-0 hidden sm:block">
+                            <div className="font-bold whitespace-nowrap">{formatKilometers(entry.weekly_kilometers)} km</div>
                           </div>
 
                           {/* Score Badge */}
-                          <div className="text-right flex-shrink-0 min-w-[3rem]">
-                            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                              {entry.weekly_score}
-                            </div>
+                          <div className="text-right flex-shrink-0">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400 cursor-help hover:text-green-700 dark:hover:text-green-300 transition-colors">
+                                    {entry.weekly_score}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs max-w-[200px]">This week's average score from nutrition, training, and bonuses.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </div>
                       ))
@@ -435,8 +430,8 @@ export default function Community() {
             )}
 
             {activeTab === 'challenges' && (
-              <Card className="shadow-card">
-                <CardContent className="p-6 text-center">
+              <Card className="shadow-card w-full">
+                <CardContent className="p-3 sm:p-6 text-center">
                   <Target className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
                   <h3 className="font-semibold text-lg mb-2">Challenges Coming Soon</h3>
                   <p className="text-sm text-muted-foreground">
@@ -447,8 +442,8 @@ export default function Community() {
             )}
 
             {activeTab === 'groups' && (
-              <Card className="shadow-card">
-                <CardContent className="p-6 text-center">
+              <Card className="shadow-card w-full">
+                <CardContent className="p-3 sm:p-6 text-center">
                   <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
                   <h3 className="font-semibold text-lg mb-2">Groups Coming Soon</h3>
                   <p className="text-sm text-muted-foreground">
@@ -457,6 +452,19 @@ export default function Community() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Beta Badge */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 w-full">
+              <div className="flex items-start gap-3">
+                <div className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">BETA</div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Community Features</h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Connect with fellow runners and compete on our weekly leaderboard!
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

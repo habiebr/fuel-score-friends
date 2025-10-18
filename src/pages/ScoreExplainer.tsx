@@ -211,7 +211,7 @@ const WeeklyScoreExplainer = () => (
 export default function ScoreExplainerPage() {
   return (
     <div className="min-h-screen bg-gradient-background pb-20">
-      <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
+      <div className="max-w-none px-4 sm:px-6 lg:px-8 py-10 space-y-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">Understanding your scores</h1>
           <p className="text-muted-foreground">

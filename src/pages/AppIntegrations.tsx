@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ChevronLeft, Activity, Download, History, Calendar, Check, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { ChevronLeft, Activity, History, Calendar, Check, AlertCircle, RefreshCw, Loader2, ChevronDown } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
@@ -13,7 +13,6 @@ import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { PageHeading } from '@/components/PageHeading';
-import { PWAInstallButton } from '@/components/PWAInstallButton';
 import { StravaConnectButton, StravaDisconnectButton } from '@/components/StravaConnectButton';
 import { GoogleFitConnectButton, GoogleFitDisconnectButton } from '@/components/GoogleFitConnectButton';
 import { useStravaAuth } from '@/hooks/useStravaAuth';
@@ -30,6 +29,7 @@ export default function AppIntegrations() {
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [syncLabel, setSyncLabel] = useState<string>('');
+  const [isBackfillExpanded, setIsBackfillExpanded] = useState(false);
   
   // Runna calendar integration
   const [runnaUrl, setRunnaUrl] = useState('');
@@ -211,20 +211,15 @@ export default function AppIntegrations() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-2">
+          <div className="flex items-center gap-3 sm:gap-4 mb-6">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate(-1)}
               className="-ml-2 flex-shrink-0"
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
-          </div>
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-white dark:bg-white dark:text-black sm:h-12 sm:w-12">
-              <Activity className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
             <PageHeading
               title="App Integrations"
               description="Manage your connected fitness apps and data sync."
@@ -292,7 +287,7 @@ export default function AppIntegrations() {
                   {/* Historical Sync */}
                   {isConnected && (
                     <div className="space-y-3 p-4 rounded-lg bg-muted/30 border border-muted">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <History className="w-5 h-5 text-primary" />
                         <div className="text-sm">
                           <div className="font-semibold text-foreground">Backfill Historical Data</div>
@@ -355,13 +350,6 @@ export default function AppIntegrations() {
                     </div>
                   )}
 
-                  {/* PWA Install - placed under integrations */}
-                  <div className="pt-2 border-t border-border">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">Install NutriSync as an app</div>
-                      <PWAInstallButton size="sm" />
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
 
@@ -523,14 +511,6 @@ export default function AppIntegrations() {
                     Your nutrition and training data is stored securely and never shared with third parties without your explicit consent. Connected apps only sync the data necessary for providing personalized recommendations.
                   </p>
 
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <button className="flex items-center gap-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 p-3 rounded-lg transition-colors">
-                      <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
-                        <Download className="w-5 h-5" />
-                      </div>
-                      <span className="font-medium">Export My Data</span>
-                    </button>
-                  </div>
                 </CardContent>
               </Card>
             </div>

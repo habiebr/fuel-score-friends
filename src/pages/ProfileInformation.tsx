@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, User } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { BottomNav } from '@/components/BottomNav';
@@ -43,6 +43,7 @@ export default function ProfileInformation() {
     weight_kg: '',
     height_cm: '',
     age: '',
+    city: '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone // Default to browser timezone
   });
 
@@ -71,6 +72,7 @@ export default function ProfileInformation() {
         weight_kg: data.weight_kg?.toString() || '',
         height_cm: data.height_cm?.toString() || '',
         age: data.age?.toString() || '',
+        city: data.city || '',
         timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
       });
     }
@@ -90,6 +92,7 @@ export default function ProfileInformation() {
           weight_kg: parseFloat(formData.weight_kg) || null,
           height_cm: parseFloat(formData.height_cm) || null,
           age: parseInt(formData.age) || null,
+          city: formData.city,
           timezone: formData.timezone,
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
@@ -118,20 +121,15 @@ export default function ProfileInformation() {
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
-          <div className="mb-2">
+          <div className="flex items-center gap-3 sm:gap-4 mb-6">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate(-1)}
               className="-ml-2 flex-shrink-0"
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
-          </div>
-          <div className="flex items-center gap-3 sm:gap-4 mb-6">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg sm:h-12 sm:w-12">
-              <User className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
             <PageHeading
               title="Profile Information"
               description="Personal details and body metrics"
@@ -253,6 +251,18 @@ export default function ProfileInformation() {
                       className="bg-gray-100 dark:bg-gray-800 border-0"
                     />
                   </div>
+                </div>
+
+                {/* City */}
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={formData.city}
+                    onChange={(e) => setFormData({...formData, city: e.target.value})}
+                    placeholder="Jakarta"
+                    className="bg-gray-100 dark:bg-gray-800 border-0"
+                  />
                 </div>
 
                 {/* Info about activity level */}

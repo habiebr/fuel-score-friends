@@ -347,7 +347,7 @@ const MealDistributionExplainer = () => (
 export default function NutritionExplainerPage() {
   return (
     <div className="min-h-screen bg-gradient-background pb-20">
-      <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
+      <div className="max-w-none mx-auto px-4 py-10 space-y-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">How We Calculate Your Nutrition Plan</h1>
           <p className="text-muted-foreground">

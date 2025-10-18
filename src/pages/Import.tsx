@@ -10,7 +10,7 @@ export default function Import() {
 
   return (
     <div className="min-h-screen bg-gradient-background pb-20">
-      <div className="max-w-none mx-auto p-4">
+      <div className="max-w-none mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header with Back Button */}
         <div className="mb-2">
           <Button variant="ghost" onClick={() => navigate('/profile')} className="-ml-2">

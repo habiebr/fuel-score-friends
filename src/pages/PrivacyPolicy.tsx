@@ -34,7 +34,7 @@ export default function PrivacyPolicy() {
       </div>
 
       {/* Content */}
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 py-8 max-w-none">
         {/* Introduction */}
         <Card className="mb-6">
           <CardHeader>

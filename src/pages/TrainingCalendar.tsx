@@ -103,11 +103,11 @@ export default function TrainingCalendar() {
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
-                 <PageHeading
-                   title="Training Calendar"
-                   description="Weekly view of your training plan"
-                   icon={Calendar}
-                 />
+          <PageHeading
+            title="Training Calendar"
+            description="Weekly view of your training plan"
+            icon={Calendar}
+          />
 
           {/* Navigation Controls */}
           <div className="flex items-center justify-center gap-2 mb-6">
@@ -187,7 +187,7 @@ export default function TrainingCalendar() {
                       <div className="flex-1 space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">Day {idx + 1}</p>
                               {hasActualActivity && (
                                 <span className="rounded-full bg-green-100 dark:bg-green-900/20 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
@@ -201,7 +201,12 @@ export default function TrainingCalendar() {
                         </div>
 
                         <div className="space-y-3">
-                          {loading && <div className="text-xs text-muted-foreground">Loading...</div>}
+                          {loading && (
+                            <div className="space-y-2 animate-pulse">
+                              <div className="h-10 bg-muted/30 rounded-lg"></div>
+                              <div className="h-4 bg-muted/30 rounded-lg w-3/4"></div>
+                            </div>
+                          )}
                           {!loading && isRestDay && (
                             <div className="flex items-center justify-between rounded-2xl border border-dashed border-border/50 bg-background/50 px-4 py-3 text-sm text-muted-foreground">
                               Rest day — keep nutrition on point.
@@ -216,7 +221,7 @@ export default function TrainingCalendar() {
                               {hasActualActivity && dayData.actual && (
                                 <div className="flex flex-col gap-2 rounded-2xl border-2 border-green-500/30 bg-gradient-to-br from-green-50/80 to-emerald-50/60 dark:from-green-900/20 dark:to-emerald-900/10 px-4 py-3 text-sm shadow-lg shadow-green-500/10 backdrop-blur">
                                   <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                       <span className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
                                       <span className="text-sm font-bold capitalize text-green-900 dark:text-green-100">{dayData.actual.activity_type}</span>
                                       <span className="rounded-full bg-green-600 px-2 py-0.5 text-xs font-bold text-white">
@@ -265,7 +270,7 @@ export default function TrainingCalendar() {
                                     : 'border border-border/60 bg-background/70 shadow-inner shadow-black/10'
                                 }`}>
                                   <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                       <span className={`h-2.5 w-2.5 rounded-full ${hasActualActivity ? 'bg-gray-400' : 'bg-primary'}`} />
                                       <span className="text-sm font-semibold capitalize">{dayData.planned.activity_type}</span>
                                       {hasActualActivity && (

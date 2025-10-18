@@ -27,8 +27,10 @@ import { accumulatePlannedFromMealPlans, accumulateConsumedFromFoodLogs, compute
 import { calculateBMR, calculateTDEE, calculateMacros, type TrainingLoad } from '@/lib/nutrition-engine';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { getLocalDayBoundaries, getLocalDateString } from '@/lib/timezone';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { readDashboardCache, writeDashboardCache, clearDashboardCache } from '@/lib/dashboard-cache';
+import { MealScoreSuggestions } from '@/components/MealScoreSuggestions';
 
 interface MealSuggestion {
   name: string;
@@ -1096,7 +1098,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   ];
 
   return (
-    <div className="max-w-none mx-auto p-4">
+    <TooltipProvider>
+      <div className="max-w-none mx-auto p-4">
       {/* Header - NutriSync Branding */}
       <div className="flex items-center justify-between">
         <PageHeading
@@ -1135,9 +1138,33 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             variant="success" 
             tooltip={
               <>
-                <p className="font-semibold">🟢 Daily Score</p>
-                <p>Reflects how well you met today&apos;s nutrition and training goals.</p>
-                <p>Resets every day to track your daily balance.</p>
+                <p className="font-semibold mb-2">🟢 Daily Score</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Reflects how well you balanced nutrition and training today. Resets every 24 hours to track your daily progress.
+                </p>
+                
+                <div className="space-y-2 text-xs">
+                  <div className="p-2 bg-muted/30 rounded">
+                    <p className="font-medium mb-1">📊 What's measured:</p>
+                    <p className="text-muted-foreground">
+                      Nutrition (macros, timing, meal structure) + Training (completion, type, intensity) + Bonuses - Penalties
+                    </p>
+                  </div>
+                  
+                  <div className="p-2 bg-muted/30 rounded">
+                    <p className="font-medium mb-1">💪 How it works:</p>
+                    <p className="text-muted-foreground">
+                      On rest days: nutrition weight 100%. On hard days: training gets more weight. Bonuses for streaks and hydration. Penalties for big deficits or missed fueling windows.
+                    </p>
+                  </div>
+                  
+                  <div className="p-2 bg-muted/30 rounded">
+                    <p className="font-medium mb-1">💡 Tip:</p>
+                    <p className="text-muted-foreground">
+                      <a href="/scores" className="text-primary underline">See the scoring explainer</a> for more details.
+                    </p>
+                  </div>
+                </div>
               </>
             }
           />
@@ -1198,6 +1225,32 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
         </div>
 
+        {/* Meal Score Suggestions */}
+        <div className="mb-5">
+          <MealScoreSuggestions
+            score={mealScore.score}
+            breakdown={{
+              calories: Math.round((data?.calories?.consumed || 0) / (data?.calories?.target || 1) * 100),
+              protein: Math.round((data?.macros?.protein?.consumed || 0) / (data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).protein : 1) * 100),
+              carbs: Math.round((data?.macros?.carbs?.consumed || 0) / (data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).carbs : 1) * 100),
+              fat: Math.round((data?.macros?.fat?.consumed || 0) / (data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).fat : 1) * 100),
+            }}
+            actual={data?.calories ? {
+              calories: data.calories.consumed,
+              protein: data.macros?.protein?.consumed || 0,
+              carbs: data.macros?.carbs?.consumed || 0,
+              fat: data.macros?.fat?.consumed || 0,
+            } : undefined}
+            target={data?.calories ? {
+              calories: data.calories.target,
+              protein: deriveMacrosFromCalories(data.calories.target).protein,
+              carbs: deriveMacrosFromCalories(data.calories.target).carbs,
+              fat: deriveMacrosFromCalories(data.calories.target).fat,
+            } : undefined}
+            mealsLogged={data?.mealsLogged || 0}
+          />
+        </div>
+
         {/* 4. Today's Nutrition */}
         <div className="mb-5">
           <TodayNutritionCard
@@ -1250,5 +1303,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         {/* Today's Nutrition Plan removed */}
 
       </div>
+    </TooltipProvider>
   );
 }

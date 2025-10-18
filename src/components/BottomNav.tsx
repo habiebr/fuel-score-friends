@@ -41,7 +41,7 @@ export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
             }
           >
             <Utensils className="h-5 w-5" />
-            <span>Food</span>
+            <span>Meals</span>
           </NavLink>
 
           <NavLink

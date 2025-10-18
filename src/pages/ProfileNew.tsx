@@ -50,7 +50,7 @@ export default function ProfileNew() {
       icon: UserIcon,
       title: 'Profile Information',
       subtitle: 'Personal details and body metrics',
-      path: '/profile/information',
+      path: '/profile-info',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
     {
@@ -64,21 +64,21 @@ export default function ProfileNew() {
       icon: Utensils,
       title: 'Food Preferences',
       subtitle: 'Dietary restrictions and eating habits',
-      path: '/profile/food-preferences',
+      path: '/food-preferences',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
     {
       icon: Bell,
       title: 'Notifications',
       subtitle: 'Meal reminders and alerts',
-      path: '/profile/notifications',
+      path: '/notifications-settings',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
     {
       icon: Smartphone,
       title: 'App Integrations',
       subtitle: 'Connected fitness apps and privacy',
-      path: '/profile/integrations',
+      path: '/integrations',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     }
   ];
@@ -91,33 +91,50 @@ export default function ProfileNew() {
           <PageHeading
             title="Profile"
             description="Manage your account and preferences."
-            className="pt-2"
             icon={UserIcon}
           />
 
-          {/* User Card */}
-          <Card className="mb-4 shadow-card">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-black dark:bg-white rounded-full flex items-center justify-center">
-                  <UserIcon className="w-8 h-8 text-white dark:text-black" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-bold text-foreground truncate">
-                    {profile?.full_name || 'Alex Runner'}
-                  </h2>
-                  <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                    <span>{profile?.weight_kg || 70}kg</span>
-                    <span>•</span>
-                    <span>{profile?.height_cm || 175}cm</span>
-                    <span>•</span>
-                    <span>{profile?.age || 28} years</span>
+          {/* User Card - Skeleton during loading */}
+          {!profile ? (
+            <Card className="mb-4 shadow-card">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4 animate-pulse">
+                  <div className="w-16 h-16 bg-muted/30 rounded-full flex-shrink-0"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-6 bg-muted/30 rounded-lg w-2/3"></div>
+                    <div className="h-4 bg-muted/30 rounded-lg w-1/2"></div>
+                    <div className="h-4 bg-muted/30 rounded-lg w-2/3"></div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="mb-4 shadow-card">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-black dark:bg-white rounded-full flex items-center justify-center">
+                    <UserIcon className="w-8 h-8 text-white dark:text-black" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-xl font-bold text-foreground truncate">
+                      {profile?.full_name || 'Alex Runner'}
+                    </h2>
+                    <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      <span>{profile?.weight_kg || 70}kg</span>
+                      <span>•</span>
+                      <span>{profile?.height_cm || 175}cm</span>
+                      <span>•</span>
+                      <span>{profile?.age || 28} years</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      <span>{profile?.city || 'Unknown City'}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* PWA Install Prompt */}
           <div className="mb-6">

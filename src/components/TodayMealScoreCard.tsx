@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Award } from 'lucide-react';
+import { Award, Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface TodayMealScoreCardProps {
   score: number;
@@ -59,7 +60,30 @@ export function TodayMealScoreCard({ score, rating }: TodayMealScoreCardProps) {
             </div>
           </div>
           <div className="text-right text-sm text-gray-600 dark:text-gray-400 leading-tight max-w-[140px]">
-            Based on unified nutrition scoring
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button 
+                    type="button"
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
+                    aria-label="Meal score info"
+                  >
+                    <Info className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-sm">
+                  <div className="space-y-2 text-xs">
+                    <p className="font-semibold">🍽️ Today's Meal Score</p>
+                    <p>Measures how well your nutrition matched your targets:</p>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                      <li>Macro alignment (carbs, protein, fat within ±5-10%)</li>
+                      <li>Timing (pre/post-run fueling windows)</li>
+                      <li>Meal structure (balanced distribution through the day)</li>
+                    </ul>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </CardContent>

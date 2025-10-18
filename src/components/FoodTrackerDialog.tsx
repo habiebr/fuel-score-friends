@@ -542,10 +542,20 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           setStage('complete');
           setProgress(100);
           console.log('✨ Food analysis ready for user review');
-          toast({
-            title: "Food analyzed!",
-            description: `Found: ${data.nutritionData.food_name}`,
-          });
+          
+          // Check validation results
+          if (data.validation?.isPackaged) {
+            console.log('ℹ️ Packaged product detected - nutrition verified from label');
+            toast({
+              title: "Food analyzed!",
+              description: `Found: ${data.nutritionData.food_name} (verified from label)`,
+            });
+          } else {
+            toast({
+              title: "Food analyzed!",
+              description: `Found: ${data.nutritionData.food_name}`,
+            });
+          }
         } else {
           throw new Error('No nutrition data received from AI');
         }
@@ -569,6 +579,15 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
           } else if (error.message.includes('Failed to send') || error.message.includes('NetworkError')) {
             errorTitle = "Connection error";
             errorMessage = "Unable to reach the server. Please check your internet connection and try again.";
+          } else if (error.message.includes('Not a food item') || error.message.includes('non-edible')) {
+            // Handle non-food item validation errors
+            errorTitle = "Not a food item";
+            errorMessage = error.message.includes('Blackberry') || error.message.includes('phone') 
+              ? "Please upload a photo of food, not a phone or electronic device."
+              : "Please upload a photo of food or edible item.";
+          } else if (error.message.includes('edible foods can be logged')) {
+            errorTitle = "Invalid item";
+            errorMessage = "Only edible foods can be logged. Please try again with a food item.";
           } else {
             errorMessage = error.message;
           }
@@ -683,7 +702,7 @@ export function FoodTrackerDialog({ open, onOpenChange }: FoodTrackerDialogProps
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="h-5 w-5" />

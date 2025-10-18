@@ -1,13 +1,20 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dashboard } from '@/components/Dashboard';
 import { BottomNav } from '@/components/BottomNav';
-import { OnboardingDialog } from '@/components/OnboardingDialog';
-import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { FitnessScreenshotDialog } from '@/components/FitnessScreenshotDialog';
 import { ActionFAB } from '@/components/ActionFAB';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { OnboardingDialog } from '@/components/OnboardingDialog';
+
+// Lazy load heavy dialogs - these are not needed on initial page load
+const FoodTrackerDialog = lazy(() => 
+  import('@/components/FoodTrackerDialog').then(m => ({ default: m.FoodTrackerDialog }))
+);
+const FitnessScreenshotDialog = lazy(() => 
+  import('@/components/FitnessScreenshotDialog').then(m => ({ default: m.FitnessScreenshotDialog }))
+);
+
+const ENABLE_ONBOARDING = import.meta.env.VITE_ENABLE_ONBOARDING !== 'false';
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -15,43 +22,15 @@ const Index = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
-  const ENABLE_ONBOARDING = false;
 
-  useEffect(() => {
-    // Always redirect unauthenticated users to /auth
-    if (!loading && !user) {
-      navigate('/auth', { replace: true });
-      return;
-    }
-
-    if (!ENABLE_ONBOARDING) return;
-    const checkOnboarding = async () => {
-      if (!loading && user) {
-        const { data } = await supabase
-          .from('user_preferences')
-          .select('value')
-          .eq('user_id', user.id)
-          .eq('key', 'onboarding')
-          .maybeSingle();
-        if (!data?.value?.hasSeenOnboarding) {
-          setShowOnboarding(true);
-        }
-      }
-    };
-    checkOnboarding();
-  }, [user, loading, navigate]);
-
-  const handleOnboardingComplete = async () => {
-    await supabase
-      .from('user_preferences')
-      .upsert({
-        user_id: user.id,
-        key: 'onboarding',
-        value: { hasSeenOnboarding: true },
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id,key'
-      });
+  const handleOnboardingComplete = async (data: any) => {
+    const { supabase } = await import('@/integrations/supabase/client');
+    
+    await supabase.from('preferences').upsert({
+      user_id: user?.id,
+      ...data,
+      onConflict: 'user_id,key'
+    });
     setShowOnboarding(false);
   };
 
@@ -83,8 +62,19 @@ const Index = () => {
         onLogMeal={() => setFoodTrackerOpen(true)}
         onUploadActivity={() => setFitnessScreenshotOpen(true)}
       />
-      <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
-      <FitnessScreenshotDialog open={fitnessScreenshotOpen} onOpenChange={setFitnessScreenshotOpen} />
+      
+      {/* Lazy loaded dialogs with Suspense boundary */}
+      <Suspense fallback={null}>
+        {foodTrackerOpen && (
+          <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
+        )}
+      </Suspense>
+      
+      <Suspense fallback={null}>
+        {fitnessScreenshotOpen && (
+          <FitnessScreenshotDialog open={fitnessScreenshotOpen} onOpenChange={setFitnessScreenshotOpen} />
+        )}
+      </Suspense>
     </>
   );
 };

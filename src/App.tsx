@@ -5,41 +5,42 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { UploadProvider } from "@/contexts/UploadContext";
-// Old meal suggestions removed
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "react-error-boundary";
+import { Suspense, lazy } from "react";
+
+// Preload critical pages
 import Index from "./pages/Index";
-import ProfileNew from "./pages/ProfileNew";
-import { Dashboard2 } from "./components/Dashboard2";
-import ProfileInformation from "./pages/ProfileInformation";
-import FoodPreferences from "./pages/FoodPreferences";
-import { MealPreferencesForm } from "./components/MealPreferencesForm";
-import { PageHeading } from "./components/PageHeading";
-import NotificationsSettings from "./pages/NotificationsSettings";
-import AppIntegrations from "./pages/AppIntegrations";
-import Goals from "./pages/Goals";
-import Training from "./pages/Training.tsx";
-import TrainingCalendar from "./pages/TrainingCalendar";
-import Community from "./pages/Community";
-import ScoreExplainerPage from "./pages/ScoreExplainer";
-import NutritionExplainerPage from "./pages/NutritionExplainer";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
-import { CachedWidgetsDemo } from "./pages/CachedWidgetsDemo";
-import Import from "./pages/Import";
-import Meals from "./pages/Meals";
-import MealPlans from "./pages/MealPlans";
-import ShoppingList from "./pages/ShoppingList";
-import MealHistory from "./pages/MealHistory";
-import MarathonCalendarPage from "./pages/MarathonCalendarPage";
-import Offline from "./pages/Offline";
-import NotFound from "./pages/NotFound";
+
+// Lazy load non-critical pages - these improve initial load time
+const ProfileNew = lazy(() => import("./pages/ProfileNew"));
+const ProfileInformation = lazy(() => import("./pages/ProfileInformation"));
+const FoodPreferences = lazy(() => import("./pages/FoodPreferences"));
+const NotificationsSettings = lazy(() => import("./pages/NotificationsSettings"));
+const AppIntegrations = lazy(() => import("./pages/AppIntegrations"));
+const Goals = lazy(() => import("./pages/Goals"));
+const Training = lazy(() => import("./pages/Training"));
+const TrainingCalendar = lazy(() => import("./pages/TrainingCalendar"));
+const Community = lazy(() => import("./pages/Community"));
+const ScoreExplainerPage = lazy(() => import("./pages/ScoreExplainer"));
+const NutritionExplainerPage = lazy(() => import("./pages/NutritionExplainer"));
+const CachedWidgetsDemo = lazy(() => import("./pages/CachedWidgetsDemo"));
+const Import = lazy(() => import("./pages/Import"));
+const Meals = lazy(() => import("./pages/Meals"));
+const MealPlans = lazy(() => import("./pages/MealPlans"));
+const ShoppingList = lazy(() => import("./pages/ShoppingList"));
+const MealHistory = lazy(() => import("./pages/MealHistory"));
+const MarathonCalendarPage = lazy(() => import("./pages/MarathonCalendarPage"));
+const Offline = lazy(() => import("./pages/Offline"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const OnboardingWizard = lazy(() => import("./pages/OnboardingWizard"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 import { PWAUpdateNotification } from "@/components/PWAUpdateNotification";
-import OnboardingWizard from "./pages/OnboardingWizard";
-import TermsOfService from "./pages/TermsOfService";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-// import HistoricalScoresPage from "./pages/HistoricalScoresPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +78,17 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
   );
 }
 
+// Loading fallback for lazy-loaded routes
+function RouteLoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-background flex items-center justify-center">
+      <div className="animate-pulse">
+        <div className="w-12 h-12 bg-primary rounded-full animate-pulse-glow"></div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary
@@ -100,141 +112,34 @@ function App() {
                   <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route path="/offline" element={<Offline />} />
                   
-                  {/* Legal Pages - Public */}
-                  <Route path="/terms-of-service" element={<TermsOfService />} />
-                  <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                  {/* Protected Routes - Index (critical, preloaded) */}
+                  <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
 
-                  {/* Protected Routes */}
-                  <Route path="/" element={
-                    <ProtectedRoute>
-                      <Index />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard2" element={
-                    <ProtectedRoute>
-                      <Dashboard2 />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/profile" element={
-                    <ProtectedRoute>
-                      <ProfileNew />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/profile/information" element={
-                    <ProtectedRoute>
-                      <ProfileInformation />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/profile/food-preferences" element={
-                    <ProtectedRoute>
-                      <FoodPreferences />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/profile/meal-preferences" element={
-                    <ProtectedRoute>
-                      <div className="min-h-screen bg-gradient-background pb-20">
-                        <div className="max-w-none mx-auto p-4">
-                          <PageHeading
-                            title="Meal Preferences"
-                            description="Configure your meal planning mode and preferences."
-                            className="pt-2"
-                          />
-                          <MealPreferencesForm />
-                        </div>
-                      </div>
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/profile/notifications" element={
-                    <ProtectedRoute>
-                      <NotificationsSettings />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/profile/integrations" element={
-                    <ProtectedRoute>
-                      <AppIntegrations />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/goals" element={
-                    <ProtectedRoute>
-                      <Goals />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/training" element={
-                    <ProtectedRoute>
-                      <Training />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/training-calendar" element={
-                    <ProtectedRoute>
-                      <TrainingCalendar />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/marathons" element={
-                    <ProtectedRoute>
-                      <MarathonCalendarPage />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/community" element={
-                    <ProtectedRoute>
-                      <Community />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/scores" element={
-                    <ProtectedRoute>
-                      <ScoreExplainerPage />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/nutrition-explainer" element={
-                    <ProtectedRoute>
-                      <NutritionExplainerPage />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/import" element={
-                             <ProtectedRoute>
-                               <Import />
-                             </ProtectedRoute>
-                           } />
-                           <Route path="/cached-widgets-demo" element={
-                             <ProtectedRoute>
-                               <CachedWidgetsDemo />
-                             </ProtectedRoute>
-                           } />
-                           <Route path="/meals" element={
-                    <ProtectedRoute>
-                      <Meals />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/meal-plans" element={
-                    <ProtectedRoute>
-                      <MealPlans />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/shopping-list" element={
-                    <ProtectedRoute>
-                      <ShoppingList />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/meal-history" element={
-                    <ProtectedRoute>
-                      <MealHistory />
-                    </ProtectedRoute>
-                  } />
-                  {/* Historical Scores page not available on this commit */}
-                  {/* <Route path="/historical-scores" element={
-                    <ProtectedRoute>
-                      <HistoricalScoresPage />
-                    </ProtectedRoute>
-                  } /> */}
+                  {/* Protected Routes - Lazy loaded */}
+                  <Route path="/profile" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><ProfileNew /></Suspense></ProtectedRoute>} />
+                  <Route path="/profile-info" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><ProfileInformation /></Suspense></ProtectedRoute>} />
+                  <Route path="/food-preferences" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><FoodPreferences /></Suspense></ProtectedRoute>} />
+                  <Route path="/notifications-settings" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><NotificationsSettings /></Suspense></ProtectedRoute>} />
+                  <Route path="/integrations" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><AppIntegrations /></Suspense></ProtectedRoute>} />
+                  <Route path="/goals" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><Goals /></Suspense></ProtectedRoute>} />
+                  <Route path="/training" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><Training /></Suspense></ProtectedRoute>} />
+                  <Route path="/training-calendar" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><TrainingCalendar /></Suspense></ProtectedRoute>} />
+                  <Route path="/community" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><Community /></Suspense></ProtectedRoute>} />
+                  <Route path="/score-explainer" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><ScoreExplainerPage /></Suspense></ProtectedRoute>} />
+                  <Route path="/nutrition-explainer" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><NutritionExplainerPage /></Suspense></ProtectedRoute>} />
+                  <Route path="/cached-widgets-demo" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><CachedWidgetsDemo /></Suspense></ProtectedRoute>} />
+                  <Route path="/import" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><Import /></Suspense></ProtectedRoute>} />
+                  <Route path="/meals" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><Meals /></Suspense></ProtectedRoute>} />
+                  <Route path="/meal-plans" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><MealPlans /></Suspense></ProtectedRoute>} />
+                  <Route path="/shopping-list" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><ShoppingList /></Suspense></ProtectedRoute>} />
+                  <Route path="/meal-history" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><MealHistory /></Suspense></ProtectedRoute>} />
+                  <Route path="/marathon-calendar" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><MarathonCalendarPage /></Suspense></ProtectedRoute>} />
+                  <Route path="/onboarding" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><OnboardingWizard /></Suspense></ProtectedRoute>} />
+                  <Route path="/terms" element={<TermsOfService />} />
+                  <Route path="/privacy" element={<PrivacyPolicy />} />
 
-                  {/* Onboarding Route - Protected but accessible to all users */}
-                  <Route path="/onboarding" element={
-                    <ProtectedRoute>
-                      <OnboardingWizard />
-                    </ProtectedRoute>
-                  } />
-
-                  {/* Catch-all route */}
-                  <Route path="*" element={<NotFound />} />
+                  {/* 404 - Lazy load */}
+                  <Route path="*" element={<Suspense fallback={<RouteLoadingFallback />}><NotFound /></Suspense>} />
                 </Routes>
                      </BrowserRouter>
                    </TooltipProvider>

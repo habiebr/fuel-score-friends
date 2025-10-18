@@ -686,7 +686,7 @@ export default function Meals() {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-background pb-20">
+      <div className="min-h-screen bg-gradient-background pb-20 overflow-x-hidden">
         <div className="max-w-none mx-auto p-4">
           <PageHeading
             title="Meals"
@@ -695,8 +695,7 @@ export default function Meals() {
           />
 
           <div className="mb-6">
-            <div className="overflow-x-auto -mx-4 px-4">
-              <div className="inline-flex min-w-max items-center gap-1 rounded-full border border-white/10 bg-black/10 p-1 shadow-inner backdrop-blur-sm dark:border-white/20 dark:bg-white/10">
+            <div className="flex flex-wrap justify-center gap-1 rounded-full border border-white/10 bg-black/10 p-1 shadow-inner backdrop-blur-sm dark:border-white/20 dark:bg-white/10">
                 {tabOptions.map(({ value, label, icon: Icon }) => (
                   <Button
                     key={value}
@@ -716,7 +715,6 @@ export default function Meals() {
                 ))}
               </div>
             </div>
-          </div>
 
           {/* Content */}
           <div className="space-y-4">
@@ -729,7 +727,7 @@ export default function Meals() {
                       <h3 className="text-lg font-semibold">Weekly Food Diary</h3>
                       <p className="text-sm text-muted-foreground">Review your logged meals for the selected week.</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -780,13 +778,13 @@ export default function Meals() {
                                 {format(new Date(day), 'EEE')}
                               </div>
                               <div className={`text-lg font-bold mb-1 ${isToday ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-gray-100'}`}>
-                                {weekTotals[day]?.calories || 0}
+                                {Math.round(weekTotals[day]?.calories || 0)}
                               </div>
                               <div className="text-[10px] text-muted-foreground font-medium mb-2">kcal</div>
                               <div className="text-[9px] text-muted-foreground leading-tight">
-                                <div>P: {weekTotals[day]?.protein || 0}g</div>
-                                <div>C: {weekTotals[day]?.carbs || 0}g</div>
-                                <div>F: {weekTotals[day]?.fat || 0}g</div>
+                                <div>P: {Math.round(weekTotals[day]?.protein || 0)}g</div>
+                                <div>C: {Math.round(weekTotals[day]?.carbs || 0)}g</div>
+                                <div>F: {Math.round(weekTotals[day]?.fat || 0)}g</div>
                               </div>
                             </div>
                           );
@@ -809,17 +807,17 @@ export default function Meals() {
                               }`}
                             >
                             <CardContent className="p-4">
-                              <div className="flex items-center justify-between mb-3">
+                              <div className="flex flex-wrap items-center justify-between mb-3">
                                 <div className={`font-bold text-base ${isToday ? 'text-blue-700 dark:text-blue-300' : ''}`}>
                                   {format(new Date(day), 'EEE, MMM d')}
                                   {isToday && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">Today</span>}
                                 </div>
-                                <div className="text-base font-bold">{weekTotals[day]?.calories || 0} kcal</div>
+                                <div className="text-base font-bold">{Math.round(weekTotals[day]?.calories || 0)} kcal</div>
                               </div>
                               {(weekLogs[day] || []).length > 0 ? (
                                 <div className="space-y-2">
                                   {(weekLogs[day] || []).map((log) => (
-                                    <div key={log.id} className="flex items-center justify-between bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg p-3 hover:shadow-md transition-all">
+                                    <div key={log.id} className="flex flex-wrap items-center justify-between bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg p-3 hover:shadow-md transition-all">
                                       <div className="flex-1 min-w-0">
                                         <div className="font-semibold truncate text-sm">{log.food_name}</div>
                                         <div className="text-xs text-muted-foreground mt-1">
@@ -830,7 +828,7 @@ export default function Meals() {
                                           </span>
                                         </div>
                                       </div>
-                                      <div className="flex items-center gap-4 text-xs ml-3">
+                                      <div className="flex flex-wrap items-center gap-2 text-xs ml-2">
                                         <div className="text-center">
                                           <div className="font-bold text-blue-600 dark:text-blue-400">{log.protein_grams}g</div>
                                           <div className="text-[9px] text-muted-foreground">P</div>
@@ -843,8 +841,8 @@ export default function Meals() {
                                           <div className="font-bold text-yellow-600 dark:text-yellow-400">{log.fat_grams}g</div>
                                           <div className="text-[9px] text-muted-foreground">F</div>
                                         </div>
-                                        <div className="text-center bg-white dark:bg-gray-900 rounded-md px-2 py-1">
-                                          <div className="font-bold text-foreground">{log.calories}</div>
+                                        <div className="text-center bg-white dark:bg-gray-900 rounded-md px-1.5 py-0.5">
+                                          <div className="font-bold text-foreground text-xs">{log.calories}</div>
                                           <div className="text-[9px] text-muted-foreground">kcal</div>
                                         </div>
                                       </div>
@@ -881,7 +879,7 @@ export default function Meals() {
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     {/* Calories */}
                     <div>
-                      <div className="text-2xl font-bold">{todayTotals.calories}</div>
+                      <div className="text-2xl font-bold">{Math.round(todayTotals.calories)}</div>
                       <div className="text-sm text-muted-foreground">/ {targets.calories} kcal</div>
                       <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
@@ -893,7 +891,7 @@ export default function Meals() {
 
                     {/* Protein */}
                     <div>
-                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{todayTotals.protein}g</div>
+                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{Math.round(todayTotals.protein)}g</div>
                       <div className="text-sm text-muted-foreground">/ {targets.protein}g protein</div>
                       <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
@@ -905,7 +903,7 @@ export default function Meals() {
 
                     {/* Carbs */}
                     <div>
-                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">{todayTotals.carbs}g</div>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">{Math.round(todayTotals.carbs)}g</div>
                       <div className="text-sm text-muted-foreground">/ {targets.carbs}g carbs</div>
                       <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
@@ -917,7 +915,7 @@ export default function Meals() {
 
                     {/* Fat */}
                     <div>
-                      <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{todayTotals.fat}g</div>
+                      <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{Math.round(todayTotals.fat)}g</div>
                       <div className="text-sm text-muted-foreground">/ {targets.fat}g fat</div>
                       <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
@@ -944,12 +942,12 @@ export default function Meals() {
               {Object.entries(groupLogsByMeal()).map(([mealType, logs]) => (
                 <Card key={mealType} className="shadow-card">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-wrap items-center justify-between mb-3">
                       <h3 className="text-lg font-semibold capitalize flex items-center gap-2">
                         {getMealTypeIcon(mealType as MealFilter)}
                         {mealType}
                       </h3>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {logs.length > 0 && (
                           <span className="text-sm font-medium text-yellow-600">
                             ⭐ {getMealScore(mealType)}% Score
@@ -1036,7 +1034,7 @@ export default function Meals() {
                       <h3 className="font-semibold text-base mb-3">Meal Plan (Today)</h3>
                       {['breakfast','lunch','dinner','snack'].map((m) => aiPlan[m] ? (
                         <div key={m} className="mb-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-                          <div className="flex items-center justify-between mb-2">
+                          <div className="flex flex-wrap items-center justify-between mb-2">
                             <div className="capitalize font-medium">{m}</div>
                             <div className="text-sm font-semibold">{aiPlan[m].target_calories} kcal</div>
                           </div>
@@ -1057,7 +1055,7 @@ export default function Meals() {
                           {Array.isArray(aiPlan[m].suggestions) && aiPlan[m].suggestions.length > 0 && (
                             <ul className="space-y-1">
                               {aiPlan[m].suggestions.slice(0,2).map((s: any, i: number) => (
-                                <li key={i} className="flex items-center justify-between text-sm">
+                                <li key={i} className="flex flex-wrap items-center justify-between text-sm">
                                   <span className="font-medium">{s.name}</span>
                                   <span className="text-muted-foreground">{s.calories} kcal</span>
                                 </li>

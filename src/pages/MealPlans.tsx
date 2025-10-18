@@ -193,7 +193,7 @@ export default function MealPlans() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-none mx-auto p-4">
+        <div className="max-w-none mx-auto px-4 sm:px-6 lg:px-8">
           <div className="animate-pulse">
             <div className="w-12 h-12 bg-primary rounded-full"></div>
           </div>
@@ -204,7 +204,7 @@ export default function MealPlans() {
 
   return (
     <div className="min-h-screen bg-gradient-background pb-20">
-      <div className="max-w-none mx-auto p-4">
+      <div className="max-w-none mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-2">
           <Button variant="ghost" onClick={() => navigate('/meals')} className="-ml-2">
