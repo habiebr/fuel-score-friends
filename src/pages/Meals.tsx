@@ -686,7 +686,7 @@ export default function Meals() {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-background pb-20 overflow-x-hidden">
+      <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           <PageHeading
             title="Meals"
