@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { Target, Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ChevronLeft } from 'lucide-react';
+import { Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -700,8 +700,8 @@ export default function Goals() {
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
       <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
-          {/* Header */}
-          <div className="mb-2">
+          {/* Header - Back button inline with title */}
+          <div className="flex items-center gap-3 sm:gap-4 mb-6">
             <Button
               variant="ghost"
               size="icon"
@@ -710,11 +710,6 @@ export default function Goals() {
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
-          </div>
-          <div className="flex items-center gap-3 sm:gap-4 mb-6">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-lg sm:h-12 sm:w-12">
-              <Target className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
             <PageHeading
               title="Set Your Goals & Training Plan"
               description="Tell us about your race and we'll help you build the perfect training schedule."
@@ -724,15 +719,15 @@ export default function Goals() {
 
 
           {/* Progress Indicator */}
-          <div className="mb-8">
-            <div className="flex items-center justify-center space-x-4">
+          <div className="mb-8 overflow-x-auto">
+            <div className="flex items-center justify-center gap-2 sm:gap-4 min-w-max sm:min-w-0">
               <div className={`flex items-center space-x-2 ${currentStep >= 1 ? 'text-primary' : 'text-muted-foreground'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
                   currentStep >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                 }`}>
                   1
                 </div>
-                <span className="text-sm font-medium">Running Goal</span>
+                <span className="text-xs sm:text-sm font-medium">Running Goal</span>
               </div>
               <div className={`w-8 h-0.5 ${currentStep >= 2 ? 'bg-primary' : 'bg-muted'}`}></div>
               <div className={`flex items-center space-x-2 ${currentStep >= 2 ? 'text-primary' : 'text-muted-foreground'}`}>
@@ -741,7 +736,7 @@ export default function Goals() {
                 }`}>
                   2
                 </div>
-                <span className="text-sm font-medium">Training Plan</span>
+                <span className="text-xs sm:text-sm font-medium">Training Plan</span>
               </div>
             </div>
           </div>
