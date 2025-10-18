@@ -698,7 +698,7 @@ export default function Goals() {
   return (
     <>
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
-      <div className="min-h-screen bg-gradient-background pb-20 overflow-hidden">
+      <div className="min-h-screen bg-gradient-background pb-20">
         <div className="max-w-none mx-auto p-4">
           {/* Header - Back button inline with title */}
           <div className="flex items-center gap-3 sm:gap-4 mb-6">
