@@ -98,17 +98,30 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
     if (step === 2) await saveDietary();
     if (step === 3) await saveGoals();
     setStep((prev => (Math.min(9, (prev + 1)) as Step)));
+    // Scroll to top when moving to next step
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const prev = () => setStep(prev => (Math.max(0, (prev - 1)) as Step));
+  const prev = () => {
+    setStep(prev => (Math.max(0, (prev - 1)) as Step));
+    // Scroll to top when moving to previous step
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   useEffect(() => {
+    // Scroll to top when component mounts
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
     try {
       const params = new URLSearchParams(window.location.search);
       const stepParam = params.get('step');
       if (stepParam) {
         const n = Number(stepParam);
-        if (!Number.isNaN(n)) setStep(Math.min(9, Math.max(0, n)) as Step);
+        if (!Number.isNaN(n)) {
+          setStep(Math.min(9, Math.max(0, n)) as Step);
+          // Scroll to top when step changes via URL
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
       }
     } catch {}
   }, []);
