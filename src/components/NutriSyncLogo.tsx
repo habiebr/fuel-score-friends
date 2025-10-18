@@ -22,16 +22,16 @@ export function NutriSyncLogo({ size = 'md', className = '' }: NutriSyncLogoProp
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-          {/* NutriSync PNG Logo */}
+          {/* Nutrisync PNG Logo */}
           <img 
             src="/nutrisync-logo.png" 
-            alt="NutriSync Logo" 
+            alt="Nutrisync Logo" 
             className={`${sizeClasses[size]} object-contain`}
           />
       
-      {/* NutriSync text */}
+      {/* Nutrisync text */}
       <span className={`font-bold text-white ${textSizes[size]}`}>
-        NutriSync
+        Nutrisync
       </span>
     </div>
   );

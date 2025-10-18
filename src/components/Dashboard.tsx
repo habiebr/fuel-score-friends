@@ -1100,7 +1100,7 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   return (
     <TooltipProvider>
       <div className="max-w-none mx-auto p-4">
-      {/* Header - NutriSync Branding */}
+      {/* Header - Nutrisync Branding */}
       <div className="flex items-center justify-between">
         <PageHeading
           title="Dashboard"

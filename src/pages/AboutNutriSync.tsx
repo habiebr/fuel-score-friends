@@ -26,7 +26,7 @@ export default function AboutNutriSync() {
             <div className="flex items-center gap-3">
               <Heart className="h-6 w-6 text-primary" />
               <div>
-                <h1 className="text-2xl font-bold">About NutriSync</h1>
+                <h1 className="text-2xl font-bold">About Nutrisync</h1>
                 <p className="text-sm text-muted-foreground">Learn more about our mission and development</p>
               </div>
             </div>
@@ -43,7 +43,7 @@ export default function AboutNutriSync() {
               <NutriSyncLogo size="xl" />
             </div>
             <div className="space-y-4">
-              <h2 className="text-3xl font-bold">Welcome to NutriSync</h2>
+              <h2 className="text-3xl font-bold">Welcome to Nutrisync</h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
                 Your smart nutrition and training companion designed specifically for marathon runners and endurance athletes.
               </p>
@@ -64,7 +64,7 @@ export default function AboutNutriSync() {
                   Currently in Development
                 </Badge>
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  NutriSync is still in active development. We're continuously improving our AI-powered nutrition analysis, 
+                  Nutrisync is still in active development. We're continuously improving our AI-powered nutrition analysis, 
                   meal planning algorithms, and user experience based on your valuable feedback.
                 </p>
               </div>
@@ -113,7 +113,7 @@ export default function AboutNutriSync() {
               </div>
               
               <p className="text-muted-foreground">
-                NutriSync is developed as part of a capstone project by Indonesian students pursuing their 
+                Nutrisync is developed as part of a capstone project by Indonesian students pursuing their 
                 Master of Entrepreneurship at the University of Melbourne. This project represents our commitment 
                 to applying cutting-edge technology to solve real-world nutrition challenges for athletes.
               </p>
@@ -173,7 +173,7 @@ export default function AboutNutriSync() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-muted-foreground">
-                Our ultimate goal is to launch NutriSync in the Indonesian market, bringing personalized 
+                Our ultimate goal is to launch Nutrisync in the Indonesian market, bringing personalized 
                 nutrition guidance to the growing community of Indonesian runners and endurance athletes.
               </p>
               

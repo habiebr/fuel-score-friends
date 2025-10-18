@@ -356,7 +356,7 @@ export default function Community() {
                       Global Leaderboard
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      All {leaderboard.length} registered NutriSync users ranked by weekly score
+                      All {leaderboard.length} registered Nutrisync users ranked by weekly score
                     </p>
 
                     <div className="space-y-3 max-h-[600px] overflow-y-auto">

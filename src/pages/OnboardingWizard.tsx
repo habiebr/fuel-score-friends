@@ -132,16 +132,20 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
     <div className="min-h-screen bg-gradient-background">
       <div className="min-h-screen flex flex-col justify-center px-6 sm:px-8 lg:px-12">
         <div className="w-full max-w-4xl mx-auto py-8">
-            {step === 0 && (
-              <div className="text-center space-y-6">
-                <div className="flex justify-center">
-                  <NutriSyncLogo size="xl" />
-                </div>
-                <h3 className="text-2xl font-bold">Welcome!</h3>
-                <p className="text-lg text-muted-foreground">We will guide you to experience the best of this app.</p>
-                <div className="flex justify-center"><Button onClick={next} size="lg">Get Started</Button></div>
-              </div>
-            )}
+                {step === 0 && (
+                  <div className="text-center space-y-6">
+                    <div className="flex justify-center">
+                      <img 
+                        src="/nutrisync-logo.png" 
+                        alt="Nutrisync Logo" 
+                        className="h-20 w-20 object-contain"
+                      />
+                    </div>
+                    <h3 className="text-2xl font-bold">Welcome!</h3>
+                    <p className="text-lg text-muted-foreground">We will guide you to experience the best of this app.</p>
+                    <div className="flex justify-center"><Button onClick={next} size="lg">Get Started</Button></div>
+                  </div>
+                )}
 
             {step === 1 && (
               <div className="w-full max-w-2xl mx-auto space-y-8 px-4 sm:px-6">
@@ -356,7 +360,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             {step === 8 && (
               <div className="text-center space-y-4">
                 <h3 className="text-2xl font-bold">Done!</h3>
-                <p className="text-lg text-muted-foreground">Let's run better with NutriSync.</p>
+                <p className="text-lg text-muted-foreground">Let's run better with Nutrisync.</p>
                 <div className="flex justify-center"><Button onClick={()=> onDone ? onDone() : window.location.assign('/')} size="lg">Done</Button></div>
               </div>
             )}

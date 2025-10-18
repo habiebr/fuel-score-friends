@@ -201,7 +201,7 @@ export default function ProfileNew() {
                     <Heart className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="flex-1">
-                    <div className="font-medium">About NutriSync</div>
+                    <div className="font-medium">About Nutrisync</div>
                     <div className="text-sm text-muted-foreground">Learn about our mission and development</div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-muted-foreground" />

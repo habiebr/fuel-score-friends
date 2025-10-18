@@ -14,7 +14,7 @@ export default function Footer() {
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <span className="text-lg font-bold text-primary">NS</span>
               </div>
-              <span className="font-semibold">NutriSync</span>
+              <span className="font-semibold">Nutrisync</span>
             </div>
             <p className="text-sm text-muted-foreground">
               Your smart nutrition and training companion for marathon success.
@@ -53,22 +53,26 @@ export default function Footer() {
             <h4 className="font-semibold text-sm">Legal</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <Link 
-                  to="/terms-of-service" 
+                <a 
+                  href="https://nutrisync.id/ToS" 
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors flex items-center gap-2"
                 >
                   <Scale className="h-3 w-3" />
                   Terms of Service
-                </Link>
+                </a>
               </li>
               <li>
-                <Link 
-                  to="/privacy-policy" 
+                <a 
+                  href="https://nutrisync.id/privacy" 
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="hover:text-foreground transition-colors flex items-center gap-2"
                 >
                   <Shield className="h-3 w-3" />
                   Privacy Policy
-                </Link>
+                </a>
               </li>
               <li>
                 <Link to="/settings" className="hover:text-foreground transition-colors">
@@ -108,7 +112,7 @@ export default function Footer() {
         <div className="mt-8 pt-6 border-t">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-muted-foreground">
-              © {currentYear} NutriSync. All rights reserved.
+              © {currentYear} Nutrisync. All rights reserved.
             </p>
             <p className="text-sm text-muted-foreground flex items-center gap-1">
               Made with <Heart className="h-3 w-3 text-red-500 fill-red-500" /> in Melbourne, Australia

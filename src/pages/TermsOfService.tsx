@@ -40,24 +40,24 @@ export default function TermsOfService() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
-              Welcome to NutriSync
+              Welcome to Nutrisync
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              These Terms of Service ("Terms") govern your access to and use of NutriSync, 
+              These Terms of Service ("Terms") govern your access to and use of Nutrisync, 
               a nutrition and fitness tracking application designed specifically for endurance athletes 
-              and marathon runners. By accessing or using NutriSync, you agree to be bound by these Terms.
+              and marathon runners. By accessing or using Nutrisync, you agree to be bound by these Terms.
             </p>
             <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
               <p className="text-sm font-medium">
                 Please read these terms carefully before using our service. If you do not agree to these terms, 
-                please do not use NutriSync.
+                please do not use Nutrisync.
               </p>
             </div>
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <p className="text-sm text-blue-800 dark:text-blue-200">
-                <strong>Important:</strong> NutriSync is an AI-based product that uses artificial intelligence for nutrition analysis, meal planning, and fitness tracking. By using our service, you acknowledge and agree to the AI-powered features described in these terms.
+                <strong>Important:</strong> Nutrisync is an AI-based product that uses artificial intelligence for nutrition analysis, meal planning, and fitness tracking. By using our service, you acknowledge and agree to the AI-powered features described in these terms.
               </p>
             </div>
           </CardContent>
@@ -70,11 +70,11 @@ export default function TermsOfService() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>
-              By creating an account, accessing, or using NutriSync in any way, you acknowledge that you have read, 
+              By creating an account, accessing, or using Nutrisync in any way, you acknowledge that you have read, 
               understood, and agree to be bound by these Terms and our Privacy Policy.
             </p>
             <p>
-              If you are using NutriSync on behalf of an organization, you represent and warrant that you have the 
+              If you are using Nutrisync on behalf of an organization, you represent and warrant that you have the 
               authority to bind that organization to these Terms.
             </p>
           </CardContent>
@@ -86,7 +86,7 @@ export default function TermsOfService() {
             <CardTitle className="text-lg">2. Description of Service</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>NutriSync provides the following services:</p>
+            <p>Nutrisync provides the following services:</p>
             <ul className="list-disc list-inside space-y-2 ml-4">
               <li>Nutrition tracking and analysis for endurance athletes</li>
               <li>Smart meal planning and recommendations</li>
@@ -116,7 +116,7 @@ export default function TermsOfService() {
               <h4 className="font-semibold text-foreground mb-2">Account Creation:</h4>
               <ul className="list-disc list-inside space-y-1 ml-4">
                 <li>You must provide accurate, current, and complete information during registration</li>
-                <li>You must be at least 18 years old to use NutriSync</li>
+                <li>You must be at least 18 years old to use Nutrisync</li>
                 <li>You are responsible for maintaining the confidentiality of your account credentials</li>
                 <li>You are responsible for all activities that occur under your account</li>
               </ul>
@@ -146,14 +146,14 @@ export default function TermsOfService() {
                 IMPORTANT: Please Read Carefully
               </p>
               <ul className="space-y-2 text-orange-700 dark:text-orange-400">
-                <li>• NutriSync is NOT a substitute for professional medical advice, diagnosis, or treatment</li>
+                <li>• Nutrisync is NOT a substitute for professional medical advice, diagnosis, or treatment</li>
                 <li>• Always consult with a qualified healthcare provider before starting any nutrition or training program</li>
                 <li>• The information provided is for informational purposes only</li>
                 <li>• We do not provide medical advice or recommendations</li>
               </ul>
             </div>
             <p>
-              NutriSync provides general nutrition and fitness tracking tools. All recommendations, meal plans, 
+              Nutrisync provides general nutrition and fitness tracking tools. All recommendations, meal plans, 
               and training suggestions are generated based on algorithms and user input, not medical expertise.
             </p>
             <p>
@@ -174,7 +174,7 @@ export default function TermsOfService() {
             <CardTitle className="text-lg">5. AI Features and Data Processing</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>NutriSync is an AI-based product that uses artificial intelligence and advanced algorithms for:</p>
+            <p>Nutrisync is an AI-based product that uses artificial intelligence and advanced algorithms for:</p>
             <ul className="list-disc list-inside space-y-2 ml-4">
               <li><strong>Fitness Screenshot Analysis:</strong> Extracting workout data from images using AI vision models</li>
               <li><strong>Meal Planning:</strong> Generating personalized meal recommendations based on your goals and preferences</li>
@@ -198,7 +198,7 @@ export default function TermsOfService() {
             <CardTitle className="text-lg">6. Third-Party Integrations</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>NutriSync integrates with third-party services including:</p>
+            <p>Nutrisync integrates with third-party services including:</p>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>Apple Health</li>
               <li>Google Fit</li>
@@ -209,10 +209,10 @@ export default function TermsOfService() {
               By connecting these services, you agree to:
             </p>
             <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>Grant NutriSync access to relevant health and fitness data from these platforms</li>
+              <li>Grant Nutrisync access to relevant health and fitness data from these platforms</li>
               <li>Comply with the terms of service of each third-party platform</li>
               <li>Understand that we are not responsible for the accuracy or availability of third-party data</li>
-              <li>Accept that third-party service interruptions may affect NutriSync functionality</li>
+              <li>Accept that third-party service interruptions may affect Nutrisync functionality</li>
             </ul>
           </CardContent>
         </Card>
@@ -226,14 +226,14 @@ export default function TermsOfService() {
             <div>
               <h4 className="font-semibold text-foreground mb-2">Your Data:</h4>
               <p>
-                You retain ownership of all data you input into NutriSync, including food logs, training activities, 
+                You retain ownership of all data you input into Nutrisync, including food logs, training activities, 
                 personal measurements, and goals. We do not claim ownership of your personal data.
               </p>
             </div>
             <div>
               <h4 className="font-semibold text-foreground mb-2">License to Use Your Data:</h4>
               <p>
-                By using NutriSync, you grant us a limited, non-exclusive license to use your data to:
+                By using Nutrisync, you grant us a limited, non-exclusive license to use your data to:
               </p>
               <ul className="list-disc list-inside space-y-1 ml-4">
                 <li>Provide and improve our services</li>
@@ -285,7 +285,7 @@ export default function TermsOfService() {
             <div>
               <h4 className="font-semibold text-foreground mb-2">Free Tier:</h4>
               <p>
-                NutriSync offers a free tier with limited features. We may modify or discontinue the free tier 
+                Nutrisync offers a free tier with limited features. We may modify or discontinue the free tier 
                 at any time with reasonable notice.
               </p>
             </div>
@@ -311,7 +311,7 @@ export default function TermsOfService() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>
-              NutriSync and its original content, features, and functionality are owned by NutriSync and are 
+              Nutrisync and its original content, features, and functionality are owned by Nutrisync and are 
               protected by international copyright, trademark, patent, trade secret, and other intellectual 
               property laws.
             </p>
@@ -363,7 +363,7 @@ export default function TermsOfService() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>
-              You agree to indemnify, defend, and hold harmless NutriSync, its officers, directors, employees, 
+              You agree to indemnify, defend, and hold harmless Nutrisync, its officers, directors, employees, 
               and agents from any claims, damages, losses, liabilities, and expenses (including legal fees) 
               arising from:
             </p>
@@ -474,7 +474,7 @@ export default function TermsOfService() {
         <Card className="mb-8 bg-primary/5 border-primary/20">
           <CardContent className="pt-6">
             <p className="text-sm text-center text-muted-foreground">
-              By using NutriSync, you acknowledge that you have read, understood, and agree to be bound by these 
+              By using Nutrisync, you acknowledge that you have read, understood, and agree to be bound by these 
               Terms of Service. If you do not agree to these terms, please discontinue use of the service immediately.
             </p>
           </CardContent>
