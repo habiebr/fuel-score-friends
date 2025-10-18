@@ -153,11 +153,11 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                 <div className="grid grid-cols-1 gap-8">
                   <div>
                     <Label className="text-white text-lg">Name <span className="text-red-400">*</span></Label>
-                    <Input value={name} onChange={e => setName(e.target.value)} className="mt-2 h-12 text-lg" />
+                    <Input value={name} onChange={e => setName(e.target.value)} className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
                     <Label className="text-white text-lg">Age <span className="text-red-400">*</span></Label>
-                    <Input value={age} onChange={e => setAge(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
+                    <Input value={age} onChange={e => setAge(e.target.value)} type="number" className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
                     <Label className="text-white text-lg">Sex <span className="text-red-400">*</span></Label>
@@ -171,15 +171,15 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                   </div>
                   <div>
                     <Label className="text-white text-lg">Height (cm) <span className="text-red-400">*</span></Label>
-                    <Input value={height} onChange={e => setHeight(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
+                    <Input value={height} onChange={e => setHeight(e.target.value)} type="number" className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
                     <Label className="text-white text-lg">Weight (kg) <span className="text-red-400">*</span></Label>
-                    <Input value={weight} onChange={e => setWeight(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
+                    <Input value={weight} onChange={e => setWeight(e.target.value)} type="number" className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
                     <Label className="text-white text-lg">City</Label>
-                    <Input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g., Jakarta" className="mt-2 h-12 text-lg" />
+                    <Input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g., Jakarta" className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                 </div>
                 <div className="flex justify-between pt-8">
@@ -238,11 +238,16 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                   </div>
                   <div>
                     <Label className="text-white text-lg">Custom name (optional)</Label>
-                    <Input value={goalName} onChange={e=>setGoalName(e.target.value)} placeholder="Jakarta Marathon" className="mt-2 h-12 text-lg" />
+                    <Input value={goalName} onChange={e=>setGoalName(e.target.value)} placeholder="Jakarta Marathon" className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
                     <Label className="text-white text-lg">Target date</Label>
-                    <Input type="date" value={targetDate} onChange={e=>setTargetDate(e.target.value)} className="mt-2 h-12 text-lg" />
+                    <Input 
+                      type="date" 
+                      value={targetDate} 
+                      onChange={e=>setTargetDate(e.target.value)} 
+                      className="mt-2 h-12 text-lg px-3 py-3 [&::-webkit-calendar-picker-indicator]:text-white [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer" 
+                    />
                   </div>
                   <div>
                     <Label className="text-white text-lg">Fitness level</Label>
