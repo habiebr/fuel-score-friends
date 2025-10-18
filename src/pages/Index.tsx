@@ -1,9 +1,10 @@
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dashboard } from '@/components/Dashboard';
 import { BottomNav } from '@/components/BottomNav';
 import { ActionFAB } from '@/components/ActionFAB';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 // Lazy load heavy dialogs - these are not needed on initial page load
 const FoodTrackerDialog = lazy(() => 
@@ -19,6 +20,38 @@ const Index = () => {
   const navigate = useNavigate();
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
+  const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
+
+  // Check if user needs onboarding
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (!user || hasCheckedOnboarding) return;
+
+      try {
+        // Check if user has completed basic profile setup
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, age, height, weight')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const hasBasicProfile = profile && profile.full_name && profile.age && profile.height && profile.weight;
+
+        // Redirect to onboarding if basic profile is incomplete
+        if (!hasBasicProfile) {
+          navigate('/onboarding');
+          return;
+        }
+
+        setHasCheckedOnboarding(true);
+      } catch (error) {
+        console.error('Error checking onboarding status:', error);
+        setHasCheckedOnboarding(true);
+      }
+    };
+
+    checkOnboardingStatus();
+  }, [user, navigate, hasCheckedOnboarding]);
 
 
   if (loading) {

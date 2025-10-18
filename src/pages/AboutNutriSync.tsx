@@ -213,7 +213,7 @@ export default function AboutNutriSync() {
               </p>
               <button 
                 className="w-full px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors flex items-center justify-center gap-2"
-                onClick={() => window.open('mailto:contact@nutrisync.id', '_blank')}
+                onClick={() => window.open('mailto:hello@nutrisync.id', '_blank')}
               >
                 <MessageCircle className="h-4 w-4" />
                 Contact Our Team

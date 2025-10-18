@@ -361,7 +361,14 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
               <div className="text-center space-y-4">
                 <h3 className="text-2xl font-bold">Done!</h3>
                 <p className="text-lg text-muted-foreground">Let's run better with Nutrisync.</p>
-                <div className="flex justify-center"><Button onClick={()=> onDone ? onDone() : window.location.assign('/')} size="lg">Done</Button></div>
+                <div className="flex justify-center"><Button onClick={async () => {
+                  await markOnboardingCompleted();
+                  if (onDone) {
+                    onDone();
+                  } else {
+                    window.location.assign('/');
+                  }
+                }} size="lg">Done</Button></div>
               </div>
             )}
 
