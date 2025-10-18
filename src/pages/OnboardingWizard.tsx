@@ -8,6 +8,7 @@ import { usePWA } from '@/hooks/usePWA';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { supabase } from '@/integrations/supabase/client';
 import { NutriSyncLogo } from '@/components/NutriSyncLogo';
+import { useToast } from '@/hooks/use-toast';
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -15,6 +16,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
   const { user } = useAuth();
   const { canInstall, installPWA } = usePWA() as any;
   const { connectGoogleFit } = useGoogleFitSync();
+  const { toast } = useToast();
 
   const [step, setStep] = useState<Step>(0);
 
@@ -81,7 +83,18 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
   };
 
   const next = async () => {
-    if (step === 1) await saveProfileBasics();
+    // Validate required fields for step 1 (Basic Profile)
+    if (step === 1) {
+      if (!name.trim() || !age.trim() || !sex || !height.trim() || !weight.trim()) {
+        toast({
+          title: "Missing Required Information",
+          description: "Please fill in all required fields: Name, Age, Sex, Height, and Weight",
+          variant: "destructive",
+        });
+        return;
+      }
+      await saveProfileBasics();
+    }
     if (step === 2) await saveDietary();
     if (step === 3) await saveGoals();
     setStep((prev => (Math.min(9, (prev + 1)) as Step)));
@@ -122,18 +135,19 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                 <div className="text-center space-y-6">
                   <h2 className="text-3xl font-bold text-white">Step 1: Basic Profile</h2>
                   <p className="text-lg text-gray-300">Let's get to know you better! Please fill in your basic information so we can personalize your nutrition plan.</p>
+                  <p className="text-sm text-gray-400">Fields marked with <span className="text-red-400">*</span> are required</p>
                 </div>
                 <div className="grid grid-cols-1 gap-8">
                   <div>
-                    <Label className="text-white text-lg">Name</Label>
+                    <Label className="text-white text-lg">Name <span className="text-red-400">*</span></Label>
                     <Input value={name} onChange={e => setName(e.target.value)} className="mt-2 h-12 text-lg" />
                   </div>
                   <div>
-                    <Label className="text-white text-lg">Age</Label>
+                    <Label className="text-white text-lg">Age <span className="text-red-400">*</span></Label>
                     <Input value={age} onChange={e => setAge(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
                   </div>
                   <div>
-                    <Label className="text-white text-lg">Sex</Label>
+                    <Label className="text-white text-lg">Sex <span className="text-red-400">*</span></Label>
                     <Select value={sex} onValueChange={(v: any) => setSex(v)}>
                       <SelectTrigger className="mt-2 h-12 text-lg"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
@@ -143,11 +157,11 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-white text-lg">Height (cm)</Label>
+                    <Label className="text-white text-lg">Height (cm) <span className="text-red-400">*</span></Label>
                     <Input value={height} onChange={e => setHeight(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
                   </div>
                   <div>
-                    <Label className="text-white text-lg">Weight (kg)</Label>
+                    <Label className="text-white text-lg">Weight (kg) <span className="text-red-400">*</span></Label>
                     <Input value={weight} onChange={e => setWeight(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
                   </div>
                   <div>
