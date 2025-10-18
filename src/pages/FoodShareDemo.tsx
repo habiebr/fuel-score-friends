@@ -56,13 +56,13 @@ export default function FoodShareDemo() {
 
   const convertFoodLogToShareData = (log: any): FoodShareData => {
     return {
-      foodName: log.name || 'Food Log',
+      foodName: log.food_name || 'Food Log',
       imageUrl: log.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80',
       calories: log.calories || 0,
       protein: log.protein_grams || 0,
       carbs: log.carbs_grams || 0,
       fat: log.fat_grams || 0,
-      date: new Date(log.logged_date),
+      date: new Date(log.logged_at),
       userName: user?.user_metadata?.full_name || 'You',
       mealType: log.meal_type || 'lunch',
     };
@@ -118,9 +118,9 @@ export default function FoodShareDemo() {
                           />
                         )}
                         <CardContent className="p-4">
-                          <h3 className="font-semibold text-lg mb-2">{log.name || 'Food Log'}</h3>
+                          <h3 className="font-semibold text-lg mb-2">{log.food_name || 'Food Log'}</h3>
                           <p className="text-sm text-muted-foreground mb-3">
-                            {new Date(log.logged_date).toLocaleDateString()} • {log.meal_type || 'meal'}
+                            {new Date(log.logged_at).toLocaleDateString()} • {log.meal_type || 'meal'}
                           </p>
                           <div className="grid grid-cols-4 gap-2 mb-4">
                             <div className="text-center">
