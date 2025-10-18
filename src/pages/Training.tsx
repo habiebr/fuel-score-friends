@@ -369,19 +369,21 @@ export default function Training() {
                               >
                                 {!isExpanded && (
                                   <div className="flex flex-col gap-2">
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(49,255,176,0.5)]" />
-                                        <span className="text-sm font-semibold capitalize">{a.activity_type}</span>
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                          <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(49,255,176,0.5)]" />
+                                          <span className="text-sm font-semibold capitalize">{a.activity_type}</span>
+                                        </div>
+                                        <span className="text-muted-foreground uppercase tracking-wide">{a.intensity}</span>
+                                        <span className="text-muted-foreground">{primaryMetric}</span>
                                       </div>
-                                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                        <span className="uppercase tracking-wide">{a.intensity}</span>
-                                        <span>{primaryMetric}</span>
-                                        <span>{a.estimated_calories} kcal</span>
+                                      <div className="flex items-center gap-2 whitespace-nowrap flex-shrink-0">
+                                        <span className="font-semibold">{a.estimated_calories} kcal</span>
+                                        <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setExpandedEditor({ date: key, index: i })}>
+                                          Edit
+                                        </Button>
                                       </div>
-                                      <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setExpandedEditor({ date: key, index: i })}>
-                                        Edit
-                                      </Button>
                                     </div>
                                     {a.notes && (
                                       <div className="rounded-xl border border-border/40 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
