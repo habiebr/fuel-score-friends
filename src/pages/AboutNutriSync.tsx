@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, Users, Heart, MapPin, Calendar, MessageCircle } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Users, Heart, MapPin, Calendar, MessageCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NutriSyncLogo } from '@/components/NutriSyncLogo';
@@ -12,7 +12,13 @@ export default function AboutNutriSync() {
       {/* Header */}
       <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-center">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 hover:bg-muted rounded-md transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
             <div className="flex items-center gap-3">
               <Heart className="h-6 w-6 text-primary" />
               <h1 className="text-2xl font-bold">About Nutrisync</h1>
