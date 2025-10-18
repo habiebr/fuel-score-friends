@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BottomNav } from '@/components/BottomNav';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
-import { Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ChevronLeft } from 'lucide-react';
+import { Upload, Calendar, Zap, CheckCircle, Dumbbell, ArrowRight, ChevronLeft, Target } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
