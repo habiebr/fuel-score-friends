@@ -759,8 +759,9 @@ export default function Meals() {
                     </div>
                   ) : (
                     <>
-                      <div className="grid grid-cols-7 gap-3">
-                        {weekDays.map((day) => {
+                      <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                        <div className="grid grid-cols-7 gap-3 min-w-[600px] sm:min-w-0">
+                          {weekDays.map((day) => {
                           const isToday = day === format(new Date(), 'yyyy-MM-dd');
                           const hasMeals = (weekTotals[day]?.calories || 0) > 0;
                           return (
@@ -789,6 +790,7 @@ export default function Meals() {
                             </div>
                           );
                         })}
+                        </div>
                       </div>
 
                       <div className="space-y-3">
