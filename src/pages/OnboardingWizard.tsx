@@ -297,7 +297,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     <span className="text-muted-foreground text-lg">Image 1: Training Plan</span>
                   </div>
                 </div>
-                <p className="text-lg text-gray-300 text-center max-w-md px-4">To get pre-training meal suggestions, please complete your training plan in the menu.</p>
+                    <p className="text-lg text-gray-300 text-center max-w-md px-4">To get pre-training meal suggestions, please complete your training plan. Go to <span className="font-semibold text-white">Profile &gt; Training Goals</span>.</p>
                 <div className="flex justify-between w-full max-w-md pt-4 px-4">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
@@ -315,7 +315,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     <span className="text-muted-foreground text-lg">Image 2: Meal Logging</span>
                   </div>
                 </div>
-                <p className="text-lg text-gray-300 text-center max-w-md px-4">To log your meal, please click the button on the right bottom corner.</p>
+                    <p className="text-lg text-gray-300 text-center max-w-md px-4">To log your meal, please <span className="font-semibold text-white">click the button on the right bottom corner</span>.</p>
                 <div className="flex justify-between w-full max-w-md pt-4 px-4">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
@@ -333,7 +333,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     <span className="text-muted-foreground text-lg">Image 3: Home Screen</span>
                   </div>
                 </div>
-                <p className="text-lg text-gray-300 text-center max-w-md px-4">Add this site to your home screen for easy access.</p>
+                    <p className="text-lg text-gray-300 text-center max-w-md px-4">Add this site to your home screen for easy access. Go to <span className="font-semibold text-white">Profile</span> and follow the prompt under your <span className="font-semibold text-white">Profile Name</span>.</p>
                 <div className="flex justify-between w-full max-w-md pt-4 px-4">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
