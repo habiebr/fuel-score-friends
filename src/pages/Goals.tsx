@@ -698,7 +698,7 @@ export default function Goals() {
   return (
     <>
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
-      <div className="min-h-screen bg-gradient-background pb-20">
+      <div className="min-h-screen bg-gradient-background pb-20 overflow-hidden">
         <div className="max-w-none mx-auto p-4">
           {/* Header - Back button inline with title */}
           <div className="flex items-center gap-3 sm:gap-4 mb-6">
@@ -719,8 +719,8 @@ export default function Goals() {
 
 
           {/* Progress Indicator */}
-          <div className="mb-8 overflow-x-auto">
-            <div className="flex items-center justify-center gap-2 sm:gap-4 min-w-max sm:min-w-0">
+          <div className="mb-8 overflow-hidden">
+            <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-4">
               <div className={`flex items-center space-x-2 ${currentStep >= 1 ? 'text-primary' : 'text-muted-foreground'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
                   currentStep >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
