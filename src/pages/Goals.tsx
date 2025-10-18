@@ -745,7 +745,7 @@ export default function Goals() {
           {currentStep === 1 && (
             <Card className="shadow-card mb-6">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle>
                   Step 1: What's Your Running Goal?
                 </CardTitle>
               </CardHeader>
@@ -842,10 +842,10 @@ export default function Goals() {
           {currentStep === 2 && (
             <Card className="shadow-card mb-6">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle>
                   Step 2: Create Your Weekly Training Plan
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground break-words">
                   Map out your typical training week. We'll use this as a template to create your personalized training plan.
                 </p>
               </CardHeader>
