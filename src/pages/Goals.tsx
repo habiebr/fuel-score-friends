@@ -698,8 +698,8 @@ export default function Goals() {
   return (
     <>
       <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
-      <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-none mx-auto p-4">
+      <div className="min-h-screen bg-gradient-background pb-20 overflow-x-hidden w-screen">
+        <div className="w-full px-4 py-4 box-border">
           {/* Header - Back button inline with title */}
           <div className="flex items-center gap-3 sm:gap-4 mb-6">
             <Button
@@ -743,13 +743,13 @@ export default function Goals() {
 
           {/* Step 1: Running Goal */}
           {currentStep === 1 && (
-            <Card className="shadow-card mb-6">
-              <CardHeader>
+            <Card className="shadow-card mb-6 w-full max-w-full">
+              <CardHeader className="w-full max-w-full box-border">
                 <CardTitle>
                   Step 1: What's Your Running Goal?
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 w-full max-w-full box-border">
                 {/* Race Type */}
                 <div className="space-y-2">
                   <Label htmlFor="race-type">What race are you targeting?</Label>
@@ -840,8 +840,8 @@ export default function Goals() {
 
           {/* Step 2: Training Plan (inline weekly editor) */}
           {currentStep === 2 && (
-            <Card className="shadow-card mb-6 w-full">
-              <CardHeader>
+            <Card className="shadow-card mb-6 w-full max-w-full">
+              <CardHeader className="w-full max-w-full box-border">
                 <CardTitle className="break-words">
                   Step 2: Create Your Weekly Training Plan
                 </CardTitle>
@@ -849,7 +849,7 @@ export default function Goals() {
                   Map out your typical training week. We'll use this as a template to create your personalized training plan.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-6 w-full">
+              <CardContent className="space-y-6 w-full max-w-full box-border">
                 {/* Controls */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs sm:text-sm text-muted-foreground">
@@ -858,17 +858,17 @@ export default function Goals() {
                   <div className="flex items-center gap-2"></div>
                 </div>
                 {/* Weekly Editor */}
-                <div className="space-y-4 w-full">
+                <div className="space-y-4 w-full max-w-full">
                   {datesOfWeek.map((d, idx) => {
                     const key = format(d, 'yyyy-MM-dd');
                     const list = activitiesByDate[key] || [];
                     return (
-                      <div key={key} className="rounded-lg border bg-muted/20 w-full">
+                      <div key={key} className="rounded-lg border bg-muted/20 w-full max-w-full box-border">
                         <div className="flex flex-wrap items-center justify-between border-b px-3 sm:px-4 py-2 gap-2">
                           <div className="text-sm font-semibold">{DAYS[idx]}</div>
                           <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
                         </div>
-                        <div className="space-y-3 p-3 sm:p-4 w-full">
+                        <div className="space-y-3 p-3 sm:p-4 w-full max-w-full box-border">
                           {list.length === 0 && (
                             <div className="text-xs text-muted-foreground">No activities planned yet.</div>
                           )}
@@ -1061,22 +1061,22 @@ export default function Goals() {
                 </div>
 
                 {/* Step Navigation */}
-                <div className="flex justify-between pt-4">
+                <div className="flex flex-wrap justify-between gap-2 pt-4 w-full">
                   <Button
                     variant="outline"
                     onClick={() => setCurrentStep(1)}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 flex-shrink-0"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                    Back to Goal
+                    <ChevronLeft className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap">Set Goals</span>
                   </Button>
                   <Button
                     onClick={handleSaveGoals}
                     disabled={uploading || !isStep1Complete()}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 flex-shrink-0"
                   >
-                    <CheckCircle className="h-4 w-4" />
-                    Save Goals & Plan
+                    <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                    <span className="whitespace-nowrap">Save Plan</span>
                   </Button>
                 </div>
               </CardContent>

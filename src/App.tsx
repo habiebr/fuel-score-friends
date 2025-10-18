@@ -38,6 +38,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const OnboardingWizard = lazy(() => import("./pages/OnboardingWizard"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const FoodShareDemo = lazy(() => import("./pages/FoodShareDemo"));
 
 import { GlobalUploadIndicator } from "@/components/GlobalUploadIndicator";
 import { PWAUpdateNotification } from "@/components/PWAUpdateNotification";
@@ -137,6 +138,7 @@ function App() {
                   <Route path="/onboarding" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><OnboardingWizard /></Suspense></ProtectedRoute>} />
                   <Route path="/terms" element={<TermsOfService />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
+                  <Route path="/food-share-demo" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><FoodShareDemo /></Suspense></ProtectedRoute>} />
 
                   {/* 404 - Lazy load */}
                   <Route path="*" element={<Suspense fallback={<RouteLoadingFallback />}><NotFound /></Suspense>} />

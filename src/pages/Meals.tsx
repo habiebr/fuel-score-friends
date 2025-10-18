@@ -686,8 +686,8 @@ export default function Meals() {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-background pb-20">
-        <div className="max-w-none mx-auto p-4">
+      <div className="min-h-screen bg-gradient-background pb-20 overflow-x-hidden w-screen">
+        <div className="w-full px-4 py-4 box-border">
           <PageHeading
             title="Meals"
             description="Track, review and plan your nutrition"
@@ -720,8 +720,8 @@ export default function Meals() {
           <div className="space-y-4">
             {/* History Tab */}
             {activeTab === 'history' && (
-              <Card className="shadow-card">
-                <CardContent className="p-4 space-y-4">
+              <Card className="shadow-card w-full max-w-full">
+                <CardContent className="p-4 sm:p-6 space-y-4 w-full max-w-full box-border">
                   <div className="space-y-3">
                     <div>
                       <h3 className="text-lg font-semibold">Weekly Food Diary</h3>
@@ -764,7 +764,7 @@ export default function Meals() {
                           return (
                             <Card 
                               key={`d-${day}`} 
-                              className={`border transition-all ${
+                              className={`border transition-all w-full max-w-full ${
                                 isToday 
                                   ? 'ring-2 ring-blue-500 dark:ring-blue-400 bg-blue-50/30 dark:bg-blue-900/10' 
                                   : hasMeals 
@@ -772,7 +772,7 @@ export default function Meals() {
                                   : 'opacity-60'
                               }`}
                             >
-                            <CardContent className="p-4">
+                            <CardContent className="p-3 w-full max-w-full box-border">
                               <div className="flex flex-wrap items-center justify-between mb-3">
                                 <div className={`font-bold text-base ${isToday ? 'text-blue-700 dark:text-blue-300' : ''}`}>
                                   {format(new Date(day), 'EEE, MMM d')}
@@ -783,33 +783,26 @@ export default function Meals() {
                               {(weekLogs[day] || []).length > 0 ? (
                                 <div className="space-y-2">
                                   {(weekLogs[day] || []).map((log) => (
-                                    <div key={log.id} className="flex flex-wrap items-center justify-between bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg p-3 hover:shadow-md transition-all">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="font-semibold truncate text-sm">{log.food_name}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">
-                                          <span className="inline-flex items-center gap-1">
-                                            <span>{format(new Date(log.logged_at), 'hh:mm a')}</span>
-                                            <span>•</span>
-                                            <span className="capitalize font-medium">{log.meal_type}</span>
-                                          </span>
+                                    <div 
+                                      key={log.id} 
+                                      className="flex items-start justify-between bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg p-2 w-full gap-1 cursor-pointer hover:from-gray-100 hover:to-gray-200 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all active:scale-98"
+                                      onClick={() => handleEditFoodLog(log)}
+                                    >
+                                      <div className="flex-1 min-w-0 pr-1">
+                                        <div className="font-semibold truncate text-sm leading-tight">{log.food_name}</div>
+                                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                                          {format(new Date(log.logged_at), 'hh:mm a')} • <span className="capitalize">{log.meal_type}</span>
                                         </div>
                                       </div>
-                                      <div className="flex flex-wrap items-center gap-2 text-xs ml-2">
-                                        <div className="text-center">
-                                          <div className="font-bold text-blue-600 dark:text-blue-400">{log.protein_grams}g</div>
-                                          <div className="text-[9px] text-muted-foreground">P</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="font-bold text-green-600 dark:text-green-400">{log.carbs_grams}g</div>
-                                          <div className="text-[9px] text-muted-foreground">C</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="font-bold text-yellow-600 dark:text-yellow-400">{log.fat_grams}g</div>
-                                          <div className="text-[9px] text-muted-foreground">F</div>
-                                        </div>
-                                        <div className="text-center bg-white dark:bg-gray-900 rounded-md px-1.5 py-0.5">
-                                          <div className="font-bold text-foreground text-xs">{log.calories}</div>
-                                          <div className="text-[9px] text-muted-foreground">kcal</div>
+                                      <div className="flex-shrink-0 text-right">
+                                        <div className="text-sm font-bold whitespace-nowrap">{log.calories}</div>
+                                        <div className="text-[9px] text-muted-foreground whitespace-nowrap">
+                                          <span className="text-blue-600 dark:text-blue-400">{log.protein_grams}</span>
+                                          <span className="text-muted-foreground mx-0.5">/</span>
+                                          <span className="text-green-600 dark:text-green-400">{log.carbs_grams}</span>
+                                          <span className="text-muted-foreground mx-0.5">/</span>
+                                          <span className="text-yellow-600 dark:text-yellow-400">{log.fat_grams}</span>
+                                          <span className="text-muted-foreground">g</span>
                                         </div>
                                       </div>
                                     </div>
@@ -836,7 +829,7 @@ export default function Meals() {
             <>
               {/* Today's Nutrition Card */}
               <Card className="shadow-card">
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                   <h3 className="text-lg font-semibold mb-1">Today's Nutrition</h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     Track your daily intake and stay on target
@@ -907,7 +900,7 @@ export default function Meals() {
               {/* Meals by Type */}
               {Object.entries(groupLogsByMeal()).map(([mealType, logs]) => (
                 <Card key={mealType} className="shadow-card">
-                  <CardContent className="p-4">
+                  <CardContent className="p-4 sm:p-6">
                     <div className="flex flex-wrap items-center justify-between mb-3">
                       <h3 className="text-lg font-semibold capitalize flex items-center gap-2">
                         {getMealTypeIcon(mealType as MealFilter)}
@@ -963,7 +956,7 @@ export default function Meals() {
           {activeTab === 'suggestions' && (
             <>
               <Card className="shadow-card">
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                   <h3 className="text-lg font-semibold mb-1">Smart Food Suggestions</h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     Personalized nutrition recommendations based on your training schedule
@@ -1006,15 +999,15 @@ export default function Meals() {
                           </div>
                           <div className="grid grid-cols-3 gap-3 mb-3">
                             <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-2">
-                              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{aiPlan[m].target_protein}g</div>
+                              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{aiPlan[m].target_protein || 0}g</div>
                               <div className="text-xs text-muted-foreground">Protein</div>
                             </div>
                             <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-2">
-                              <div className="text-lg font-bold text-green-600 dark:text-green-400">{aiPlan[m].target_carbs}g</div>
+                              <div className="text-lg font-bold text-green-600 dark:text-green-400">{aiPlan[m].target_carbs || 0}g</div>
                               <div className="text-xs text-muted-foreground">Carbs</div>
                             </div>
                             <div className="text-center bg-yellow-50 dark:bg-yellow-900/20 rounded-lg py-2">
-                              <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{aiPlan[m].target_fat}g</div>
+                              <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{aiPlan[m].target_fat || 0}g</div>
                               <div className="text-xs text-muted-foreground">Fat</div>
                             </div>
                           </div>
