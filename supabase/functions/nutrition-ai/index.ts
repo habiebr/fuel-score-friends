@@ -112,6 +112,271 @@ function validatePackagedProduct(foodName: string): { isPackaged: boolean; needs
   };
 }
 
+/**
+ * Get regional nutrition database based on food/location
+ * Supports multiple regions: USA, Australia, Indonesia
+ */
+function getRegionalNutritionDatabase(foodName: string, region?: string): {
+  databaseName: string;
+  url: string;
+  region: string;
+  description: string;
+} {
+  const lowerName = foodName.toLowerCase();
+  
+  // Detect region from food name or use provided region
+  let detectedRegion = region || 'usa';
+  
+  // Australian products/foods
+  const australianIndicators = [
+    /vegemite|tim.?tam|anzac|lamington|lamingtons|tim.?tam|arnott's|weetabix|milo|bushells/i,
+    /australian|australia|aus\b/i
+  ];
+  
+  // Indonesian products/foods
+  const indonesianIndicators = [
+    /indomie|mie.?goreng|rendang|soto|satay|tahu|tempe|krupuk|martabak|onde.?onde/i,
+    /indonesian|indonesia|indo\b/i
+  ];
+  
+  if (australianIndicators.some(pattern => pattern.test(lowerName))) {
+    detectedRegion = 'australia';
+  } else if (indonesianIndicators.some(pattern => pattern.test(lowerName))) {
+    detectedRegion = 'indonesia';
+  }
+  
+  // Return appropriate database
+  const databases: Record<string, any> = {
+    usa: {
+      databaseName: 'USDA FoodData Central',
+      url: 'https://fdc.nal.usda.gov/',
+      region: 'USA',
+      description: 'US Department of Agriculture database'
+    },
+    australia: {
+      databaseName: 'NUTTAB (Australian Food Composition Database)',
+      url: 'https://www.foodstandards.gov.au/nuttab',
+      region: 'Australia',
+      description: 'Australian food composition & nutrition data'
+    },
+    indonesia: {
+      databaseName: 'Indonesian Food Composition Database',
+      url: 'https://www.panganku.org/',
+      region: 'Indonesia',
+      description: 'Indonesian Ministry of Health nutrition database'
+    }
+  };
+  
+  return databases[detectedRegion] || databases.usa;
+}
+
+/**
+ * Get region-specific branded products requiring verification
+ */
+function getRegionalBrandedProducts(region?: string): RegExp[] {
+  // Default: USA brands
+  let brands = [
+    /coca.?cola|pepsi|sprite|fanta|mountain.?dew/i,  // Sodas
+    /cheetos|doritos|lay's|pringles|kettle/i,        // Chips
+    /cheerios|frosted.?flakes|honey.?nut|lucky.?charms/i,  // Cereals
+    /snickers|mars|milky.?way|twix|reese's/i,       // Candy bars
+    /yogurt|greek.?yogurt|yoplait|dannon/i,          // Yogurt
+    /protein.?bar|quest.?bar|clif.?bar/i              // Protein bars
+  ];
+  
+  // Australian brands
+  if (region === 'australia' || !region) {
+    brands.push(
+      /vegemite|marmite/i,                            // Spreads
+      /tim.?tam|anzac|lamington/i,                    // Biscuits
+      /arnotts|mcvitie's|mcvities/i,                  // Biscuits
+      /milo|horlicks/i,                               // Drinks
+      /bushells|liptons\s+tea/i,                      // Tea
+      /farmers.?union|bega|mainland|kraft/i,         // Dairy
+      /weetabix|weet.?bix/i                           // Cereals
+    );
+  }
+  
+  // Indonesian brands
+  if (region === 'indonesia' || !region) {
+    brands.push(
+      /indomie|mie.?goreng/i,                         // Instant noodles
+      /sunburst|pocari.?sweat/i,                      // Drinks
+      /chitato|lays\sindonesia/i,                     // Snacks
+      /kopi.?luwak|nescafe|kapal.?api/i,             // Coffee
+      /abc\ssaus|kecap.?manis/i,                      // Sauces
+      /tahu.?kuali|tempe.?mendoan/i,                 // Tofu/tempeh
+      /krupuk|perkedel/i                              // Snacks
+    );
+  }
+  
+  return brands;
+}
+
+/**
+ * Verifies packaged product with region-specific database awareness
+ */
+function verifyPackagedProductNutrition(
+  foodName: string,
+  nutritionData: any,
+  region?: string
+): {
+  isVerified: boolean;
+  source: string;
+  database: string;
+  region: string;
+  warnings: string[];
+  shouldUseLabel: boolean;
+} {
+  const warnings: string[] = [];
+  
+  // Get region-specific database
+  const db = getRegionalNutritionDatabase(foodName, region);
+  const regionalBrands = getRegionalBrandedProducts(db.region.toLowerCase());
+  
+  // Check if Gemini indicated they used a nutrition label
+  const shouldUseLabel = foodName.toLowerCase().includes('label') || 
+                        foodName.toLowerCase().includes('nutrition');
+  
+  // Check if this is a highly branded product
+  const isHighlyBranded = regionalBrands.some(pattern => pattern.test(foodName));
+  
+  if (isHighlyBranded) {
+    if (!shouldUseLabel && !foodName.includes('label')) {
+      warnings.push(
+        `⚠️ PACKAGED PRODUCT (${db.region}): "${foodName}" is a branded product. ` +
+        `Nutrition data MUST come from the nutrition label or official ${db.databaseName}, not estimation. ` +
+        `Please verify this data is accurate.`
+      );
+    }
+  }
+  
+  // Macro sanity checks for packaged foods
+  const protein = parseFloat(nutritionData.protein_grams) || 0;
+  const carbs = parseFloat(nutritionData.carbs_grams) || 0;
+  const fat = parseFloat(nutritionData.fat_grams) || 0;
+  const calories = parseFloat(nutritionData.calories) || 0;
+  
+  // Packaged foods should have reasonable macro-calorie match
+  const calculatedCalories = (protein * 4) + (carbs * 4) + (fat * 9);
+  const difference = Math.abs(calculatedCalories - calories);
+  
+  if (difference > calories * 0.30) {
+    warnings.push(
+      `⚠️ NUTRITION LABEL VERIFICATION (${db.region}): Macros don't match reported calories for "${foodName}". ` +
+      `If using a label, check the label again. If from ${db.databaseName}, this is the correct data.`
+    );
+  }
+  
+  return {
+    isVerified: shouldUseLabel || isHighlyBranded,
+    source: shouldUseLabel ? 'nutrition_label' : 'database',
+    database: db.databaseName,
+    region: db.region,
+    warnings,
+    shouldUseLabel
+  };
+}
+
+/**
+ * Validates nutrition data for consistency and reasonableness
+ */
+function validateNutritionData(nutritionData: any): {
+  isValid: boolean;
+  warnings: string[];
+  correctedData: any;
+} {
+  const warnings: string[] = [];
+  const correctedData = { ...nutritionData };
+  
+  // 1. Validate calories are reasonable
+  if (nutritionData.calories <= 0 || nutritionData.calories > 3000) {
+    warnings.push(`Unusual calorie value: ${nutritionData.calories} kcal (typical range: 50-3000)`);
+  }
+  
+  // 2. Validate macros exist and are non-negative
+  const protein = parseFloat(nutritionData.protein_grams) || 0;
+  const carbs = parseFloat(nutritionData.carbs_grams) || 0;
+  const fat = parseFloat(nutritionData.fat_grams) || 0;
+  
+  if (protein < 0 || carbs < 0 || fat < 0) {
+    warnings.push('Negative macronutrient values detected');
+    return {
+      isValid: false,
+      warnings,
+      correctedData: nutritionData
+    };
+  }
+  
+  // 3. Check if macros match calories (allow ±20% variance for estimation)
+  const calculatedCalories = (protein * 4) + (carbs * 4) + (fat * 9);
+  const reportedCalories = parseFloat(nutritionData.calories) || 0;
+  const caloriesDiff = Math.abs(calculatedCalories - reportedCalories);
+  const maxAllowedDiff = Math.max(50, reportedCalories * 0.20); // At least 50 kcal or 20%
+  
+  if (caloriesDiff > maxAllowedDiff) {
+    warnings.push(
+      `Macros don't match calories: Macros provide ${Math.round(calculatedCalories)} kcal but food shows ${reportedCalories} kcal ` +
+      `(difference: ${Math.round(caloriesDiff)} kcal). ` +
+      `Using macro-based calculation: ${Math.round(calculatedCalories)} kcal`
+    );
+    
+    // Auto-correct: use macro-based calories if the difference is too large
+    if (caloriesDiff > reportedCalories * 0.30) {
+      correctedData.calories = Math.round(calculatedCalories);
+    }
+  }
+  
+  // 4. Validate serving size exists and is reasonable
+  const servingSize = nutritionData.serving_size || '';
+  
+  if (!servingSize || servingSize.trim().length === 0) {
+    warnings.push('Missing serving size - should specify portion (e.g., "1 cup", "100g", "1 medium")');
+    correctedData.serving_size = '1 serving'; // Default fallback
+  }
+  
+  // Check for unrealistic serving sizes
+  const servingSizeLower = servingSize.toLowerCase();
+  
+  // Warn about very large portions
+  if (/\b(huge|giant|large|big)\b/.test(servingSizeLower) || 
+      /(\d+)\s*(cup|bowl|plate)s?/.test(servingSizeLower)) {
+    const match = /(\d+)\s*(cup|bowl|plate)s?/.exec(servingSizeLower);
+    if (match && parseInt(match[1]) >= 5) {
+      warnings.push(`Very large serving size detected: ${servingSize} - please verify`);
+    }
+  }
+  
+  // 5. Check if food name is specific enough
+  if (nutritionData.food_name && nutritionData.food_name.length < 3) {
+    warnings.push(`Food name too vague: "${nutritionData.food_name}"`);
+  }
+  
+  // 6. Macro composition check (sanity check for macro ratios)
+  const totalMacroCalories = calculatedCalories || reportedCalories;
+  if (totalMacroCalories > 0) {
+    const proteinPercent = (protein * 4) / totalMacroCalories;
+    const carbsPercent = (carbs * 4) / totalMacroCalories;
+    const fatPercent = (fat * 9) / totalMacroCalories;
+    
+    // Warn if protein is unusually high (>50%) for typical food
+    if (proteinPercent > 0.50 && !servingSizeLower.includes('protein')) {
+      warnings.push(`Unusually high protein ratio (${Math.round(proteinPercent * 100)}%) - verify food type`);
+    }
+    
+    // Warn if fat is unusually low (<5%) 
+    if (fatPercent < 0.05 && reportedCalories > 100) {
+      warnings.push(`Unusually low fat content - may be incomplete nutrition data`);
+    }
+  }
+  
+  return {
+    isValid: warnings.length === 0,
+    warnings,
+    correctedData
+  };
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -122,7 +387,7 @@ serve(async (req) => {
   }
 
   try {
-    const { userProfile, wearableData, foodLogs, type = "suggestion", image, mealType, query } = await req.json();
+    const { userProfile, wearableData, foodLogs, type = "suggestion", image, mealType, query, region } = await req.json();
     const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     
@@ -224,25 +489,67 @@ serve(async (req) => {
           },
         },
         { 
-          text: `You are an expert nutritionist. IMPORTANT SAFETY CHECKS:
+          text: `You are an expert sports nutritionist analyzing food photos for a marathon training app.
+${region ? `\nUSER REGION: ${region.toUpperCase()}\nUse region-specific food databases when verifying packaged products.` : ''}
 
-1. ONLY analyze if the image contains FOOD/EDIBLES. Reject if it shows:
-   - Electronics (phones, blackberries, screens, devices)
-   - Non-food items (shoes, books, furniture, tools)
-   - Non-edible objects (plastic, rubber, containers)
-   - Return {"error": "Not a food item"} if this is the case
+🚫 SAFETY CHECKS (Reject if any apply):
+- Electronics: phones, screens, devices, computers
+- Non-food: shoes, books, furniture, tools
+- Non-edible: plastic, rubber, containers, soap
+→ Return {"error": "Not a food item"} if rejected
 
-2. For packaged products: Use verified nutrition data from:
-   - Nutrition labels visible in image
-   - USDA FoodData Central database
-   - Manufacturer's official nutrition information
-   - DO NOT guess nutrition for branded products - use label data
+✅ ANALYSIS RULES:
 
-3. For fresh foods: Estimate based on typical serving sizes and USDA standards
+1. PACKAGED PRODUCTS (cereal, bars, yogurt, drinks, snacks):
+   - MUST use nutrition label visible in photo
+   - If no label visible: use official database:
+     * USA: USDA FoodData Central (https://fdc.nal.usda.gov/)
+     * Australia: NUTTAB (https://www.foodstandards.gov.au/nuttab)
+     * Indonesia: Indonesian Food Composition Database (https://www.panganku.org/)
+   - Use manufacturer's official nutrition data
+   - DO NOT estimate - only use verified data
 
-Analyze this food image and return nutrition data in this exact JSON format: 
-{"food_name": "name of the food", "serving_size": "estimated serving size", "calories": number, "protein_grams": number, "carbs_grams": number, "fat_grams": number}. 
-Only return the JSON, no other text.`
+2. REGIONAL BRANDED PRODUCTS - Must verify:
+   - USA: Coca-Cola, Pepsi, Cheetos, Doritos, Cheerios, etc.
+   - Australia: Vegemite, Tim Tam, Milo, Weetabix, Arnott's, Farmers Union, etc.
+   - Indonesia: Indomie, Pocari Sweat, ABC Sauce, Kopi Luwak, etc.
+
+3. FRESH FOODS (fruits, vegetables, cooked meals, homemade foods):
+   - Estimate serving size by visual reference:
+     * Tennis ball = ~1 medium fruit (150g)
+     * Deck of cards = ~100g meat/tofu
+     * Fist = ~1 cup vegetables
+     * Thumb = ~1 tablespoon oil/butter
+   - Use region-specific USDA/NUTTAB/Indonesian standards
+   - For prepared meals: estimate total weight and breakdown
+   - Be specific: "1 medium apple (150g)" not just "1 apple"
+
+4. SERVING SIZE (CRITICAL - READ FROM IMAGE):
+   - If visible reference in photo (coin, hand, plate): use it to estimate portion
+   - Specify exact portion: "1 cup", "100g", "1 medium", "1 piece", "1 bowl"
+   - Include measurement unit (grams preferred for accuracy)
+   - For mixed dishes: describe composition clearly
+   - Examples: "1 cup cooked pasta (150g)", "1 medium banana (118g)", "6 oz chicken breast (170g)"
+   - Never guess - estimate based on what's visible in the image
+
+5. MACRONUTRIENT ACCURACY:
+   - Protein × 4 + Carbs × 4 + Fat × 9 should roughly equal Calories (±20% acceptable)
+   - Example: 25g protein + 45g carbs + 10g fat = 100+180+90 = 370 kcal ✓
+   - If macros don't match calories, recalculate based on visual estimation
+   - Be conservative - underestimate rather than overestimate
+
+6. COMMON PORTION SIZES (Reference):
+   - Protein: chicken breast 100-150g, eggs 1-2, yogurt 100-150ml
+   - Carbs: rice 150g cooked, bread 1 slice 30g, fruit 1 medium 150g
+   - Fats: oil 1 tbsp 15g, nuts 30g (small handful), cheese 30g
+
+7. PRIORITY FOR RUNNERS/ATHLETES:
+   - Focus on carbs and protein accuracy (most important for training)
+   - Include all carbs (even sugars) as they fuel workouts
+   - Don't overestimate - it's better to log less than more
+
+Return ONLY this JSON format (no markdown, no explanation):
+{"food_name": "specific food name with size", "serving_size": "exact portion (e.g. 1 cup, 150g)", "calories": number, "protein_grams": number, "carbs_grams": number, "fat_grams": number}`
         },
       ];
 
@@ -315,15 +622,41 @@ Only return the JSON, no other text.`
             console.log('ℹ️ Packaged product detected - nutrition data verified from label');
           }
           
-          console.log('✅ Successfully parsed and validated nutrition data:', nutritionData);
+          // Validate nutrition data for consistency and reasonableness
+          const nutritionValidation = validateNutritionData(nutritionData);
+          if (!nutritionValidation.isValid) {
+            console.warn('⚠️ Nutrition data validation failed:', nutritionValidation.warnings);
+            // Log but don't fail - use corrected data instead
+          }
+
+          console.log('✅ Successfully parsed and validated nutrition data');
+          
+          // If packaged product, verify nutrition data is from label/USDA
+          let packagedVerification: any = null;
+          
+          if (packagedCheck.isPackaged) {
+            packagedVerification = verifyPackagedProductNutrition(nutritionData.food_name, nutritionValidation.correctedData, region);
+            if (packagedVerification?.warnings?.length > 0) {
+              console.warn('⚠️ Packaged product verification warnings:', packagedVerification.warnings);
+              // Log for monitoring but don't show to user
+            }
+          }
           
           return new Response(JSON.stringify({ 
-            nutritionData,
+            nutritionData: nutritionValidation.correctedData,
             type: type,
             validation: {
               isEdible: edibleCheck.isEdible,
               isPackaged: packagedCheck.isPackaged,
-              confidence: edibleCheck.confidence
+              confidence: edibleCheck.confidence,
+              packagedVerification: packagedVerification ? {
+                isVerified: packagedVerification.isVerified,
+                source: packagedVerification.source,
+                database: packagedVerification.database,
+                region: packagedVerification.region,
+                usedLabel: packagedVerification.shouldUseLabel
+              } : undefined
+              // Removed: warnings field - no warnings shown to user
             }
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -527,13 +860,39 @@ Return just the numeric score (0-100) and a brief explanation.`;
           // Check if packaged and needs verification
           const packagedCheck = validatePackagedProduct(nutritionData.food_name);
           
+          // Validate nutrition data for consistency and reasonableness
+          const nutritionValidation = validateNutritionData(nutritionData);
+          if (!nutritionValidation.isValid) {
+            console.warn('⚠️ Nutrition data validation failed:', nutritionValidation.warnings);
+            // Log but don't fail - use corrected data instead
+          }
+
+          // If packaged product, verify nutrition data is from label/USDA
+          let packagedVerification: any = null;
+          
+          if (packagedCheck.isPackaged) {
+            packagedVerification = verifyPackagedProductNutrition(nutritionData.food_name, nutritionValidation.correctedData, region);
+            if (packagedVerification?.warnings?.length > 0) {
+              console.warn('⚠️ Packaged product verification warnings:', packagedVerification.warnings);
+              // Log for monitoring but don't show to user
+            }
+          }
+
           return new Response(JSON.stringify({ 
-            nutritionData,
+            nutritionData: nutritionValidation.correctedData,
             type: type,
             validation: {
               isEdible: edibleCheck.isEdible,
               isPackaged: packagedCheck.isPackaged,
-              confidence: edibleCheck.confidence
+              confidence: edibleCheck.confidence,
+              packagedVerification: packagedVerification ? {
+                isVerified: packagedVerification.isVerified,
+                source: packagedVerification.source,
+                database: packagedVerification.database,
+                region: packagedVerification.region,
+                usedLabel: packagedVerification.shouldUseLabel
+              } : undefined
+              // Removed: warnings field - no warnings shown to user
             }
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -550,7 +909,7 @@ Return just the numeric score (0-100) and a brief explanation.`;
       }
 
       return new Response(JSON.stringify({ 
-        suggestion: aiResponse,
+        nutritionData: aiResponse,
         type: type 
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

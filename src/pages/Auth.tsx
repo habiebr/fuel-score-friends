@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Apple, Watch } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { NutriSyncLogo } from '@/components/NutriSyncLogo';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -82,15 +83,9 @@ export default function Auth() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="p-3 bg-gradient-primary rounded-2xl shadow-glow">
-              <Apple className="h-8 w-8 text-primary-foreground" />
-            </div>
-            <Watch className="h-8 w-8 text-primary" />
+          <div className="flex justify-center mb-4">
+            <NutriSyncLogo size="lg" />
           </div>
-          <h1 className="text-3xl font-bold text-primary">
-            Nutrisync
-          </h1>
           <p className="text-muted-foreground mt-2">
             AI-powered nutrition for peak performance
           </p>

@@ -928,7 +928,7 @@ export default function Meals() {
                                 <div className="font-medium">{log.food_name}</div>
                                 <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                                   <Clock className="w-3 h-3" />
-                                  {format(new Date(log.logged_at), 'hh:mm a')} • 1 bowl
+                                  {format(new Date(log.logged_at), 'hh:mm a')} • {log.serving_size || '1 serving'}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-1">
                                   P: {log.protein_grams}g C: {log.carbs_grams}g F: {log.fat_grams}g

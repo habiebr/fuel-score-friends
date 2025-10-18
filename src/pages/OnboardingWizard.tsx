@@ -9,8 +9,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePWA } from '@/hooks/usePWA';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { supabase } from '@/integrations/supabase/client';
+import { NutriSyncLogo } from '@/components/NutriSyncLogo';
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
   const { user } = useAuth();
@@ -25,6 +26,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
   const [sex, setSex] = useState<'male' | 'female' | ''>('');
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
+  const [city, setCity] = useState('');
 
   // preferences
   const [dietary, setDietary] = useState<string[]>([]);
@@ -45,6 +47,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
       sex: sex || null,
       height_cm: height ? Number(height) : null,
       weight_kg: weight ? Number(weight) : null,
+      city: city || null,
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id' });
   };
@@ -83,7 +86,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
     if (step === 1) await saveProfileBasics();
     if (step === 2) await saveDietary();
     if (step === 3) await saveGoals();
-    setStep((prev => (Math.min(6, (prev + 1)) as Step)));
+    setStep((prev => (Math.min(9, (prev + 1)) as Step)));
   };
 
   const prev = () => setStep(prev => (Math.max(0, (prev - 1)) as Step));
@@ -94,7 +97,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
       const stepParam = params.get('step');
       if (stepParam) {
         const n = Number(stepParam);
-        if (!Number.isNaN(n)) setStep(Math.min(6, Math.max(0, n)) as Step);
+        if (!Number.isNaN(n)) setStep(Math.min(9, Math.max(0, n)) as Step);
       }
     } catch {}
   }, []);
@@ -110,15 +113,19 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
         <Card className="shadow-card">
           <CardContent className="p-6 space-y-4">
             {step === 0 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Use your current goal and training plan</h3>
-                <p className="text-sm text-muted-foreground">We’ll pull your settings from the web app and personalize recommendations.</p>
-                <div className="flex justify-end"><Button onClick={next}>Start</Button></div>
+              <div className="text-center space-y-6">
+                <div className="flex justify-center">
+                  <NutriSyncLogo size="xl" />
+                </div>
+                <h3 className="text-2xl font-bold">Welcome!</h3>
+                <p className="text-lg text-muted-foreground">We will guide you to experience the best of this app.</p>
+                <div className="flex justify-center"><Button onClick={next} size="lg">Get Started</Button></div>
               </div>
             )}
 
             {step === 1 && (
               <div className="grid grid-cols-1 gap-4">
+                <h3 className="text-lg font-semibold">Basics</h3>
                 <div>
                   <Label>Name</Label>
                   <Input value={name} onChange={e => setName(e.target.value)} />
@@ -145,12 +152,17 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                   <Label>Weight (kg)</Label>
                   <Input value={weight} onChange={e => setWeight(e.target.value)} type="number" />
                 </div>
+                <div>
+                  <Label>City</Label>
+                  <Input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g., Jakarta" />
+                </div>
                 <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
               </div>
             )}
 
             {step === 2 && (
               <div className="space-y-3">
+                <h3 className="text-lg font-semibold">Dietary Restrictions</h3>
                 <Label>Dietary restrictions</Label>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {['Halal','Vegetarian','Vegan','Lactose-intolerant','Keto','Gluten-free','Low-carb','Allergies'].map(opt => (
@@ -163,7 +175,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
 
             {step === 3 && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Set your goal and plan</h3>
+                <h3 className="text-lg font-semibold">Race Goal</h3>
                 <div className="grid grid-cols-1 gap-3">
                   <div>
                     <Label>Goal</Label>
@@ -213,33 +225,63 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 4 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Sync with Google Fit</h3>
-                <p className="text-sm text-muted-foreground">Connect your account to unlock smart activity-based nutrition suggestions.</p>
-                <div className="flex justify-end gap-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={async ()=>{ try { localStorage.setItem('oauth_return_to','/onboarding?step=5'); } catch {} await connectGoogleFit(); }}>Connect</Button></div>
+              <div className="text-center space-y-4">
+                <h3 className="text-2xl font-bold">Thank you for being our early user!</h3>
+                <p className="text-lg text-muted-foreground">Your feedback helps us improve the app.</p>
+                <div className="flex justify-center"><Button onClick={next} size="lg">Continue</Button></div>
               </div>
             )}
 
             {step === 5 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Add to Home Screen</h3>
-                <p className="text-sm text-muted-foreground">Install NutriSync for offline access and faster experience.</p>
-                <div className="flex justify-end gap-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={async ()=>{if(canInstall) await installPWA(); next();}}>Install</Button></div>
+              <div className="text-center space-y-4">
+                <h3 className="text-lg font-semibold">Training Plan Setup</h3>
+                <div className="w-full max-w-sm mx-auto">
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-4">
+                    <span className="text-muted-foreground">Image 1: Training Plan</span>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">To get pre-training meal suggestions, please complete your training plan in the menu.</p>
+                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
               </div>
             )}
 
             {step === 6 && (
-              <div className="text-center space-y-3">
-                <h2 className="text-2xl font-semibold">Done!</h2>
-                <p className="text-muted-foreground">Enjoy your personalized nutrition plan.</p>
-                <Button onClick={()=> onDone ? onDone() : window.location.assign('/')}>Start</Button>
+              <div className="text-center space-y-4">
+                <h3 className="text-lg font-semibold">Meal Logging</h3>
+                <div className="w-full max-w-sm mx-auto">
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-4">
+                    <span className="text-muted-foreground">Image 2: Meal Logging</span>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">To log your meal, please click the button on the right bottom corner.</p>
+                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
               </div>
             )}
+
+            {step === 7 && (
+              <div className="text-center space-y-4">
+                <h3 className="text-lg font-semibold">Add to Home Screen</h3>
+                <div className="w-full max-w-sm mx-auto">
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-4">
+                    <span className="text-muted-foreground">Image 3: Home Screen</span>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">Add this site to your home screen for easy access.</p>
+                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
+              </div>
+            )}
+
+            {step === 8 && (
+              <div className="text-center space-y-4">
+                <h3 className="text-2xl font-bold">Done!</h3>
+                <p className="text-lg text-muted-foreground">Let's run better with NutriSync.</p>
+                <div className="flex justify-center"><Button onClick={()=> onDone ? onDone() : window.location.assign('/')} size="lg">Done</Button></div>
+              </div>
+            )}
+
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
-
-
