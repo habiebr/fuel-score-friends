@@ -1,64 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FoodShareDialog } from '@/components/FoodShareDialog';
 import { FoodShareData } from '@/lib/image-overlay';
-import { Share2 } from 'lucide-react';
+import { Share2, Loader2 } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
-
-const SAMPLE_FOODS: FoodShareData[] = [
-  {
-    foodName: 'Post-Run Açai Bowl',
-    imageUrl: 'https://images.unsplash.com/photo-1590301157890-4810ed1d4f20?w=800&q=80',
-    calories: 487,
-    protein: 18,
-    carbs: 62,
-    fat: 14,
-    date: new Date(),
-    userName: 'Alex Runner',
-    mealType: 'breakfast',
-    trainingInfo: 'Easy 10K run',
-  },
-  {
-    foodName: 'Grilled Salmon & Quinoa',
-    imageUrl: 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=800&q=80',
-    calories: 625,
-    protein: 42,
-    carbs: 48,
-    fat: 22,
-    date: new Date(),
-    userName: 'Alex Runner',
-    mealType: 'lunch',
-  },
-  {
-    foodName: 'Recovery Protein Smoothie',
-    imageUrl: 'https://images.unsplash.com/photo-1590301157890-4810ed1d4f20?w=800&q=80',
-    calories: 350,
-    protein: 28,
-    carbs: 42,
-    fat: 6,
-    date: new Date(),
-    userName: 'Alex Runner',
-    mealType: 'snack',
-  },
-  {
-    foodName: 'Pasta Carbonara',
-    imageUrl: 'https://images.unsplash.com/photo-1612874742237-6526221fcf4f?w=800&q=80',
-    calories: 580,
-    protein: 24,
-    carbs: 68,
-    fat: 20,
-    date: new Date(),
-    userName: 'Alex Runner',
-    mealType: 'dinner',
-  },
-];
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function FoodShareDemo() {
+  const { user } = useAuth();
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedFood, setSelectedFood] = useState<FoodShareData | null>(null);
+  const [foodLogs, setFoodLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [customFood, setCustomFood] = useState<Partial<FoodShareData>>({
     foodName: 'My Custom Meal',
     calories: 500,
@@ -67,6 +24,35 @@ export default function FoodShareDemo() {
     fat: 15,
     mealType: 'lunch',
   });
+
+  // Load actual food logs from diary
+  useEffect(() => {
+    const loadFoodLogs = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('food_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('logged_date', { ascending: false })
+          .limit(10);
+
+        if (error) throw error;
+
+        // Filter out logs without images
+        const logsWithImages = (data || []).filter(log => log.image_url);
+        setFoodLogs(logsWithImages);
+      } catch (error) {
+        console.error('Error loading food logs:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadFoodLogs();
+  }, [user]);
 
   const handleOpenShare = (food: FoodShareData) => {
     setSelectedFood(food);
@@ -89,6 +75,20 @@ export default function FoodShareDemo() {
     setShareDialogOpen(true);
   };
 
+  const convertFoodLogToShareData = (log: any): FoodShareData => {
+    return {
+      foodName: log.name || 'Food Log',
+      imageUrl: log.image_url || '',
+      calories: log.calories || 0,
+      protein: log.protein_grams || 0,
+      carbs: log.carbs_grams || 0,
+      fat: log.fat_grams || 0,
+      date: new Date(log.logged_date),
+      userName: user?.user_metadata?.full_name || 'You',
+      mealType: log.meal_type || 'lunch',
+    };
+  };
+
   return (
     <>
       <div className="min-h-screen bg-gradient-background pb-20">
@@ -100,54 +100,77 @@ export default function FoodShareDemo() {
               <h1 className="text-3xl font-bold">Food Share Demo</h1>
             </div>
             <p className="text-muted-foreground">
-              Test the Strava-style food image sharing feature. Click any meal to open the share dialog.
+              Share your actual logged meals with beautiful macro overlays. Click any meal from your diary to create a shareable image.
             </p>
           </div>
 
-          {/* Sample Foods Section */}
+          {/* Your Food Logs Section */}
           <div className="space-y-6 mb-12">
             <div>
-              <h2 className="text-xl font-semibold mb-4">Sample Meals</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {SAMPLE_FOODS.map((food) => (
-                  <Card key={food.foodName} className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
-                    <img
-                      src={food.imageUrl}
-                      alt={food.foodName}
-                      className="w-full h-48 object-cover"
-                    />
-                    <CardContent className="p-4">
-                      <h3 className="font-semibold text-lg mb-2">{food.foodName}</h3>
-                      <div className="grid grid-cols-4 gap-2 mb-4">
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-orange-600">{food.calories}</div>
-                          <div className="text-xs text-muted-foreground">cal</div>
+              <h2 className="text-xl font-semibold mb-4">Your Recent Meals</h2>
+              
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : foodLogs.length === 0 ? (
+                <Card className="bg-muted/30">
+                  <CardContent className="p-6 text-center">
+                    <p className="text-muted-foreground mb-4">
+                      No meals with photos in your diary yet. Log a meal with a photo first, or create a custom meal below.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      💡 Tip: Go to Meals page and upload a food photo to see it here!
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {foodLogs.map((log) => (
+                    <Card key={log.id} className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
+                      {log.image_url && (
+                        <img
+                          src={log.image_url}
+                          alt={log.name}
+                          className="w-full h-48 object-cover"
+                        />
+                      )}
+                      <CardContent className="p-4">
+                        <h3 className="font-semibold text-lg mb-2">{log.name || 'Food Log'}</h3>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {new Date(log.logged_date).toLocaleDateString()} • {log.meal_type || 'meal'}
+                        </p>
+                        <div className="grid grid-cols-4 gap-2 mb-4">
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-orange-600">{log.calories}</div>
+                            <div className="text-xs text-muted-foreground">cal</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-red-500">{log.protein_grams}g</div>
+                            <div className="text-xs text-muted-foreground">protein</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-yellow-500">{log.carbs_grams}g</div>
+                            <div className="text-xs text-muted-foreground">carbs</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-green-500">{log.fat_grams}g</div>
+                            <div className="text-xs text-muted-foreground">fat</div>
+                          </div>
                         </div>
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-red-500">{food.protein}g</div>
-                          <div className="text-xs text-muted-foreground">protein</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-yellow-500">{food.carbs}g</div>
-                          <div className="text-xs text-muted-foreground">carbs</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-green-500">{food.fat}g</div>
-                          <div className="text-xs text-muted-foreground">fat</div>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => handleOpenShare(food)}
-                        className="w-full"
-                        variant="outline"
-                      >
-                        <Share2 className="w-4 h-4 mr-2" />
-                        Share This Meal
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                        <Button
+                          onClick={() => handleOpenShare(convertFoodLogToShareData(log))}
+                          className="w-full"
+                          variant="outline"
+                        >
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Share This Meal
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -259,22 +282,19 @@ export default function FoodShareDemo() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <p>
-                ✓ <strong>Preview:</strong> Real-time preview of your shareable image with adjustable theme
+                ✓ <strong>Your Meals:</strong> Shows recently logged meals with photos from your diary
               </p>
               <p>
-                ✓ <strong>Format Selection:</strong> Choose between Instagram Story, Post, or Square formats
+                ✓ <strong>Share Options:</strong> Download, copy to clipboard, or use native share
               </p>
               <p>
-                ✓ <strong>Download:</strong> Save high-resolution images optimized for social media
+                ✓ <strong>Formats:</strong> Instagram Story, Post, or Square
               </p>
               <p>
-                ✓ <strong>Copy & Paste:</strong> Copy directly to clipboard for instant sharing
-              </p>
-              <p>
-                ✓ <strong>Native Sharing:</strong> Use device-native share sheet on mobile
+                ✓ <strong>Custom Meals:</strong> Test with any image URL and macro values
               </p>
               <p className="text-xs text-muted-foreground mt-4">
-                💡 This demo is not integrated yet - ready for testing and iteration!
+                💡 Log more meals with photos in your diary to see them here!
               </p>
             </CardContent>
           </Card>
