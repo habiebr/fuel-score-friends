@@ -24,6 +24,7 @@ const FORMATS = {
   'instagram-story': { width: 1080, height: 1920 },
   'instagram-post': { width: 1200, height: 1200 },
   'square': { width: 1080, height: 1080 },
+  'reels': { width: 1080, height: 1920 }, // Full-screen Reels format
   'custom': { width: 1080, height: 1350 }, // Default
 };
 
@@ -156,9 +157,9 @@ export async function renderFoodShareImage(
   data: FoodShareData,
   options: ShareImageOptions = {}
 ): Promise<Canvas> {
-  const format = options.format || 'custom';
+  const format = options.format || 'reels'; // Default to Reels format
   const dpi = options.dpi || 2;
-  const dims = FORMATS[format];
+  const dims = FORMATS[format as keyof typeof FORMATS];
   const width = options.width || dims.width;
   const height = options.height || dims.height;
 
@@ -180,12 +181,14 @@ export async function renderFoodShareImage(
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, scaledWidth, scaledHeight);
 
-  // Load and draw food image
+  // Load and draw food image - FULL SCREEN for Reels
   try {
     const img = await loadImage(data.imageUrl);
-    const imageHeight = scaledWidth * 0.6;
-
-    // Draw image with slight rounded top corners effect
+    
+    // For Reels format: image takes up entire canvas minus footer
+    const imageHeight = scaledHeight * 0.85; // Leave 15% for footer
+    
+    // Draw image with clipping
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -195,120 +198,92 @@ export async function renderFoodShareImage(
     ctx.closePath();
     ctx.clip();
 
-    ctx.drawImage(img, 0, 0, scaledWidth, imageHeight);
+    // Draw image to cover full width
+    const imgAspect = img.width / img.height;
+    const canvasAspect = scaledWidth / imageHeight;
+    
+    let drawWidth = scaledWidth;
+    let drawHeight = drawWidth / imgAspect;
+    
+    if (drawHeight < imageHeight) {
+      drawHeight = imageHeight;
+      drawWidth = drawHeight * imgAspect;
+    }
+    
+    const offsetX = (scaledWidth - drawWidth) / 2;
+    const offsetY = (imageHeight - drawHeight) / 2;
+    
+    ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
     ctx.restore();
 
-    // Add subtle gradient overlay
-    const gradient = ctx.createLinearGradient(0, 0, 0, imageHeight);
+    // Add subtle gradient overlay at bottom for text readability
+    const gradient = ctx.createLinearGradient(0, imageHeight * 0.7, 0, imageHeight);
     gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(1, colors.background + 'CC');
+    gradient.addColorStop(1, 'rgba(0,0,0,0.5)');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, scaledWidth, imageHeight);
+    ctx.fillRect(0, imageHeight * 0.7, scaledWidth, imageHeight * 0.3);
 
-    // Title section (Food name + calories)
-    const titleY = imageHeight + 40 * scale;
-    ctx.fillStyle = colors.text;
-    ctx.font = `bold ${48 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
+    // ===== FOOTER SECTION (Clean Strava Style) =====
+    const footerY = imageHeight + 40 * scale;
+    
+    // Main metric: Calories (large, prominent)
+    ctx.fillStyle = '#FF6B35'; // Strava orange
+    ctx.font = `bold ${72 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
     ctx.textAlign = 'left';
-    ctx.fillText(data.foodName, 40 * scale, titleY);
-
-    // Calories prominent display
-    ctx.fillStyle = '#FF6B35'; // Vibrant orange like Strava
-    ctx.font = `bold ${64 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
-    ctx.fillText(`${Math.round(data.calories)}`, 40 * scale, titleY + 80 * scale);
+    ctx.fillText(`${Math.round(data.calories)}`, 40 * scale, footerY);
 
     ctx.fillStyle = colors.textSecondary;
-    ctx.font = `400 ${32 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
-    ctx.fillText('kcal', 280 * scale, titleY + 70 * scale);
+    ctx.font = `400 ${28 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
+    ctx.fillText('kcal', 40 * scale, footerY + 50 * scale);
 
-    // Macro section header
-    const macroSectionY = titleY + 140 * scale;
-    ctx.fillStyle = colors.text;
-    ctx.font = `600 ${28 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
-    ctx.fillText('Macros', 40 * scale, macroSectionY);
-
-    // Three macro cards in a row
-    const cardWidth = (scaledWidth - 80 * scale) / 3;
-    const cardHeight = 160 * scale;
-    const cardSpacing = 20 * scale;
-
-    drawMacroCard(
-      ctx,
-      40 * scale,
-      macroSectionY + 50 * scale,
-      cardWidth,
-      cardHeight,
-      'Protein',
-      data.protein,
-      Math.round(data.protein * 1.2), // Assume 20% buffer for target
-      colors.proteinColor,
-      colors,
-      20 * scale
-    );
-
-    drawMacroCard(
-      ctx,
-      40 * scale + cardWidth + cardSpacing,
-      macroSectionY + 50 * scale,
-      cardWidth,
-      cardHeight,
-      'Carbs',
-      data.carbs,
-      Math.round(data.carbs * 1.2),
-      colors.carbsColor,
-      colors,
-      20 * scale
-    );
-
-    drawMacroCard(
-      ctx,
-      40 * scale + (cardWidth + cardSpacing) * 2,
-      macroSectionY + 50 * scale,
-      cardWidth,
-      cardHeight,
-      'Fat',
-      data.fat,
-      Math.round(data.fat * 1.2),
-      colors.fatColor,
-      colors,
-      20 * scale
-    );
-
-    // Footer section
-    const footerY = macroSectionY + 50 * scale + cardHeight + 60 * scale;
+    // Macros: Simple 3-column layout with just numbers
+    const macroY = footerY + 120 * scale;
+    const macroWidth = (scaledWidth - 80 * scale) / 3;
     
-    if (data.userName) {
-      ctx.fillStyle = colors.text;
-      ctx.font = `600 ${24 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
-      ctx.fillText(data.userName, 40 * scale, footerY);
-    }
-
-    if (data.mealType) {
-      ctx.fillStyle = colors.accent;
-      ctx.fillRect(40 * scale, footerY + 20 * scale, 200 * scale, 40 * scale);
-      
-      ctx.fillStyle = colors.background;
-      ctx.font = `600 ${20 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
-      ctx.textAlign = 'center';
-      ctx.fillText(data.mealType.charAt(0).toUpperCase() + data.mealType.slice(1), 140 * scale, footerY + 48 * scale);
-    }
-
-    // Date
-    const dateStr = data.date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    // Protein
+    ctx.fillStyle = colors.proteinColor;
+    ctx.font = `bold ${48 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.round(data.protein)}g`, 40 * scale + macroWidth / 2, macroY);
+    
     ctx.fillStyle = colors.textSecondary;
     ctx.font = `400 ${20 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
-    ctx.textAlign = 'left';
-    ctx.fillText(dateStr, 40 * scale, scaledHeight - 40 * scale);
+    ctx.fillText('Protein', 40 * scale + macroWidth / 2, macroY + 50 * scale);
 
-    // Branding
-    ctx.fillStyle = colors.accent;
+    // Carbs
+    ctx.fillStyle = colors.carbsColor;
+    ctx.font = `bold ${48 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.round(data.carbs)}g`, 40 * scale + macroWidth + macroWidth / 2, macroY);
+    
+    ctx.fillStyle = colors.textSecondary;
+    ctx.font = `400 ${20 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
+    ctx.fillText('Carbs', 40 * scale + macroWidth + macroWidth / 2, macroY + 50 * scale);
+
+    // Fat
+    ctx.fillStyle = colors.fatColor;
+    ctx.font = `bold ${48 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.round(data.fat)}g`, 40 * scale + macroWidth * 2 + macroWidth / 2, macroY);
+    
+    ctx.fillStyle = colors.textSecondary;
+    ctx.font = `400 ${20 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Fat', 40 * scale + macroWidth * 2 + macroWidth / 2, macroY + 50 * scale);
+
+    // Food name and details (bottom line)
+    const bottomLineY = scaledHeight - 50 * scale;
+    ctx.fillStyle = colors.text;
     ctx.font = `600 ${20 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
+    ctx.textAlign = 'left';
+    ctx.fillText(data.foodName, 40 * scale, bottomLineY);
+
+    // NutriSync logo (bottom right)
+    ctx.fillStyle = colors.accent;
+    ctx.font = `600 ${18 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`;
     ctx.textAlign = 'right';
-    ctx.fillText('🏃 Fuel Score', scaledWidth - 40 * scale, scaledHeight - 40 * scale);
+    ctx.fillText('🏃 NutriSync', scaledWidth - 40 * scale, bottomLineY);
+
   } catch (error) {
     console.error('Error rendering food share image:', error);
     // Fallback: render without image
