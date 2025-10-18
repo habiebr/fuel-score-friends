@@ -851,8 +851,8 @@ export default function Goals() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Controls */}
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs sm:text-sm text-muted-foreground">
                     Your typical week (Monday–Sunday)
                   </div>
                   <div className="flex items-center gap-2"></div>
