@@ -18,7 +18,10 @@ export default function FoodShareDemo() {
   // Load actual food logs from diary - NO FILTER, JUST ALL LOGS
   useEffect(() => {
     const loadFoodLogs = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log('No user, skipping food logs load');
+        return;
+      }
       
       try {
         setLoading(true);
@@ -28,15 +31,16 @@ export default function FoodShareDemo() {
           .from('food_logs')
           .select('*')
           .eq('user_id', user.id)
-          .order('logged_date', { ascending: false })
+          .order('logged_at', { ascending: false })
           .limit(20);
+
+        console.log('Food logs query result:', { error, dataCount: data?.length, data });
 
         if (error) {
           console.error('Query error:', error);
           throw error;
         }
 
-        console.log('Food logs loaded:', data);
         setFoodLogs(data || []);
       } catch (error) {
         console.error('Error loading food logs:', error);
@@ -55,9 +59,11 @@ export default function FoodShareDemo() {
   };
 
   const convertFoodLogToShareData = (log: any): FoodShareData => {
+    console.log('Converting log to share data:', log);
     return {
       foodName: log.food_name || 'Food Log',
-      imageUrl: log.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80',
+      // No image URL stored in food_logs - use placeholder
+      imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80',
       calories: log.calories || 0,
       protein: log.protein_grams || 0,
       carbs: log.carbs_grams || 0,
@@ -113,7 +119,7 @@ export default function FoodShareDemo() {
                         {hasImage && (
                           <img
                             src={log.image_url}
-                            alt={log.name}
+                            alt={log.food_name}
                             className="w-full h-48 object-cover"
                           />
                         )}
@@ -176,7 +182,7 @@ export default function FoodShareDemo() {
                 ✓ <strong>Multiple Formats:</strong> Choose Story, Post, or Square when sharing
               </p>
               <p className="text-xs text-muted-foreground mt-4">
-                💡 All your logged meals appear here - meals with photos get special formatting!
+                💡 Note: Currently uses placeholder images. Food photos are uploaded separately to storage.
               </p>
             </CardContent>
           </Card>
