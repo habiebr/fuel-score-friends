@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PageHeading } from '@/components/PageHeading';
 import { useAuth } from '@/hooks/useAuth';
 import { usePWA } from '@/hooks/usePWA';
 import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
@@ -102,16 +100,12 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
     } catch {}
   }, []);
 
-  const StepHeader = (
-    <PageHeading title={step === 0 ? 'Welcome' : 'Onboarding'} description={step === 0 ? 'Let’s complete your profile.' : undefined} />
-  );
+  const StepHeader = null; // Remove header completely
 
   return (
-    <div className="min-h-screen bg-gradient-background pb-20">
-      <div className="max-w-none mx-auto px-4 sm:px-6 lg:px-8">
-        {StepHeader}
-        <Card className="shadow-card">
-          <CardContent className="p-6 space-y-4">
+    <div className="min-h-screen bg-gradient-background">
+      <div className="min-h-screen flex flex-col justify-center px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-4xl mx-auto">
             {step === 0 && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
@@ -124,63 +118,89 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 1 && (
-              <div className="grid grid-cols-1 gap-4">
-                <h3 className="text-lg font-semibold">Basics</h3>
-                <div>
-                  <Label>Name</Label>
-                  <Input value={name} onChange={e => setName(e.target.value)} />
+              <div className="w-full max-w-2xl mx-auto space-y-6">
+                <div className="text-center space-y-4">
+                  <h2 className="text-3xl font-bold text-white">Step 1: Basic Profile</h2>
+                  <p className="text-lg text-gray-300">Let's get to know you better! Please fill in your basic information so we can personalize your nutrition plan.</p>
                 </div>
-                <div>
-                  <Label>Age</Label>
-                  <Input value={age} onChange={e => setAge(e.target.value)} type="number" />
+                <div className="grid grid-cols-1 gap-6">
+                  <div>
+                    <Label className="text-white text-lg">Name</Label>
+                    <Input value={name} onChange={e => setName(e.target.value)} className="mt-2 h-12 text-lg" />
+                  </div>
+                  <div>
+                    <Label className="text-white text-lg">Age</Label>
+                    <Input value={age} onChange={e => setAge(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
+                  </div>
+                  <div>
+                    <Label className="text-white text-lg">Sex</Label>
+                    <Select value={sex} onValueChange={(v: any) => setSex(v)}>
+                      <SelectTrigger className="mt-2 h-12 text-lg"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-white text-lg">Height (cm)</Label>
+                    <Input value={height} onChange={e => setHeight(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
+                  </div>
+                  <div>
+                    <Label className="text-white text-lg">Weight (kg)</Label>
+                    <Input value={weight} onChange={e => setWeight(e.target.value)} type="number" className="mt-2 h-12 text-lg" />
+                  </div>
+                  <div>
+                    <Label className="text-white text-lg">City</Label>
+                    <Input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g., Jakarta" className="mt-2 h-12 text-lg" />
+                  </div>
                 </div>
-                <div>
-                  <Label>Sex</Label>
-                  <Select value={sex} onValueChange={(v: any) => setSex(v)}>
-                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex justify-between pt-6">
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
+                  <Button onClick={next} className="h-12 px-8">Continue</Button>
                 </div>
-                <div>
-                  <Label>Height (cm)</Label>
-                  <Input value={height} onChange={e => setHeight(e.target.value)} type="number" />
-                </div>
-                <div>
-                  <Label>Weight (kg)</Label>
-                  <Input value={weight} onChange={e => setWeight(e.target.value)} type="number" />
-                </div>
-                <div>
-                  <Label>City</Label>
-                  <Input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g., Jakarta" />
-                </div>
-                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
               </div>
             )}
 
             {step === 2 && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold">Dietary Restrictions</h3>
-                <Label>Dietary restrictions</Label>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {['Halal','Vegetarian','Vegan','Lactose-intolerant','Keto','Gluten-free','Low-carb','Allergies'].map(opt => (
-                    <Button key={opt} variant={dietary.includes(opt) ? 'default' : 'outline'} onClick={() => setDietary(prev => prev.includes(opt) ? prev.filter(x=>x!==opt) : [...prev,opt])}>{opt}</Button>
-                  ))}
+              <div className="w-full max-w-2xl mx-auto space-y-6">
+                <div className="text-center space-y-4">
+                  <h2 className="text-3xl font-bold text-white">Step 2: Dietary Preferences</h2>
+                  <p className="text-lg text-gray-300">Help us understand your dietary needs! Select any restrictions or preferences that apply to you.</p>
                 </div>
-                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
+                <div className="space-y-4">
+                  <Label className="text-white text-lg">Dietary restrictions</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {['Halal','Vegetarian','Vegan','Lactose-intolerant','Keto','Gluten-free','Low-carb','Allergies'].map(opt => (
+                      <Button 
+                        key={opt} 
+                        variant={dietary.includes(opt) ? 'default' : 'outline'} 
+                        onClick={() => setDietary(prev => prev.includes(opt) ? prev.filter(x=>x!==opt) : [...prev,opt])}
+                        className="h-12 text-base"
+                      >
+                        {opt}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-between pt-6">
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
+                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                </div>
               </div>
             )}
 
             {step === 3 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Race Goal</h3>
-                <div className="grid grid-cols-1 gap-3">
+              <div className="w-full max-w-2xl mx-auto space-y-6">
+                <div className="text-center space-y-4">
+                  <h2 className="text-3xl font-bold text-white">Step 3: Race Goal</h2>
+                  <p className="text-lg text-gray-300">Tell us about your running goals! This helps us create the perfect nutrition plan for your training.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-6">
                   <div>
-                    <Label>Goal</Label>
+                    <Label className="text-white text-lg">Goal</Label>
                     <Select value={goalType} onValueChange={(v:any)=>setGoalType(v)}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectTrigger className="mt-2 h-12 text-lg"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="5k">5K</SelectItem>
                         <SelectItem value="10k">10K</SelectItem>
@@ -190,17 +210,17 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     </Select>
                   </div>
                   <div>
-                    <Label>Custom name (optional)</Label>
-                    <Input value={goalName} onChange={e=>setGoalName(e.target.value)} placeholder="Jakarta Marathon" />
+                    <Label className="text-white text-lg">Custom name (optional)</Label>
+                    <Input value={goalName} onChange={e=>setGoalName(e.target.value)} placeholder="Jakarta Marathon" className="mt-2 h-12 text-lg" />
                   </div>
                   <div>
-                    <Label>Target date</Label>
-                    <Input type="date" value={targetDate} onChange={e=>setTargetDate(e.target.value)} />
+                    <Label className="text-white text-lg">Target date</Label>
+                    <Input type="date" value={targetDate} onChange={e=>setTargetDate(e.target.value)} className="mt-2 h-12 text-lg" />
                   </div>
                   <div>
-                    <Label>Fitness level</Label>
+                    <Label className="text-white text-lg">Fitness level</Label>
                     <Select value={fitnessLevel} onValueChange={(v:any)=>setFitnessLevel(v)}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectTrigger className="mt-2 h-12 text-lg"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="beginner">Beginner</SelectItem>
                         <SelectItem value="intermediate">Intermediate</SelectItem>
@@ -209,9 +229,9 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     </Select>
                   </div>
                   <div>
-                    <Label>Weekly training template</Label>
+                    <Label className="text-white text-lg">Weekly training template</Label>
                     <Select value={trainingTemplate} onValueChange={(v:any)=>setTrainingTemplate(v)}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectTrigger className="mt-2 h-12 text-lg"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="balanced">Balanced (3 run, 1 strength)</SelectItem>
                         <SelectItem value="base">Base (easy mileage)</SelectItem>
@@ -220,7 +240,10 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     </Select>
                   </div>
                 </div>
-                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
+                <div className="flex justify-between pt-6">
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
+                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                </div>
               </div>
             )}
 
@@ -233,41 +256,56 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 5 && (
-              <div className="text-center space-y-4">
-                <h3 className="text-lg font-semibold">Training Plan Setup</h3>
-                <div className="w-full max-w-sm mx-auto">
-                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-4">
-                    <span className="text-muted-foreground">Image 1: Training Plan</span>
+              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-4">
+                <div className="text-center space-y-4">
+                  <h2 className="text-3xl font-bold text-white">Training Plan Setup</h2>
+                </div>
+                <div className="w-full max-w-md">
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
+                    <span className="text-muted-foreground text-lg">Image 1: Training Plan</span>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">To get pre-training meal suggestions, please complete your training plan in the menu.</p>
-                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
+                <p className="text-lg text-gray-300 text-center max-w-md">To get pre-training meal suggestions, please complete your training plan in the menu.</p>
+                <div className="flex justify-between w-full max-w-md pt-4">
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
+                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                </div>
               </div>
             )}
 
             {step === 6 && (
-              <div className="text-center space-y-4">
-                <h3 className="text-lg font-semibold">Meal Logging</h3>
-                <div className="w-full max-w-sm mx-auto">
-                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-4">
-                    <span className="text-muted-foreground">Image 2: Meal Logging</span>
+              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-4">
+                <div className="text-center space-y-4">
+                  <h2 className="text-3xl font-bold text-white">Meal Logging</h2>
+                </div>
+                <div className="w-full max-w-md">
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
+                    <span className="text-muted-foreground text-lg">Image 2: Meal Logging</span>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">To log your meal, please click the button on the right bottom corner.</p>
-                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
+                <p className="text-lg text-gray-300 text-center max-w-md">To log your meal, please click the button on the right bottom corner.</p>
+                <div className="flex justify-between w-full max-w-md pt-4">
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
+                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                </div>
               </div>
             )}
 
             {step === 7 && (
-              <div className="text-center space-y-4">
-                <h3 className="text-lg font-semibold">Add to Home Screen</h3>
-                <div className="w-full max-w-sm mx-auto">
-                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-4">
-                    <span className="text-muted-foreground">Image 3: Home Screen</span>
+              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-4">
+                <div className="text-center space-y-4">
+                  <h2 className="text-3xl font-bold text-white">Add to Home Screen</h2>
+                </div>
+                <div className="w-full max-w-md">
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
+                    <span className="text-muted-foreground text-lg">Image 3: Home Screen</span>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Add this site to your home screen for easy access.</p>
-                <div className="flex justify-between pt-2"><Button variant="outline" onClick={prev}>Back</Button><Button onClick={next}>Continue</Button></div>
+                <p className="text-lg text-gray-300 text-center max-w-md">Add this site to your home screen for easy access.</p>
+                <div className="flex justify-between w-full max-w-md pt-4">
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
+                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                </div>
               </div>
             )}
 
@@ -279,8 +317,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
               </div>
             )}
 
-          </CardContent>
-        </Card>
+        </div>
       </div>
     </div>
   );
