@@ -104,8 +104,8 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
 
   return (
     <div className="min-h-screen bg-gradient-background">
-      <div className="min-h-screen flex flex-col justify-center px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-4xl mx-auto">
+      <div className="min-h-screen flex flex-col justify-center px-6 sm:px-8 lg:px-12">
+        <div className="w-full max-w-4xl mx-auto py-8">
             {step === 0 && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
@@ -118,12 +118,12 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 1 && (
-              <div className="w-full max-w-2xl mx-auto space-y-6">
-                <div className="text-center space-y-4">
+              <div className="w-full max-w-2xl mx-auto space-y-8 px-4 sm:px-6">
+                <div className="text-center space-y-6">
                   <h2 className="text-3xl font-bold text-white">Step 1: Basic Profile</h2>
                   <p className="text-lg text-gray-300">Let's get to know you better! Please fill in your basic information so we can personalize your nutrition plan.</p>
                 </div>
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-8">
                   <div>
                     <Label className="text-white text-lg">Name</Label>
                     <Input value={name} onChange={e => setName(e.target.value)} className="mt-2 h-12 text-lg" />
@@ -155,7 +155,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     <Input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g., Jakarta" className="mt-2 h-12 text-lg" />
                   </div>
                 </div>
-                <div className="flex justify-between pt-6">
+                <div className="flex justify-between pt-8">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
                 </div>
@@ -163,14 +163,14 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 2 && (
-              <div className="w-full max-w-2xl mx-auto space-y-6">
-                <div className="text-center space-y-4">
+              <div className="w-full max-w-2xl mx-auto space-y-8 px-4 sm:px-6">
+                <div className="text-center space-y-6">
                   <h2 className="text-3xl font-bold text-white">Step 2: Dietary Preferences</h2>
                   <p className="text-lg text-gray-300">Help us understand your dietary needs! Select any restrictions or preferences that apply to you.</p>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <Label className="text-white text-lg">Dietary restrictions</Label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     {['Halal','Vegetarian','Vegan','Lactose-intolerant','Keto','Gluten-free','Low-carb','Allergies'].map(opt => (
                       <Button 
                         key={opt} 
@@ -183,7 +183,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     ))}
                   </div>
                 </div>
-                <div className="flex justify-between pt-6">
+                <div className="flex justify-between pt-8">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
                 </div>
@@ -191,12 +191,12 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 3 && (
-              <div className="w-full max-w-2xl mx-auto space-y-6">
-                <div className="text-center space-y-4">
+              <div className="w-full max-w-2xl mx-auto space-y-8 px-4 sm:px-6">
+                <div className="text-center space-y-6">
                   <h2 className="text-3xl font-bold text-white">Step 3: Race Goal</h2>
                   <p className="text-lg text-gray-300">Tell us about your running goals! This helps us create the perfect nutrition plan for your training.</p>
                 </div>
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-8">
                   <div>
                     <Label className="text-white text-lg">Goal</Label>
                     <Select value={goalType} onValueChange={(v:any)=>setGoalType(v)}>
@@ -240,7 +240,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                     </Select>
                   </div>
                 </div>
-                <div className="flex justify-between pt-6">
+                <div className="flex justify-between pt-8">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
                 </div>
@@ -256,17 +256,17 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 5 && (
-              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-4">
-                <div className="text-center space-y-4">
+              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-6 sm:px-8">
+                <div className="text-center space-y-6">
                   <h2 className="text-3xl font-bold text-white">Training Plan Setup</h2>
                 </div>
-                <div className="w-full max-w-md">
+                <div className="w-full max-w-md px-4">
                   <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
                     <span className="text-muted-foreground text-lg">Image 1: Training Plan</span>
                   </div>
                 </div>
-                <p className="text-lg text-gray-300 text-center max-w-md">To get pre-training meal suggestions, please complete your training plan in the menu.</p>
-                <div className="flex justify-between w-full max-w-md pt-4">
+                <p className="text-lg text-gray-300 text-center max-w-md px-4">To get pre-training meal suggestions, please complete your training plan in the menu.</p>
+                <div className="flex justify-between w-full max-w-md pt-4 px-4">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
                 </div>
@@ -274,17 +274,17 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 6 && (
-              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-4">
-                <div className="text-center space-y-4">
+              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-6 sm:px-8">
+                <div className="text-center space-y-6">
                   <h2 className="text-3xl font-bold text-white">Meal Logging</h2>
                 </div>
-                <div className="w-full max-w-md">
+                <div className="w-full max-w-md px-4">
                   <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
                     <span className="text-muted-foreground text-lg">Image 2: Meal Logging</span>
                   </div>
                 </div>
-                <p className="text-lg text-gray-300 text-center max-w-md">To log your meal, please click the button on the right bottom corner.</p>
-                <div className="flex justify-between w-full max-w-md pt-4">
+                <p className="text-lg text-gray-300 text-center max-w-md px-4">To log your meal, please click the button on the right bottom corner.</p>
+                <div className="flex justify-between w-full max-w-md pt-4 px-4">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
                 </div>
@@ -292,17 +292,17 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             )}
 
             {step === 7 && (
-              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-4">
-                <div className="text-center space-y-4">
+              <div className="w-full h-screen flex flex-col justify-center items-center space-y-8 px-6 sm:px-8">
+                <div className="text-center space-y-6">
                   <h2 className="text-3xl font-bold text-white">Add to Home Screen</h2>
                 </div>
-                <div className="w-full max-w-md">
+                <div className="w-full max-w-md px-4">
                   <div className="aspect-square bg-muted rounded-lg flex items-center justify-center mb-6">
                     <span className="text-muted-foreground text-lg">Image 3: Home Screen</span>
                   </div>
                 </div>
-                <p className="text-lg text-gray-300 text-center max-w-md">Add this site to your home screen for easy access.</p>
-                <div className="flex justify-between w-full max-w-md pt-4">
+                <p className="text-lg text-gray-300 text-center max-w-md px-4">Add this site to your home screen for easy access.</p>
+                <div className="flex justify-between w-full max-w-md pt-4 px-4">
                   <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
                   <Button onClick={next} className="h-12 px-8">Continue</Button>
                 </div>
