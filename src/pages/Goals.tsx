@@ -840,16 +840,16 @@ export default function Goals() {
 
           {/* Step 2: Training Plan (inline weekly editor) */}
           {currentStep === 2 && (
-            <Card className="shadow-card mb-6">
+            <Card className="shadow-card mb-6 w-full">
               <CardHeader>
-                <CardTitle>
+                <CardTitle className="break-words">
                   Step 2: Create Your Weekly Training Plan
                 </CardTitle>
                 <p className="text-xs sm:text-sm text-muted-foreground break-words">
                   Map out your typical training week. We'll use this as a template to create your personalized training plan.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 w-full">
                 {/* Controls */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs sm:text-sm text-muted-foreground">
@@ -858,17 +858,17 @@ export default function Goals() {
                   <div className="flex items-center gap-2"></div>
                 </div>
                 {/* Weekly Editor */}
-                <div className="space-y-4">
+                <div className="space-y-4 w-full">
                   {datesOfWeek.map((d, idx) => {
                     const key = format(d, 'yyyy-MM-dd');
                     const list = activitiesByDate[key] || [];
                     return (
-                      <div key={key} className="rounded-lg border bg-muted/20">
-                        <div className="flex flex-wrap items-center justify-between border-b px-4 py-2 gap-2">
+                      <div key={key} className="rounded-lg border bg-muted/20 w-full">
+                        <div className="flex flex-wrap items-center justify-between border-b px-3 sm:px-4 py-2 gap-2">
                           <div className="text-sm font-semibold">{DAYS[idx]}</div>
                           <Button variant="outline" size="sm" className="h-8" onClick={() => addActivity(key)}>+ Add Activity</Button>
                         </div>
-                        <div className="space-y-3 p-4">
+                        <div className="space-y-3 p-3 sm:p-4 w-full">
                           {list.length === 0 && (
                             <div className="text-xs text-muted-foreground">No activities planned yet.</div>
                           )}
@@ -895,14 +895,14 @@ export default function Goals() {
                                     .filter(Boolean)
                                     .join(' · ');
                             return (
-                              <div key={i} className="rounded-md bg-background/60 p-3 shadow-sm">
+                              <div key={i} className="rounded-md bg-background/60 p-3 shadow-sm w-full">
                                 {!isExpanded && (
-                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                    <div className="flex flex-wrap items-center gap-2">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs w-full">
+                                    <div className="flex flex-wrap items-center gap-2 min-w-0">
                                       <span className="font-semibold">{getUiActivityLabel(uiType)}</span>
-                                      <span className="text-muted-foreground">{metrics}</span>
+                                      <span className="text-muted-foreground truncate">{metrics}</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-shrink-0">
                                       <span className="font-semibold">
                                         {uiType === 'rest'
                                           ? '0 kcal'

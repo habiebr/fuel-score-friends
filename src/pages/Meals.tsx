@@ -722,32 +722,30 @@ export default function Meals() {
             {activeTab === 'history' && (
               <Card className="shadow-card">
                 <CardContent className="p-4 space-y-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-3">
                     <div>
                       <h3 className="text-lg font-semibold">Weekly Food Diary</h3>
                       <p className="text-sm text-muted-foreground">Review your logged meals for the selected week.</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setHistoryWeekStart(subDays(historyWeekStart, 7))}
-                        className="rounded-full"
+                        className="rounded-full flex-shrink-0"
                       >
                         <ChevronLeft className="h-4 w-4" />
-                        Prev
                       </Button>
-                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:border-white/20 dark:bg-white/10 sm:text-sm">
+                      <div className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-muted-foreground dark:border-white/20 dark:bg-white/10 text-center min-w-0 flex-1">
                         {historyWeekRangeLabel}
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setHistoryWeekStart(addDays(historyWeekStart, 7))}
-                        className="rounded-full"
+                        className="rounded-full flex-shrink-0"
                         disabled={isCurrentWeek}
                       >
-                        Next
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>
