@@ -124,6 +124,11 @@ function parseRunnaNotes(description: string | undefined): string {
     .replace(/View in Runna: https:\/\/[^\s]+/g, '')
     .replace(/https:\/\/club\.runna\.com\/[^\s]+/g, '')
     .replace(/https:\/\/cal\.runna\.com\/[^\s]+/g, '')
+    // Remove visual separators and clean up formatting
+    .replace(/\\n/g, '\n')  // Convert escaped newlines to actual newlines
+    .replace(/-{10,}/g, '')  // Remove long dash separators
+    .replace(/\n\s*\n\s*\n/g, '\n\n')  // Remove excessive line breaks
+    .replace(/\s+/g, ' ')  // Normalize whitespace
     .trim();
   
   // Extract key workout insights
@@ -142,13 +147,25 @@ function parseRunnaNotes(description: string | undefined): string {
     insights.push(`🔥 ${warmupMatch[1]} min warm-up`);
   }
   
-  // Extract interval instructions
+  // Extract interval instructions with better parsing
   const intervalMatch = cleaned.match(/Repeat\s+the\s+following\s+(\d+)x?:/i);
   if (intervalMatch) {
     const reps = intervalMatch[1];
-    const intervalDetails = cleaned.match(/Repeat\s+the\s+following\s+\d+x?:\s*([^]+?)(?=\n\n|\n5\s*mins?\s*walking\s*cool\s*down|$)/i);
-    if (intervalDetails) {
-      const details = intervalDetails[1].trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+    // Extract interval details more carefully
+    const intervalSection = cleaned.match(/Repeat\s+the\s+following\s+\d+x?:\s*([^]+?)(?=\n\n|\n\d+\s*mins?\s*walking\s*cool\s*down|$)/i);
+    if (intervalSection) {
+      let details = intervalSection[1]
+        .replace(/-{10,}/g, '')  // Remove dash separators
+        .replace(/\n/g, ' ')     // Convert newlines to spaces
+        .replace(/\s+/g, ' ')    // Normalize whitespace
+        .trim();
+      
+      // Clean up common patterns
+      details = details
+        .replace(/\s*minutes?\s*/g, ' min ')
+        .replace(/\s*running\s*at\s*a\s*/g, ' running at ')
+        .replace(/\s*walking\s*/g, ' walking ');
+      
       insights.push(`🔄 ${reps} reps: ${details}`);
     }
   }
