@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
-import { Calendar, Edit3 } from 'lucide-react';
+import { Calendar, Edit3, PenLine } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrainingNutritionWidget } from '@/components/TrainingNutritionWidget';
 
@@ -107,16 +107,6 @@ export default function TrainingCalendar() {
             title="Training Calendar"
             description="Weekly view of your training plan"
             icon={Calendar}
-            actions={
-                     <Button
-                       variant="outline"
-                       onClick={() => navigate('/training-plan')}
-                       className="flex items-center gap-2"
-                     >
-                       <Edit3 className="h-4 w-4" />
-                       Edit Training Plan
-                     </Button>
-            }
           />
 
           {/* Navigation Controls */}
@@ -207,6 +197,14 @@ export default function TrainingCalendar() {
                             </div>
                             <p className="text-sm text-muted-foreground">{format(d, 'EEEE, MMM dd')}</p>
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/training-plan?date=${format(d, 'yyyy-MM-dd')}`)}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          >
+                            <PenLine className="h-4 w-4" />
+                          </Button>
                         </div>
 
                         <div className="space-y-3">
