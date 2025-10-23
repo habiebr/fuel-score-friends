@@ -353,8 +353,8 @@ export default function AppIntegrations() {
                 </CardContent>
               </Card>
 
-              {/* Runna Calendar - Hidden for now */}
-              {false && <Card className="shadow-card mt-4">
+              {/* Runna Calendar */}
+              <Card className="shadow-card mt-4">
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
@@ -453,7 +453,7 @@ export default function AppIntegrations() {
                     </>
                   )}
                 </CardContent>
-              </Card>}
+              </Card>
 
               {/* Strava - Coming Soon */}
               <Card className="shadow-card mt-4 relative">
