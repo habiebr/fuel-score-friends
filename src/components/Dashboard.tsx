@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils, Settings } from 'lucide-react';
 import { Home } from 'lucide-react';
+import { format } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
 import { RaceGoalWidget } from '@/components/RaceGoalWidget';
@@ -182,8 +183,8 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
     
     // Fallback to static suggestions
     const targetCalories = plan?.recommended_calories || 400;
-    const indonesianSuggestion = getIndonesianMealSuggestions(currentMealType, targetCalories);
-    return [indonesianSuggestion];
+    const indonesianSuggestions = getIndonesianMealSuggestions(currentMealType, targetCalories);
+    return indonesianSuggestions;
   };
 
   // Indonesian food suggestions with portions
@@ -219,21 +220,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           protein: 22,
           carbs: 42,
           fat: 12
-        },
-        {
-          name: "Lontong Sayur",
-          description: "Lontong dengan sayur labu siam dan kuah santan",
-          foods: [
-            "Lontong (120g)",
-            "Sayur labu siam (150g)", 
-            "Santan (100ml)",
-            "Tempe (50g)",
-            "Bawang merah (10g)"
-          ],
-          calories: 320,
-          protein: 18,
-          carbs: 38,
-          fat: 14
         }
       ],
       lunch: [
@@ -266,21 +252,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           protein: 28,
           carbs: 35,
           fat: 22
-        },
-        {
-          name: "Soto Ayam",
-          description: "Sup ayam dengan bumbu kuning dan pelengkap",
-          foods: [
-            "Daging ayam (120g)",
-            "Nasi putih (150g)", 
-            "Tauge (60g)",
-            "Bawang goreng (10g)",
-            "Sambal (15g)"
-          ],
-          calories: 480,
-          protein: 32,
-          carbs: 48,
-          fat: 16
         }
       ],
       dinner: [
@@ -313,35 +284,48 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           protein: 35,
           carbs: 42,
           fat: 18
-        },
-        {
-          name: "Ayam Bakar",
-          description: "Ayam bakar dengan bumbu kecap dan nasi",
-          foods: [
-            "Ayam bakar (150g)",
-            "Nasi putih (150g)", 
-            "Tempe goreng (60g)",
-            "Sambal (15g)",
-            "Timun (50g)"
-          ],
-          calories: 450,
-          protein: 30,
-          carbs: 40,
-          fat: 16
         }
       ]
     };
 
     const mealSuggestions = suggestions[mealType as keyof typeof suggestions] || [];
     
-    // Find the suggestion closest to target calories
-    const closestSuggestion = mealSuggestions.reduce((closest, current) => {
-      const closestDiff = Math.abs(closest.calories - targetCalories);
-      const currentDiff = Math.abs(current.calories - targetCalories);
-      return currentDiff < closestDiff ? current : closest;
-    }, mealSuggestions[0]);
+    // Return 2 suggestions closest to target calories
+    const sortedSuggestions = [...mealSuggestions].sort((a, b) => {
+      const diffA = Math.abs(a.calories - targetCalories);
+      const diffB = Math.abs(b.calories - targetCalories);
+      return diffA - diffB;
+    });
 
-    return closestSuggestion || mealSuggestions[0];
+    return sortedSuggestions.slice(0, 2);
+  };
+
+  const generateMealPlanForToday = async () => {
+    if (!user) return;
+    
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      console.log('Generating meal plan for today...');
+      
+      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
+        body: { 
+          date: today,
+          useAI: false // Use templates for faster generation
+        }
+      });
+      
+      if (error) {
+        console.error('Error generating meal plan:', error);
+        return;
+      }
+      
+      console.log('Meal plan generated successfully:', data);
+      
+      // Reload dashboard data to show the new meal plan
+      loadDashboardData();
+    } catch (err) {
+      console.error('Failed to generate meal plan:', err);
+    }
   };
 
   useEffect(() => {
@@ -1381,6 +1365,28 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             mealsLogged={data?.mealsLogged || 0}
           />
         </div>
+
+        {/* Generate Meal Plan Button - Show when no meal plan exists */}
+        {data?.calories?.target === 0 && (
+          <div className="mb-5">
+            <Card className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-orange-800 dark:text-orange-200">No Meal Plan Found</h3>
+                    <p className="text-sm text-orange-600 dark:text-orange-300">Generate a personalized meal plan for today</p>
+                  </div>
+                  <Button 
+                    onClick={generateMealPlanForToday}
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    Generate Plan
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* 2. Gamification Section - Temporarily Hidden */}
         {/* 

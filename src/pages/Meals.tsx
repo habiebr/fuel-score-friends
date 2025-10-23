@@ -727,6 +727,11 @@ export default function Meals() {
                       <h3 className="text-lg font-semibold">Weekly Food Diary</h3>
                       <p className="text-sm text-muted-foreground">Review your logged meals for the selected week.</p>
                     </div>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        💡 <strong>Tip:</strong> You can edit individual meals by clicking on the meal name in each day's entry.
+                      </p>
+                    </div>
                     <div className="flex items-center justify-between gap-2">
                       <Button
                         variant="outline"
