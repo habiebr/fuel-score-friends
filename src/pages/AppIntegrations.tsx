@@ -358,7 +358,9 @@ export default function AppIntegrations() {
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
-                      <Calendar className="w-6 h-6 text-white" />
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-white">
+                        <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="currentColor"/>
+                      </svg>
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-lg font-semibold text-foreground">Runna Training Calendar</h3>
