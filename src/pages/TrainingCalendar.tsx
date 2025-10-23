@@ -196,7 +196,7 @@ export default function TrainingCalendar() {
                       </div>
                       <div className="flex-1 space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                          <div>
+                          <div className="flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">Day {idx + 1}</p>
                               {hasActualActivity && (
@@ -205,8 +205,7 @@ export default function TrainingCalendar() {
                                 </span>
                               )}
                             </div>
-                            <h3 className="text-lg font-semibold">{DAYS[idx]}</h3>
-                            <p className="text-xs text-muted-foreground">{format(d, 'EEEE, MMM dd')}</p>
+                            <p className="text-sm text-muted-foreground">{format(d, 'EEEE, MMM dd')}</p>
                           </div>
                         </div>
 
