@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomNav } from '@/components/BottomNav';
-import { ChevronRight, User as UserIcon, Utensils, Bell, Smartphone, Shield, Download, X, Target, LogOut, Heart } from 'lucide-react';
+import { ChevronRight, User as UserIcon, Utensils, Bell, Smartphone, Shield, Download, X, Target, LogOut, Heart, Globe } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ActionFAB } from '@/components/ActionFAB';
 import { FoodTrackerDialog } from '@/components/FoodTrackerDialog';
@@ -13,6 +13,10 @@ import { Activity } from 'lucide-react';
 import { PageHeading } from '@/components/PageHeading';
 import { PWAInstallPrompt } from '@/components/PWAInstallButton';
 import { usePWA } from '@/hooks/usePWA';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
+import { PerformanceTierBadge } from '@/components/gamification/PerformanceTierBadge';
+import { useGamification } from '@/hooks/useGamification';
 
 export default function ProfileNew() {
   const { user, signOut } = useAuth();
@@ -21,6 +25,13 @@ export default function ProfileNew() {
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
   const [fitnessScreenshotOpen, setFitnessScreenshotOpen] = useState(false);
   const { isIOS, isAndroid, isInstalled } = usePWA();
+  const { t } = useTranslation();
+  
+  // Gamification hook
+  const { 
+    data: gamificationData, 
+    loading: gamificationLoading 
+  } = useGamification();
 
   const handleLogout = async () => {
     await signOut();
@@ -48,39 +59,50 @@ export default function ProfileNew() {
   const menuItems = [
     {
       icon: UserIcon,
-      title: 'Profile Information',
+      title: t('settings.profileInformation'),
       subtitle: 'Personal details and body metrics',
       path: '/profile-info',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
     {
       icon: Target,
-      title: 'Training Goals',
+      title: t('goals.setGoalsTrainingPlan'),
       subtitle: 'Set your fitness objectives',
       path: '/goals',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
     {
       icon: Utensils,
-      title: 'Food Preferences',
+      title: t('settings.foodPreferences'),
       subtitle: 'Dietary restrictions and eating habits',
       path: '/food-preferences',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
     {
       icon: Bell,
-      title: 'Notifications',
+      title: t('settings.notificationsSettings'),
       subtitle: 'Meal reminders and alerts',
       path: '/notifications-settings',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
     {
       icon: Smartphone,
-      title: 'App Integrations',
+      title: t('settings.appIntegrations'),
       subtitle: 'Connected fitness apps and privacy',
       path: '/integrations',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
+    },
+    // Temporarily hidden language switcher
+    /*
+    {
+      icon: Globe,
+      title: t('settings.language'),
+      subtitle: t('settings.changeLanguage'),
+      path: null, // Special case for language switcher
+      iconBg: 'bg-gray-100 dark:bg-gray-800',
+      isLanguageSwitcher: true
     }
+    */
   ];
 
   return (
@@ -89,8 +111,8 @@ export default function ProfileNew() {
         <div className="max-w-none mx-auto p-4">
           {/* Header */}
           <PageHeading
-            title="Profile"
-            description="Manage your account and preferences."
+            title={t('navigation.profile')}
+            description={t('profile.manageAccountPreferences')}
             icon={UserIcon}
           />
 
@@ -136,29 +158,47 @@ export default function ProfileNew() {
             </Card>
           )}
 
+          {/* Performance Tier Badge */}
+          {gamificationData && (
+            <div className="mb-6">
+              <Card className="shadow-card">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-center">
+                    <PerformanceTierBadge
+                      tier={gamificationData.state.tier}
+                      avg28d={gamificationData.state.total_days_logged > 0 ? gamificationData.todayScore : 0}
+                      showProgress={true}
+                      size="lg"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* PWA Install Prompt */}
           <div className="mb-6">
             <PWAInstallPrompt />
             {isIOS && !isInstalled && (
               <div className="mt-3 p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 text-sm">
-                <div className="font-semibold mb-1">📱 Install on iOS</div>
+                <div className="font-semibold mb-1">📱 {t('pwa.iosInstructions')}</div>
                 <ol className="list-decimal list-inside space-y-1 text-blue-900 dark:text-blue-100">
-                  <li>Tap the Share button in Safari</li>
-                  <li>Scroll down and tap "Add to Home Screen"</li>
-                  <li>Tap "Add" to confirm</li>
+                  <li>{t('pwa.iosStep1')} in Safari</li>
+                  <li>{t('pwa.iosStep2')}</li>
+                  <li>{t('pwa.iosStep3')}</li>
                 </ol>
               </div>
             )}
             {isAndroid && !isInstalled && (
               <div className="mt-3 p-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 text-sm">
-                <div className="font-semibold mb-1">🤖 Install on Android</div>
+                <div className="font-semibold mb-1">🤖 {t('pwa.androidInstructions')}</div>
                 <ol className="list-decimal list-inside space-y-1 text-green-900 dark:text-green-100">
-                  <li>Tap the menu (⋮) in your browser</li>
-                  <li>Select "Install app" or "Add to Home screen"</li>
-                  <li>Tap "Install" to confirm</li>
+                  <li>{t('pwa.androidStep1')}</li>
+                  <li>{t('pwa.androidStep2')}</li>
+                  <li>{t('pwa.androidStep3')}</li>
                 </ol>
                 <div className="mt-2 text-xs text-green-700 dark:text-green-300">
-                  💡 <strong>Tip:</strong> Installing the app gives you better camera access for food photos and a smoother experience!
+                  💡 <strong>Tip:</strong> {t('pwa.androidTip')}
                 </div>
               </div>
             )}
@@ -168,6 +208,30 @@ export default function ProfileNew() {
           <div className="space-y-3 mb-6">
             {menuItems.map((item) => {
               const Icon = item.icon;
+              
+              // Special handling for language switcher
+              if (item.isLanguageSwitcher) {
+                return (
+                  <Card
+                    key="language-switcher"
+                    className="shadow-card"
+                  >
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 ${item.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}>
+                          <Icon className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg font-semibold text-foreground leading-tight">{item.title}</h3>
+                          <p className="text-sm text-muted-foreground mt-0.5">{item.subtitle}</p>
+                        </div>
+                        <LanguageSwitcher />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+              
               return (
                 <Card
                   key={item.path}

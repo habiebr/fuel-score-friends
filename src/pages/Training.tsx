@@ -10,12 +10,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
-import { Activity } from 'lucide-react';
+import { Activity, Edit3 } from 'lucide-react';
 import { TrainingNutritionWidget } from '@/components/TrainingNutritionWidget';
 import { TrainingNotifications } from '@/components/TrainingNotifications';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 type ActivityType = 'rest' | 'run' | 'strength' | 'cardio' | 'other';
 type Intensity = 'low' | 'moderate' | 'high';
@@ -37,6 +38,7 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 export default function Training() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -245,14 +247,19 @@ export default function Training() {
             icon={Activity}
             actions={
               <div className="flex items-center gap-2">
+                       <Button
+                         variant="outline"
+                         onClick={() => navigate('/training-plan')}
+                         className="flex items-center gap-2"
+                       >
+                         <Edit3 className="h-4 w-4" />
+                         Edit Training Plan
+                       </Button>
                 <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>
                   Prev
                 </Button>
                 <Button variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>
                   Next
-                </Button>
-                <Button onClick={saveAll} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save'}
                 </Button>
               </div>
             }

@@ -9,6 +9,7 @@ import {
   activityTypeNames
 } from '../_shared/google-fit-activities.ts';
 import { normalizeActivityName } from '../_shared/google-fit-utils.ts';
+import { fetchDayData, storeDayData } from '../_shared/google-fit-sync-core.ts';
 
 interface HistoricalGoogleFitData {
   steps: number;
@@ -82,32 +83,20 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get user from request headers
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Missing authorization header' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    // Get user ID from request body (since verify_jwt = false)
+    const { userId, accessToken, daysBack = 30 } = await req.json();
     
-    if (userError || !user) {
+    if (!userId) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Invalid user token' }),
+        JSON.stringify({ success: false, error: 'Missing userId in request body' }),
         { 
-          status: 401, 
+          status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
     }
 
-    console.log(`🔄 Starting IMPROVED historical sync for user ${user.id}, fetching ${daysBack} days back`);
+    console.log(`🔄 Starting IMPROVED historical sync for user ${userId}, fetching ${daysBack} days back`);
 
     // Fetch historical data from Google Fit API (NOW WITH SESSIONS!)
     const historicalData = await fetchHistoricalDataWithSessions(accessToken, daysBack);
@@ -126,9 +115,9 @@ serve(async (req) => {
     }
 
     // Store historical data in database
-    const syncedDays = await storeHistoricalData(supabaseClient, user.id, historicalData);
+    const syncedDays = await storeHistoricalData(supabaseClient, userId, historicalData);
 
-    console.log(`✅ Historical sync completed: ${syncedDays} days synced for user ${user.id}`);
+    console.log(`✅ Historical sync completed: ${syncedDays} days synced for user ${userId}`);
     console.log(`📊 Sessions found: ${historicalData.reduce((sum, day) => sum + day.sessions.length, 0)} total`);
 
     return new Response(
@@ -250,67 +239,15 @@ async function fetchDayDataWithSessions(
   };
 
   try {
-    // Fetch all aggregate metrics in parallel
-    const [stepsData, caloriesData, activeMinutesData, heartRateData, distanceData] = await Promise.all([
-      aggregate('com.google.step_count.delta'),
-      aggregate('com.google.calories.expended'),
-      aggregate('com.google.active_minutes'),
-      aggregate('com.google.heart_rate.bpm').catch(() => null),
-      aggregate('com.google.distance.delta').catch(() => null)
-    ]);
-
-    // Extract aggregate values
-    const steps = stepsData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-    const caloriesBurned = caloriesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-    const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-    const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
-    const distanceMeters = distanceData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-
-    // ✨ NEW: Fetch sessions for this day
-    let sessions: any[] = [];
-    try {
-      const sessionsRes = await fetch(
-        `https://www.googleapis.com/fitness/v1/users/me/sessions?` +
-        `startTime=${startOfDay.toISOString()}&` +
-        `endTime=${endOfDay.toISOString()}`,
-        {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        }
-      );
-
-      if (sessionsRes.ok) {
-        const sessionsData = await sessionsRes.json();
-        const rawSessions = sessionsData.session || [];
-        
-        // Filter to only exercise sessions
-        const filteredSessions = filterExerciseSessions(rawSessions);
-        
-        // Normalize session names
-        sessions = filteredSessions.map((session: any) => {
-          const copy = { ...session };
-          const numericType = Number(copy.activityType ?? copy.activityTypeId ?? copy.activity);
-          if (!Number.isNaN(numericType)) {
-            copy._activityTypeNumeric = numericType;
-            if (!copy.activityType) {
-              copy.activityType = numericType;
-            }
-          }
-          const friendlyName = normalizeActivityName(copy);
-          if (friendlyName) {
-            copy.name = friendlyName;
-            if (!copy.description) {
-              copy.description = friendlyName;
-            }
-          }
-          return copy;
-        });
-      } else if (sessionsRes.status !== 404) {
-        console.warn(`Sessions API returned ${sessionsRes.status} for ${startOfDay.toISOString().split('T')[0]}`);
-      }
-    } catch (sessionError) {
-      console.warn(`Failed to fetch sessions for ${startOfDay.toISOString().split('T')[0]}:`, sessionError);
-      // Continue without sessions rather than failing completely
-    }
+    // Use shared core module for comprehensive data extraction
+    const dayData = await fetchDayData(accessToken, startOfDay, endOfDay);
+    
+    const steps = dayData.steps;
+    const caloriesBurned = dayData.caloriesBurned;
+    const activeMinutes = dayData.activeMinutes;
+    const heartRateAvg = dayData.heartRateAvg;
+    const distanceMeters = dayData.distanceMeters;
+    const sessions = dayData.sessions;
 
     // Only return data if there's meaningful activity
     if (steps > 0 || caloriesBurned > 0 || sessions.length > 0) {

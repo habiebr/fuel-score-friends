@@ -10,7 +10,7 @@
  * - Optimized cache sizes and expiration
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAMES = {
   // Supabase API responses
   SUPABASE_PROFILES: `supabase-profiles-${CACHE_VERSION}`,

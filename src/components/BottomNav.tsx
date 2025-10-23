@@ -1,6 +1,7 @@
 import { Home, User, Utensils, Users, Activity } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useTranslation } from 'react-i18next';
 
 interface BottomNavProps {
   onAddMeal?: () => void;
@@ -14,6 +15,8 @@ const inactiveLinkStyles =
   "text-muted-foreground hover:text-foreground hover:bg-muted/30";
 
 export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
+  const { t } = useTranslation();
+  
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 safe-area-inset-bottom pb-2 sm:pb-4">
       <div className="max-w-none mx-auto px-2 sm:px-4">
@@ -28,7 +31,7 @@ export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
             }
           >
             <Home className="h-5 w-5" />
-            <span>Home</span>
+            <span>{t('navigation.dashboard')}</span>
           </NavLink>
 
           <NavLink
@@ -41,7 +44,7 @@ export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
             }
           >
             <Utensils className="h-5 w-5" />
-            <span>Meals</span>
+            <span>{t('navigation.meals')}</span>
           </NavLink>
 
           <NavLink
@@ -54,7 +57,7 @@ export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
             }
           >
             <Activity className="h-5 w-5" />
-            <span>Training</span>
+            <span>{t('navigation.training')}</span>
           </NavLink>
 
           <NavLink
@@ -67,7 +70,7 @@ export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
             }
           >
             <Users className="h-5 w-5" />
-            <span>Community</span>
+            <span>{t('navigation.community')}</span>
           </NavLink>
 
           <NavLink
@@ -80,7 +83,7 @@ export function BottomNav({ onAddMeal: _onAddMeal }: BottomNavProps) {
             }
           >
             <User className="h-5 w-5" />
-            <span>Profile</span>
+            <span>{t('navigation.profile')}</span>
           </NavLink>
         </div>
       </div>

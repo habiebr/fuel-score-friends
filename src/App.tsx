@@ -5,9 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { UploadProvider } from "@/contexts/UploadContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "react-error-boundary";
 import { Suspense, lazy } from "react";
+
+// Initialize i18n
+import "@/lib/i18n";
 
 // Preload critical pages
 import Index from "./pages/Index";
@@ -21,6 +25,8 @@ const FoodPreferences = lazy(() => import("./pages/FoodPreferences"));
 const NotificationsSettings = lazy(() => import("./pages/NotificationsSettings"));
 const AppIntegrations = lazy(() => import("./pages/AppIntegrations"));
 const Goals = lazy(() => import("./pages/Goals"));
+const RaceGoal = lazy(() => import("./pages/RaceGoal"));
+const TrainingPlan = lazy(() => import("./pages/TrainingPlan"));
 const Training = lazy(() => import("./pages/Training"));
 const TrainingCalendar = lazy(() => import("./pages/TrainingCalendar"));
 const Community = lazy(() => import("./pages/Community"));
@@ -100,8 +106,9 @@ function App() {
       }}
     >
       <QueryClientProvider client={queryClient}>
-               <AuthProvider>
-                 <UploadProvider>
+               <LanguageProvider>
+                 <AuthProvider>
+                   <UploadProvider>
                      <TooltipProvider>
                        <Toaster />
                        <Sonner />
@@ -124,6 +131,8 @@ function App() {
                   <Route path="/notifications-settings" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><NotificationsSettings /></Suspense></ProtectedRoute>} />
                   <Route path="/integrations" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><AppIntegrations /></Suspense></ProtectedRoute>} />
                   <Route path="/goals" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><Goals /></Suspense></ProtectedRoute>} />
+                  <Route path="/race-goal" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><RaceGoal /></Suspense></ProtectedRoute>} />
+                  <Route path="/training-plan" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><TrainingPlan /></Suspense></ProtectedRoute>} />
                   <Route path="/training" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><Training /></Suspense></ProtectedRoute>} />
                   <Route path="/training-calendar" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><TrainingCalendar /></Suspense></ProtectedRoute>} />
                   <Route path="/community" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><Community /></Suspense></ProtectedRoute>} />
@@ -145,10 +154,11 @@ function App() {
                   {/* 404 - Lazy load */}
                   <Route path="*" element={<Suspense fallback={<RouteLoadingFallback />}><NotFound /></Suspense>} />
                 </Routes>
-                     </BrowserRouter>
-                   </TooltipProvider>
-               </UploadProvider>
-             </AuthProvider>
+                       </BrowserRouter>
+                     </TooltipProvider>
+                   </UploadProvider>
+                 </AuthProvider>
+               </LanguageProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from 'react-i18next';
 
 interface MacroData {
   current: number;
@@ -28,6 +29,7 @@ export function TodayNutritionCard({
   fat,
   showEducation = false,
 }: TodayNutritionCardProps) {
+  const { t } = useTranslation();
   const [openTip, setOpenTip] = useState<null | "Calories" | "Protein" | "Carbs" | "Fat">(null);
 
   const isLoading = !calories.target;
@@ -39,41 +41,26 @@ export function TodayNutritionCard({
 
   const tips: Record<"Protein" | "Carbs" | "Fat", { title: string; points: string[]; target: string }> = {
     Protein: {
-      title: "Why protein builds your runs:",
-      points: [
-        "Repairs muscle micro-tears from training",
-        "Supports recovery and adaptation",
-        "Helps maintain lean mass during hard cycles",
-        "Improves satiety and stable energy",
-      ],
-      target: "Target: 1.2–1.6g per kg body weight",
+      title: t('widgets.todayNutrition.proteinTips.title'),
+      points: t('widgets.todayNutrition.proteinTips.points', { returnObjects: true }) as string[],
+      target: t('widgets.todayNutrition.proteinTips.target'),
     },
     Carbs: {
-      title: "Why carbs fuel your runs:",
-      points: [
-        "Primary fuel for moderate–high intensity",
-        "Replenishes muscle glycogen stores",
-        "Supports brain function on long efforts",
-        "Speeds post‑workout recovery",
-      ],
-      target: "Target: 5–10g per kg body weight (by training load)",
+      title: t('widgets.todayNutrition.carbsTips.title'),
+      points: t('widgets.todayNutrition.carbsTips.points', { returnObjects: true }) as string[],
+      target: t('widgets.todayNutrition.carbsTips.target'),
     },
     Fat: {
-      title: "Why healthy fats matter:",
-      points: [
-        "Fuel source for long, easier runs",
-        "Reduces training inflammation",
-        "Supports hormone production",
-        "Aids absorption of fat‑soluble vitamins",
-      ],
-      target: "Target: 20–35% of total calories",
+      title: t('widgets.todayNutrition.fatTips.title'),
+      points: t('widgets.todayNutrition.fatTips.points', { returnObjects: true }) as string[],
+      target: t('widgets.todayNutrition.fatTips.target'),
     },
   };
 
   const macroConfig = [
-    { key: "Protein" as const, data: protein, label: "Protein", unit: "g" },
-    { key: "Carbs" as const, data: carbs, label: "Carbs", unit: "g" },
-    { key: "Fat" as const, data: fat, label: "Fats", unit: "g" },
+    { key: "Protein" as const, data: protein, label: t('widgets.todayNutrition.protein'), unit: "g" },
+    { key: "Carbs" as const, data: carbs, label: t('widgets.todayNutrition.carbs'), unit: "g" },
+    { key: "Fat" as const, data: fat, label: t('widgets.todayNutrition.fats'), unit: "g" },
   ];
 
   return (
@@ -82,9 +69,9 @@ export function TodayNutritionCard({
       <CardContent className="relative space-y-8 p-6">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-lg font-semibold">Nutrition</h3>
+            <h3 className="text-lg font-semibold">{t('widgets.todayNutrition.title')}</h3>
             <p className="text-[11px] uppercase tracking-[0.35em] text-muted-foreground">
-              Today&apos;s fuel status
+              {t('widgets.todayNutrition.subtitle')}
             </p>
           </div>
           <div className="rounded-full bg-primary/20 px-3 py-1 text-sm font-semibold text-primary shadow-[0_0_18px_rgba(49,255,176,0.35)]">
@@ -100,7 +87,7 @@ export function TodayNutritionCard({
             strokeWidth={18}
             color="#FFD74A"
             centerLabel={`${Math.round(calories.current)}`}
-            centerSubLabel="KCAL"
+            centerSubLabel={t('widgets.todayNutrition.calories').toUpperCase()}
             subText={`of ${Math.round(calories.target)} target`}
           />
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

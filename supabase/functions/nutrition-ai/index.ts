@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI } from "npm:@google/genai";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -17,21 +18,21 @@ function validateFoodIsEdible(foodName: string, foodDescription?: string): FoodV
   const lowerName = foodName.toLowerCase();
   const lowerDesc = (foodDescription || "").toLowerCase();
   
-  // List of non-edible items that might be detected (blackberry phone example)
-  const nonEdiblePatterns = [
-    /^(phone|blackberry|samsung|iphone|pixel|device|screen|display)/,
+  // Only reject obvious non-food items (very basic check)
+  const obviousNonFood = [
+    /^(phone|blackberry|samsung|iphone|pixel|device|screen|display)$/,
     /^(plastic|rubber|metal|container|packaging|wrapper|box)$/,
-    /^(shoe|boot|cloth|fabric|hat|bag|purse)/,
-    /^(book|pen|pencil|paper|notebook|desk)/,
-    /^(wall|floor|ceiling|door|window|furniture)/,
-    /^(car|bike|motorcycle|vehicle)/,
-    /^(tool|hammer|screw|wrench|saw|soldering|iron|drill|saw|knife(?!s\s))/,
-    /soap|shampoo|detergent|bleach|chemical|medicine(?!s\s*like)/,
-    /vitamin|supplement|pill|tablet(?!s\s*of)/,
+    /^(shoe|boot|cloth|fabric|hat|bag|purse)$/,
+    /^(book|pen|pencil|paper|notebook|desk)$/,
+    /^(wall|floor|ceiling|door|window|furniture)$/,
+    /^(car|bike|motorcycle|vehicle)$/,
+    /^(tool|hammer|screw|wrench|saw|soldering|iron|drill)$/,
+    /^(soap|shampoo|detergent|bleach|chemical)$/,
+    /^(vitamin|supplement|pill|tablet)$/
   ];
   
-  // Check if any non-edible pattern matches
-  for (const pattern of nonEdiblePatterns) {
+  // Check if it's obviously not food
+  for (const pattern of obviousNonFood) {
     if (pattern.test(lowerName) || pattern.test(lowerDesc)) {
       return {
         isEdible: false,
@@ -42,53 +43,23 @@ function validateFoodIsEdible(foodName: string, foodDescription?: string): FoodV
     }
   }
   
-  // List of edible indicators
-  const ediblePatterns = [
-    /fruit|vegetable|meat|fish|chicken|beef|pork|grain|bread|cereal|rice|pasta|milk|cheese|egg|nut|seed|herb|spice|sauce|oil|butter|jam|honey|yogurt|pizza|burger|salad|soup|stew|curry|noodle|rice|bean|lentil|tofu|dessert|cake|cookie|chocolate|candy|snack|drink|juice|coffee|tea|water|juice|smoothie|sauce|dressing|spread|condiment|seasoning|spice/,
-  ];
-  
-  // Check if any edible pattern matches
-  const isLikelyEdible = ediblePatterns.some(pattern => 
-    pattern.test(lowerName) || pattern.test(lowerDesc)
-  );
-  
-  // Additional checks for suspicious items
-  const suspiciousPatterns = [
-    /iron|steel|metal|plastic|electronic|device|screen|phone|computer|tool|equipment/
-  ];
-  
-  const isSuspicious = suspiciousPatterns.some(pattern =>
-    pattern.test(lowerName)
-  );
-  
-  // Reject if:
-  // 1. Doesn't match any edible pattern AND is suspicious
-  // 2. Too short and generic
-  // 3. Only numbers
-  if (!isLikelyEdible && (isSuspicious || lowerName.length < 3 || /^\d+$/.test(lowerName))) {
-    return {
-      isEdible: false,
-      isPackaged: false,
-      confidence: 0.85,
-      reason: `Unable to confirm as food: ${foodName}`
-    };
-  }
-  
-  if (!isLikelyEdible) {
-    // Unknown item - be more conservative
+  // If Gemini AI detected it as food, trust it completely
+  // Only reject if it's too short (less than 2 characters) or just numbers
+  if (lowerName.length < 2 || /^\d+$/.test(lowerName)) {
     return {
       isEdible: false,
       isPackaged: false,
       confidence: 0.70,
-      reason: `Unknown item - cannot verify as food: ${foodName}`
+      reason: `Too short or numeric only: ${foodName}`
     };
   }
   
+  // Everything else is considered edible - trust Gemini AI
   return {
     isEdible: true,
     isPackaged: false,
-    confidence: 0.85,
-    reason: `Recognized as food item`
+    confidence: 0.80,
+    reason: `AI-identified food item: ${foodName}`
   };
 }
 
@@ -387,11 +358,44 @@ serve(async (req) => {
   }
 
   try {
+    // Get the JWT token from Authorization header
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error('No Authorization header');
+      return new Response(JSON.stringify({ error: 'Authorization header missing' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Create Supabase client with proper JWT handling
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Get user from JWT token
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    
+    if (userError || !user) {
+      console.error('Auth error:', userError);
+      return new Response(JSON.stringify({ error: 'Invalid token' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userId = user.id;
+    console.log('User authenticated:', userId);
+
     const { userProfile, wearableData, foodLogs, type = "suggestion", image, mealType, query, region } = await req.json();
     const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     
     console.log('Request type:', type);
+    console.log('User ID:', userId || 'Not provided');
     console.log('Has image:', !!image);
     console.log('Has GROQ_API_KEY:', !!GROQ_API_KEY);
     console.log('Has GEMINI_API_KEY:', !!GEMINI_API_KEY);
@@ -593,10 +597,13 @@ Return ONLY this JSON format (no markdown, no explanation):
           if (nutritionData.error) {
             console.warn('⚠️ AI validation failed:', nutritionData.error);
             return new Response(JSON.stringify({ 
+              success: false,
+              message: 'Food not identified, try again',
               error: nutritionData.error,
-              details: 'This does not appear to be a food item'
+              type: type,
+              userId: userId
             }), {
-              status: 400,
+              status: 200,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
           }
@@ -608,10 +615,13 @@ Return ONLY this JSON format (no markdown, no explanation):
           if (!edibleCheck.isEdible) {
             console.warn('⚠️ Food validation failed:', edibleCheck.reason);
             return new Response(JSON.stringify({ 
+              success: false,
+              message: 'Food not identified, try again',
               error: edibleCheck.reason,
-              details: 'Only edible foods can be logged'
+              type: type,
+              userId: userId
             }), {
-              status: 400,
+              status: 200,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
           }
@@ -643,8 +653,10 @@ Return ONLY this JSON format (no markdown, no explanation):
           }
           
           return new Response(JSON.stringify({ 
+            success: true,
             nutritionData: nutritionValidation.correctedData,
             type: type,
+            userId: userId,
             validation: {
               isEdible: edibleCheck.isEdible,
               isPackaged: packagedCheck.isPackaged,
@@ -879,8 +891,10 @@ Return just the numeric score (0-100) and a brief explanation.`;
           }
 
           return new Response(JSON.stringify({ 
+            success: true,
             nutritionData: nutritionValidation.correctedData,
             type: type,
+            userId: userId,
             validation: {
               isEdible: edibleCheck.isEdible,
               isPackaged: packagedCheck.isPackaged,
@@ -910,7 +924,8 @@ Return just the numeric score (0-100) and a brief explanation.`;
 
       return new Response(JSON.stringify({ 
         nutritionData: aiResponse,
-        type: type 
+        type: type,
+        userId: userId
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

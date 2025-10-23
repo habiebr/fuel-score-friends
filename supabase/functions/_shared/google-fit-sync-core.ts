@@ -345,8 +345,8 @@ export async function syncMultipleDays(
         console.log(`   ✓ ${dateStr}: ${dayData.sessions.length} sessions`);
       }
 
-      // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Reduced delay for faster sync
+      await new Promise(resolve => setTimeout(resolve, 50));
 
     } catch (error) {
       console.warn(`⚠️  Failed to sync ${dateStr}:`, error);

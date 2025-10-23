@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 import { addDays, format } from 'date-fns';
 import { getLocalDateString } from '@/lib/timezone';
 import { Flame, Clock, TrendingUp, Apple, ChevronDown } from 'lucide-react';
@@ -35,6 +36,7 @@ interface FuelingAdvice {
 
 export function PreTrainingFuelingWidget() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [advice, setAdvice] = useState<FuelingAdvice | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -214,15 +216,15 @@ export function PreTrainingFuelingWidget() {
                   <Flame className="h-5 w-5 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div className="text-left">
-                  <CardTitle className="text-lg text-orange-900 dark:text-orange-100">Pre-Training Fueling Reminder</CardTitle>
+                  <CardTitle className="text-lg text-orange-900 dark:text-orange-100">{t('widgets.preTrainingFueling.title')}</CardTitle>
                   <CardDescription className="dark:text-orange-200/70">
-                    {isOpen ? "Tomorrow's training requires carb-loading" : `${advice.preFuelingCHO_g}g carbs • ${advice.windowStart} - ${advice.windowEnd}`}
+                    {isOpen ? t('widgets.preTrainingFueling.description') : t('widgets.preTrainingFueling.descriptionCollapsed', { carbs: advice.preFuelingCHO_g, start: advice.windowStart, end: advice.windowEnd })}
                   </CardDescription>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-800 text-orange-700 dark:text-orange-200">
-                  Tomorrow
+                  {t('widgets.preTrainingFueling.tomorrow')}
                 </Badge>
                 <ChevronDown className={`h-4 w-4 text-orange-600 dark:text-orange-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
               </div>
@@ -248,7 +250,7 @@ export function PreTrainingFuelingWidget() {
           {advice.trainingTime && (
             <div className="flex items-center gap-1.5 text-sm">
               <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-              <span className="text-muted-foreground dark:text-orange-200/60">Starts at {advice.trainingTime}</span>
+              <span className="text-muted-foreground dark:text-orange-200/60">{t('widgets.preTrainingFueling.startsAt', { time: advice.trainingTime })}</span>
             </div>
           )}
         </div>
@@ -262,10 +264,10 @@ export function PreTrainingFuelingWidget() {
         <div className="rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 p-4">
           <div className="flex items-baseline gap-2 mb-2">
             <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">{advice.preFuelingCHO_g}g</span>
-            <span className="text-sm text-muted-foreground dark:text-orange-200/60">carbohydrates</span>
+            <span className="text-sm text-muted-foreground dark:text-orange-200/60">{t('widgets.preTrainingFueling.carbohydrates')}</span>
           </div>
           <p className="text-xs text-muted-foreground dark:text-orange-200/60">
-            Science-based: 1.5g CHO per kg body weight
+            {t('widgets.preTrainingFueling.scienceBased')}
           </p>
         </div>
         
@@ -273,7 +275,7 @@ export function PreTrainingFuelingWidget() {
         <div className="rounded-lg bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 p-3">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-            <span className="text-sm font-medium dark:text-orange-100">Optimal Fueling Window</span>
+            <span className="text-sm font-medium dark:text-orange-100">{t('widgets.preTrainingFueling.optimalFuelingWindow')}</span>
           </div>
           <p className="text-sm text-muted-foreground dark:text-orange-200/60">
             {advice.windowStart} - {advice.windowEnd}
@@ -284,7 +286,7 @@ export function PreTrainingFuelingWidget() {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <Apple className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-            <span className="text-sm font-medium dark:text-orange-100">Suggested Meals</span>
+            <span className="text-sm font-medium dark:text-orange-100">{t('widgets.preTrainingFueling.suggestedMeals')}</span>
           </div>
           <ul className="space-y-1.5">
             {advice.foods.map((food, idx) => (
@@ -299,7 +301,7 @@ export function PreTrainingFuelingWidget() {
         {/* Footer Tip */}
         <div className="pt-2 border-t border-orange-100 dark:border-orange-800">
           <p className="text-xs text-muted-foreground dark:text-orange-200/60">
-            💡 <strong className="dark:text-orange-100">Pro tip:</strong> Choose easily digestible foods and avoid high fiber/fat to prevent GI distress.
+            {t('widgets.preTrainingFueling.footerTip')}
           </p>
         </div>
           </CardContent>

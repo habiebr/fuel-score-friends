@@ -3,6 +3,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, User, Scale, Ruler, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 interface IncompleteProfileAlertProps {
   missingData?: string[];
@@ -22,6 +23,7 @@ export function IncompleteProfileAlert({
   className = '',
 }: IncompleteProfileAlertProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   // Don't show if everything is complete
   // NOTE: Meal plan is NOT required since science layer can calculate targets!
@@ -47,22 +49,22 @@ export function IncompleteProfileAlert({
   const severityConfig = {
     critical: {
       variant: 'destructive' as const,
-      title: '⚠️ Profile Incomplete',
-      description: 'We need your body metrics to calculate accurate nutrition targets and daily scores.',
+      title: t('alerts.profileIncomplete'),
+      description: t('alerts.profileIncompleteMessage'),
       bgColor: 'bg-destructive/10',
       borderColor: 'border-destructive',
     },
     medium: {
       variant: 'default' as const,
-      title: '🍽️ No Meals Logged Today',
-      description: 'Start logging your meals to track your nutrition and improve your daily score.',
+      title: t('alerts.noMealsLogged'),
+      description: t('alerts.noMealsLoggedMessage'),
       bgColor: 'bg-yellow-500/10',
       borderColor: 'border-yellow-500',
     },
     low: {
       variant: 'default' as const,
-      title: 'ℹ️ Limited Data',
-      description: 'Log more meals throughout the day for a more accurate score.',
+      title: t('alerts.limitedData'),
+      description: t('alerts.limitedDataMessage'),
       bgColor: 'bg-blue-500/10',
       borderColor: 'border-blue-500',
     },
@@ -79,7 +81,7 @@ export function IncompleteProfileAlert({
         
         {!hasBodyMetrics && missingData.length > 0 && (
           <div className="mb-4 space-y-2">
-            <p className="font-semibold text-sm">Missing required information:</p>
+            <p className="font-semibold text-sm">{t('alerts.missingRequiredInfo')}</p>
             <ul className="space-y-1">
               {missingData.map((field, index) => (
                 <li key={index} className="flex items-center gap-2 text-sm">
@@ -98,7 +100,7 @@ export function IncompleteProfileAlert({
             className="mt-2"
           >
             <User className="h-4 w-4 mr-2" />
-            Complete Your Profile
+            {t('alerts.completeYourProfile')}
           </Button>
         )}
 
@@ -110,13 +112,13 @@ export function IncompleteProfileAlert({
             className="mt-2"
           >
             <AlertTriangle className="h-4 w-4 mr-2" />
-            Log Your First Meal
+            {t('alerts.logYourFirstMeal')}
           </Button>
         )}
 
         {hasBodyMetrics && hasFoodLogs && mealsLogged === 0 && (
           <p className="text-xs text-muted-foreground mt-2">
-            Tip: Log meals at specific times (breakfast, lunch, dinner) for better tracking.
+            {t('alerts.tipLogMeals')}
           </p>
         )}
       </AlertDescription>
@@ -156,7 +158,7 @@ export function DataCompletenessScoreDisplay({
     return (
       <div className="flex flex-col items-center">
         <div className="text-5xl font-bold text-muted-foreground">--</div>
-        <div className="text-xs text-destructive font-medium">Profile incomplete</div>
+        <div className="text-xs text-destructive font-medium">{t('alerts.profileIncompleteShort')}</div>
       </div>
     );
   }
@@ -167,7 +169,7 @@ export function DataCompletenessScoreDisplay({
       <div className="text-5xl font-bold text-orange-500">{score}</div>
       <div className="text-xs text-orange-600 font-medium flex items-center gap-1">
         <AlertTriangle className="h-3 w-3" />
-        Incomplete data
+        {t('alerts.incompleteData')}
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { PageHeading } from '@/components/PageHeading';
-import { Calendar } from 'lucide-react';
+import { Calendar, Edit3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TrainingNutritionWidget } from '@/components/TrainingNutritionWidget';
 
@@ -107,6 +107,16 @@ export default function TrainingCalendar() {
             title="Training Calendar"
             description="Weekly view of your training plan"
             icon={Calendar}
+            actions={
+                     <Button
+                       variant="outline"
+                       onClick={() => navigate('/training-plan')}
+                       className="flex items-center gap-2"
+                     >
+                       <Edit3 className="h-4 w-4" />
+                       Edit Training Plan
+                     </Button>
+            }
           />
 
           {/* Navigation Controls */}

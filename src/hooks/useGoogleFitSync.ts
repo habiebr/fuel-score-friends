@@ -34,7 +34,7 @@ export function useGoogleFitSync() {
     if (!user) return;
     const loadLastSync = async () => {
       try {
-        const { data } = await (supabase as any)
+        const { data, error } = await (supabase as any)
           .from('google_tokens')
           .select('last_refreshed_at')
           .eq('user_id', user.id)
@@ -42,6 +42,14 @@ export function useGoogleFitSync() {
           .order('last_refreshed_at', { ascending: false })
           .limit(1)
           .single();
+        
+        if (error) {
+          console.error('Error loading last sync time:', error);
+          if (error.message.includes('access control') || error.message.includes('401')) {
+            console.warn('Authentication error in google_tokens query, skipping last sync time');
+            return;
+          }
+        }
         
         if (data?.last_refreshed_at) {
           setLastSync(new Date(data.last_refreshed_at));
@@ -68,13 +76,22 @@ export function useGoogleFitSync() {
 
       try {
         // Check for active token in database
-        const { data } = await (supabase as any)
+        const { data, error } = await (supabase as any)
           .from('google_tokens')
           .select('id')
           .eq('user_id', user?.id)
           .eq('is_active', true)
           .limit(1)
           .maybeSingle();
+        
+        if (error) {
+          console.error('Error checking Google Fit connection:', error);
+          if (error.message.includes('access control') || error.message.includes('401')) {
+            console.warn('Authentication error in google_tokens query, setting disconnected');
+            if (!cancelled) setIsConnected(false);
+            return;
+          }
+        }
         
         if (!cancelled && data?.id) {
           setIsConnected(true);
@@ -88,7 +105,7 @@ export function useGoogleFitSync() {
     return () => { cancelled = true; };
   }, [getGoogleAccessToken, user?.id]);
 
-  // Auto-sync every 5 minutes if connected (reduced from 15 for instant recovery)
+  // Auto-sync every 2 minutes if connected (optimized for recovery window)
   useEffect(() => {
     if (!user || !isConnected) return;
 
@@ -99,7 +116,7 @@ export function useGoogleFitSync() {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         syncGoogleFit();
-      }, 1000); // 1 second debounce (reduced from 2s for faster response)
+      }, 500); // Reduced to 500ms for faster response
     };
 
     const checkAndSync = async () => {
@@ -112,8 +129,8 @@ export function useGoogleFitSync() {
           .maybeSingle();
         
         const lastSyncTime = data?.last_synced_at ? new Date(data.last_synced_at) : null;
-        // Sync if no data or last sync > 5 minutes ago (reduced from 15 for instant recovery)
-        if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (5 * 60 * 1000)) {
+        // Sync if no data or last sync > 2 minutes ago (optimized for recovery)
+        if (!lastSyncTime || (Date.now() - lastSyncTime.getTime()) > (2 * 60 * 1000)) {
           debouncedSync();
         }
       } catch (error) {
@@ -124,10 +141,10 @@ export function useGoogleFitSync() {
 
     checkAndSync();
 
-    // Foreground interval (5 minutes for instant recovery)
+    // Foreground interval (2 minutes for faster recovery detection)
     const interval = setInterval(() => {
       debouncedSync();
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000);
 
     // Debounce sync on resume/online to prevent multiple simultaneous calls
     const onFocus = () => debouncedSync();
@@ -233,8 +250,10 @@ export function useGoogleFitSync() {
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (reduced from 30s)
 
       const { data: response, error: functionError } = await (supabase as any).functions.invoke('fetch-google-fit-data', {
-        body: { accessToken },
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: { 
+          userId: user.id,
+          accessToken 
+        },
         signal: controller.signal
       });
 
@@ -347,15 +366,16 @@ export function useGoogleFitSync() {
       }
 
       if (!data) {
-        // No data for today, trigger a sync
-        return await syncGoogleFit();
+        // No data for today, return null instead of triggering sync to prevent infinite loops
+        console.log('No Google Fit data for today, sync will be triggered by auto-sync');
+        return null;
       }
 
       // Check if data is stale (older than 15 minutes)
       const lastSyncedAt = data.last_synced_at ? new Date(data.last_synced_at) : null;
       if (!lastSyncedAt || (Date.now() - lastSyncedAt.getTime()) > (15 * 60 * 1000)) {
-        // Data is stale, trigger a background sync
-        syncGoogleFit();
+        // Data is stale, log it but don't trigger sync to prevent infinite loops
+        console.log('Google Fit data is stale, sync will be triggered by auto-sync');
       }
 
       return {
@@ -429,8 +449,11 @@ export function useGoogleFitSync() {
       });
 
       const { data: response, error: functionError } = await (supabase as any).functions.invoke('sync-historical-google-fit-data', {
-        body: { accessToken, daysBack },
-        headers: { Authorization: `Bearer ${session.access_token}` }
+        body: { 
+          userId: user.id,
+          accessToken, 
+          daysBack 
+        }
       });
 
       if (functionError) {
@@ -478,6 +501,36 @@ export function useGoogleFitSync() {
     setSyncStatus(null);
   }, []);
 
+  // Manual sync trigger for immediate recovery detection
+  const triggerImmediateSync = useCallback(async () => {
+    if (!user || !isConnected) return;
+    
+    console.log('🚀 Triggering immediate sync for recovery detection...');
+    setSyncStatus('pending');
+    
+    try {
+      const result = await syncGoogleFit(false); // Not silent for user feedback
+      if (result) {
+        console.log('✅ Immediate sync completed successfully');
+        toast({
+          title: "Sync Complete",
+          description: "Latest workout data synced successfully",
+          duration: 3000,
+        });
+      }
+      return result;
+    } catch (error) {
+      console.error('❌ Immediate sync failed:', error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync workout data. Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      return null;
+    }
+  }, [user, isConnected, syncGoogleFit, toast]);
+
   return {
     syncGoogleFit,
     getTodayData,
@@ -489,6 +542,7 @@ export function useGoogleFitSync() {
     resetErrorState,
     consecutiveErrors,
     lastErrorTime,
+    triggerImmediateSync, // New immediate sync function
     // Historical sync functionality
     syncHistoricalData,
     isHistoricalSyncing,

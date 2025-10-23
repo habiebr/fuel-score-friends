@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom';
+import { startTransition } from 'react';
 import { ArrowLeft, GraduationCap, Users, Heart, MapPin, Calendar, MessageCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { NutriSyncLogo } from '@/components/NutriSyncLogo';
 
 export default function AboutNutriSync() {
   const navigate = useNavigate();
@@ -14,7 +14,7 @@ export default function AboutNutriSync() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => startTransition(() => navigate(-1))}
               className="p-2 hover:bg-muted rounded-md transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -33,7 +33,9 @@ export default function AboutNutriSync() {
           {/* Logo and Introduction */}
           <div className="text-center space-y-6">
             <div className="flex justify-center">
-              <NutriSyncLogo size="xl" />
+              <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center">
+                <Heart className="h-12 w-12 text-primary" />
+              </div>
             </div>
             <div className="space-y-4">
               <h2 className="text-3xl font-bold">Welcome to Nutrisync</h2>
@@ -213,7 +215,11 @@ export default function AboutNutriSync() {
               </p>
               <button 
                 className="w-full px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors flex items-center justify-center gap-2"
-                onClick={() => window.open('mailto:hello@nutrisync.id', '_blank')}
+                onClick={() => {
+                  startTransition(() => {
+                    window.open('mailto:hello@nutrisync.id', '_blank');
+                  });
+                }}
               >
                 <MessageCircle className="h-4 w-4" />
                 Contact Our Team

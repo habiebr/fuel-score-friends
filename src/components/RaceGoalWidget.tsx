@@ -6,6 +6,7 @@ import { Target, Clock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds, format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 
 interface ProfileGoal {
   goal_type?: string | null;
@@ -16,6 +17,7 @@ interface ProfileGoal {
 
 export function RaceGoalWidget() {
   const { user, session } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const realtimeErrorLogged = useRef(false);
   const [goalLabel, setGoalLabel] = useState<string>('');
@@ -209,7 +211,7 @@ export function RaceGoalWidget() {
           <div className="flex items-center gap-3">
             <Target className={`h-4 w-4 ${goalLabel ? 'text-primary' : 'text-muted-foreground'}`} />
             <div className={`font-medium text-sm ${goalLabel ? 'text-primary' : 'text-muted-foreground'}`}>
-              {goalLabel || 'No goal set'}
+              {goalLabel || t('widgets.raceGoal.noGoalSet')}
             </div>
           </div>
           {countdown && raceDate ? (
@@ -224,7 +226,7 @@ export function RaceGoalWidget() {
               onClick={() => navigate('/goals')}
               className="text-primary hover:text-primary-glow"
             >
-              {goalLabel ? 'Update' : 'Set Goal'}
+              {goalLabel ? t('widgets.raceGoal.update') : t('widgets.raceGoal.setGoal')}
             </Button>
           )}
         </div>

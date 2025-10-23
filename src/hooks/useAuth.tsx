@@ -216,6 +216,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (error) {
           console.error('Database token refresh failed:', error);
+          // Don't throw error for authentication issues, just log and continue
+          if (error.message.includes('access control') || error.message.includes('401')) {
+            console.warn('Authentication error in refresh-all-google-tokens, skipping token refresh');
+            return null;
+          }
           throw new Error(error.message || 'Database refresh failed');
         }
 

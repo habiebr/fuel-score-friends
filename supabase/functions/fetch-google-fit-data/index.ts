@@ -8,6 +8,7 @@ import {
   activityTypeNames
 } from '../_shared/google-fit-activities.ts';
 import { normalizeActivityName, isExerciseSession } from '../_shared/google-fit-utils.ts';
+import { fetchDayData, storeDayData } from '../_shared/google-fit-sync-core.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,31 +35,16 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get user from JWT
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Missing Authorization header');
-    }
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
-
-    if (userError || !user) {
-      console.error('JWT validation failed:', userError);
-      throw new Error('Unauthorized - invalid or expired token');
+    // Get user ID from request body (since verify_jwt = false)
+    const { userId, accessToken = null, date = new Date().toISOString().split('T')[0] } = await req.json();
+    
+    if (!userId) {
+      throw new Error('Missing userId in request body');
     }
     
-    // Validate user ID
-    if (!user.id || user.id === 'undefined') {
-      console.error('Invalid user ID:', user.id);
-      throw new Error('Invalid user ID - please sign in again');
-    }
-    
-    console.log(`Fetching Google Fit data for user: ${user.id}`);
+    console.log(`Fetching Google Fit data for user: ${userId}`);
 
     // Get access token from request or database
-    const { accessToken = null, date = new Date().toISOString().split('T')[0] } = await req.json();
     let googleToken = accessToken;
 
     if (!googleToken) {
@@ -66,7 +52,7 @@ serve(async (req) => {
       const { data: tokenData, error: tokenError } = await supabase
         .from('google_tokens')
         .select('access_token, expires_at, refresh_token')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -81,7 +67,7 @@ serve(async (req) => {
       }
       
       if (!tokenData?.access_token) {
-        console.log(`No Google Fit token found for user: ${user.id}`);
+        console.log(`No Google Fit token found for user: ${userId}`);
         throw new Error('No valid Google Fit token found - please connect your Google Fit account in settings');
       }
 
@@ -121,7 +107,7 @@ serve(async (req) => {
                 refresh_count: tokenData.refresh_count + 1,
                 updated_at: now.toISOString()
               })
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('is_active', true);
 
             googleToken = refreshData.access_token;
@@ -161,7 +147,7 @@ serve(async (req) => {
       const { data: cache } = await supabase
         .from('google_fit_cache')
         .select('response_data')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('endpoint', endpoint)
         .eq('request_hash', requestHash)
         .gt('expires_at', new Date().toISOString())
@@ -179,7 +165,7 @@ serve(async (req) => {
       await supabase
         .from('google_fit_cache')
         .upsert({
-          user_id: user.id,
+          user_id: userId,
           endpoint,
           request_hash: requestHash,
           response_data: data,
@@ -237,105 +223,20 @@ serve(async (req) => {
       return data;
     };
 
-    // Fetch all metrics in parallel
-    const [stepsData, caloriesData, activeMinutesData, heartRateData] = await Promise.all([
-      aggregate('com.google.step_count.delta'),
-      aggregate('com.google.calories.expended'),
-      aggregate('com.google.active_minutes'),
-      aggregate('com.google.heart_rate.bpm').catch(() => null)
-    ]);
+    // Use shared core module for comprehensive data extraction
+    const dayData = await fetchDayData(googleToken, startOfDay, endOfDay, { useCache: false });
+    
+    const steps = dayData.steps;
+    const caloriesBurned = dayData.caloriesBurned;
+    const activeMinutes = dayData.activeMinutes;
+    const heartRateAvg = dayData.heartRateAvg;
+    const baseDistanceMeters = dayData.distanceMeters;
+    const normalizedSessions = dayData.sessions;
 
-    // Extract values
-    const steps = stepsData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-    const caloriesBurned = caloriesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-    const activeMinutes = activeMinutesData.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-    const heartRateAvg = heartRateData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal;
-
-    // Fetch sessions with caching
-    const endpoint = 'sessions';
-    const params = {
-      startTime: startOfDay.toISOString(),
-      endTime: endOfDay.toISOString()
-    };
-
-    // Check cache first
-    let sessions: any[] = [];
-    const cachedSessions = await checkCache(endpoint, params);
-    if (cachedSessions) {
-      console.log('Cache hit for sessions');
-      sessions = cachedSessions.session || [];
-    } else {
-      // Make API call if not cached
-      const sessionsRes = await fetch(
-        `https://www.googleapis.com/fitness/v1/users/me/sessions?startTime=${startOfDay.toISOString()}&endTime=${endOfDay.toISOString()}`,
-        { headers: { 'Authorization': `Bearer ${googleToken}` } }
-      );
-
-      if (sessionsRes.status === 401) {
-        throw new Error('Google Fit token expired');
-      }
-      if (sessionsRes.ok) {
-        const sessionsData = await sessionsRes.json();
-        sessions = sessionsData.session || [];
-        // Store in cache
-        await storeCache(endpoint, params, sessionsData);
-      }
-    }
-
-    // Filter sessions to only include exercise activities (with numeric code fallback)
-    const filteredSessions = sessions.filter((session: any) => {
-      const activityTypeRaw = session.activityType ?? session.activityTypeId ?? session.activity ?? '';
-      const activityType = String(activityTypeRaw || '').toLowerCase();
-      const sessionName = String(session.name || '').toLowerCase();
-      const sessionDescription = String(session.description || '').toLowerCase();
-      const numericType = Number(activityTypeRaw);
-
-      const numericKey = Number.isFinite(numericType) ? String(numericType) : null;
-      if (numericKey && excludedActivityCodes.has(numericKey)) {
-        return false;
-      }
-
-      const isExplicitlyExcluded = excludedActivities.some(excluded => 
-        activityType.includes(excluded) || 
-        sessionName.includes(excluded) || 
-        sessionDescription.includes(excluded)
-      );
-      if (isExplicitlyExcluded && !(numericKey && includedActivityCodes.has(numericKey))) {
-        return false;
-      }
-
-      if (numericKey && includedActivityCodes.has(numericKey)) {
-        return true;
-      }
-
-      return exerciseActivities.some(activity => 
-        activityType.includes(activity) || 
-        sessionName.includes(activity) || 
-        sessionDescription.includes(activity)
-      );
-    });
-
-    const normalizedSessions = filteredSessions.map((session: any) => {
-      const copy = { ...session };
-      const numericType = Number(copy.activityType ?? copy.activityTypeId ?? copy.activity);
-      if (!Number.isNaN(numericType)) {
-        copy._activityTypeNumeric = numericType;
-        if (!copy.activityType) {
-          copy.activityType = numericType;
-        }
-      }
-      const friendlyName = normalizeActivityName(copy);
-      if (friendlyName) {
-        copy.name = friendlyName;
-        if (!copy.description) {
-          copy.description = friendlyName;
-        }
-      }
-      return copy;
-    });
+    // Using sessions from shared core module (comprehensive data extraction)
 
     // Calculate distance for exercise sessions
-    let exerciseDistanceMeters = 0;
+    let exerciseDistanceMeters = baseDistanceMeters;
     if (normalizedSessions.length > 0) {
       for (const session of normalizedSessions) {
         try {
@@ -381,7 +282,7 @@ serve(async (req) => {
     const { error: upsertErr } = await supabase
       .from('google_fit_data')
       .upsert({
-        user_id: user.id,
+        user_id: userId,
         date,
         steps,
         calories_burned: caloriesBurned,
@@ -406,7 +307,7 @@ serve(async (req) => {
           (Number.isFinite(numericType) && activityTypeNames[numericType]) ||
           String(s.activity_type || s.activityType || s.activity || 'run');
         return {
-          user_id: user.id,
+          user_id: userId,
           session_id: String(sessionId),
           start_time: s.startTimeMillis ? new Date(Number(s.startTimeMillis)).toISOString() : new Date().toISOString(),
           end_time: s.endTimeMillis ? new Date(Number(s.endTimeMillis)).toISOString() : new Date().toISOString(),

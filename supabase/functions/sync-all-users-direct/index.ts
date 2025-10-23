@@ -5,31 +5,12 @@ import {
   excludedActivityCodes,
   activityTypeNames 
 } from '../_shared/google-fit-activities.ts';
-import { normalizeSession as normalizeGoogleFitSession } from '../_shared/google-fit-utils.ts';
+import { normalizeSession } from '../_shared/google-fit-utils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, cache-control, expires, pragma',
 };
-
-function normalizeSession(session: any) {
-  const copy = { ...session };
-  const activityTypeRaw = copy.activityType ?? copy.activityTypeId ?? copy.activity ?? '';
-  const numericType = Number(activityTypeRaw);
-  if (!Number.isNaN(numericType)) {
-    copy._activityTypeNumeric = numericType;
-  }
-  if (!copy.name || !String(copy.name).trim()) {
-    const friendly = !Number.isNaN(numericType) ? activityTypeNames[numericType] : null;
-    if (friendly) {
-      copy.name = friendly;
-      if (!copy.description) {
-        copy.description = friendly;
-      }
-    }
-  }
-  return copy;
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -107,7 +88,7 @@ serve(async (req) => {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - daysBack);
 
-T        // Fetch sessions (handle pagination)
+        // Fetch sessions (handle pagination)
         let exerciseSessions: any[] = [];
         let pageToken: string | undefined = undefined;
         do {
@@ -210,18 +191,28 @@ T        // Fetch sessions (handle pagination)
               const numericType = Number(session._activityTypeNumeric ?? session.activityType ?? session.activity);
               const friendlyName = (!Number.isNaN(numericType) && activityTypeNames[numericType]) || null;
               const activityTypeName = String(session.name || session.description || friendlyName || 'Workout').trim();
+              
+              // Validate timestamps before creating Date objects
+              const startTimeMillis = parseInt(session.startTimeMillis);
+              const endTimeMillis = parseInt(session.endTimeMillis);
+              
+              if (isNaN(startTimeMillis) || isNaN(endTimeMillis)) {
+                console.warn(`⚠️ Invalid timestamps for session ${session.id}: startTimeMillis=${session.startTimeMillis}, endTimeMillis=${session.endTimeMillis}`);
+                return null; // Skip this session
+              }
+              
               return {
                 user_id: token.user_id,
                 session_id: session.id,
-                start_time: new Date(parseInt(session.startTimeMillis)).toISOString(),
-                end_time: new Date(parseInt(session.endTimeMillis)).toISOString(),
+                start_time: new Date(startTimeMillis).toISOString(),
+                end_time: new Date(endTimeMillis).toISOString(),
                 activity_type: activityTypeName,
                 name: session.name || activityTypeName,
                 description: session.description || activityTypeName,
                 source: 'google_fit',
                 raw: session
               };
-            });
+            }).filter(session => session !== null); // Remove null sessions with invalid timestamps
 
             const { error: sessionsError } = await supabaseClient
               .from('google_fit_sessions')
@@ -237,27 +228,65 @@ T        // Fetch sessions (handle pagination)
               continue;
             }
 
-            // HYBRID RECOVERY DETECTION: Check for recent workouts (< 30 min)
+            // HYBRID RECOVERY DETECTION: Check for recent workouts (< 2 hours for debugging)
             try {
               const now = Date.now();
-              const thirtyMinutesAgo = now - (30 * 60 * 1000);
+              const twoHoursAgo = now - (2 * 60 * 60 * 1000); // Extended to 2 hours for testing
               
-              // Find workouts that ended in last 30 minutes
+              console.log(`🔍 Checking for recent workouts for user ${token.user_id}...`);
+              console.log(`📊 Total exercise sessions: ${exerciseSessions.length}`);
+              
+              // Log all exercise sessions found (for debugging)
+              if (exerciseSessions.length > 0) {
+                console.log(`📋 All exercise sessions found:`);
+                exerciseSessions.forEach((session, index) => {
+                  const calories = session.calories || 'unknown';
+                  const startTimeMillis = parseInt(session.startTimeMillis);
+                  const endTimeMillis = parseInt(session.endTimeMillis);
+                  
+                  if (isNaN(startTimeMillis) || isNaN(endTimeMillis)) {
+                    console.log(`  ${index + 1}. ${session.name || 'Unknown'} (${calories} cal) - INVALID TIMESTAMPS`);
+                    return;
+                  }
+                  
+                  const duration = Math.round((endTimeMillis - startTimeMillis) / (60 * 1000));
+                  const endTime = new Date(endTimeMillis);
+                  const timeSinceEnd = Math.round((now - endTime.getTime()) / (60 * 1000));
+                  console.log(`  ${index + 1}. ${session.name || 'Unknown'} (${calories} cal, ${duration} min) - ended ${timeSinceEnd} min ago`);
+                });
+              }
+              
+              // Find workouts that ended in last 2 hours (extended for testing)
               const recentWorkouts = exerciseSessions.filter((session: any) => {
-                const endTime = new Date(parseInt(session.endTimeMillis)).getTime();
+                const endTimeMillis = parseInt(session.endTimeMillis);
+                if (isNaN(endTimeMillis)) return false; // Skip sessions with invalid timestamps
+                
+                const endTime = new Date(endTimeMillis).getTime();
                 const timeSinceEnd = now - endTime;
-                return timeSinceEnd > 0 && timeSinceEnd < 30 * 60 * 1000;
+                const isRecent = timeSinceEnd > 0 && timeSinceEnd < (2 * 60 * 60 * 1000); // 2 hours
+                
+                if (isRecent) {
+                  const calories = session.calories || 'unknown';
+                  const startTimeMillis = parseInt(session.startTimeMillis);
+                  const duration = isNaN(startTimeMillis) ? 0 : Math.round((endTimeMillis - startTimeMillis) / (60 * 1000));
+                  console.log(`🏃 Found recent workout: ${session.name || 'Unknown'} (${calories} cal, ${duration} min) ended ${Math.round(timeSinceEnd / (60 * 1000))} minutes ago`);
+                }
+                
+                return isRecent;
               });
               
               if (recentWorkouts.length > 0) {
                 // Take most recent workout
-                const mostRecent = recentWorkouts.sort((a: any, b: any) => 
-                  parseInt(b.endTimeMillis) - parseInt(a.endTimeMillis)
-                )[0];
+                const mostRecent = recentWorkouts.sort((a: any, b: any) => {
+                  const aEndTime = parseInt(a.endTimeMillis);
+                  const bEndTime = parseInt(b.endTimeMillis);
+                  return isNaN(aEndTime) || isNaN(bEndTime) ? 0 : bEndTime - aEndTime;
+                })[0];
                 
-                const endTime = new Date(parseInt(mostRecent.endTimeMillis)).getTime();
+                const endTimeMillis = parseInt(mostRecent.endTimeMillis);
+                const endTime = new Date(endTimeMillis).getTime();
                 const minutesSinceEnd = Math.floor((now - endTime) / (60 * 1000));
-                const remainingMinutes = 30 - minutesSinceEnd;
+                const remainingMinutes = Math.max(0, 120 - minutesSinceEnd); // 2 hours window
                 
                 const numericType = Number(mostRecent._activityTypeNumeric ?? mostRecent.activityType ?? mostRecent.activity);
                 const friendlyName = (!Number.isNaN(numericType) && activityTypeNames[numericType]) || null;
@@ -272,7 +301,7 @@ T        // Fetch sessions (handle pagination)
                     user_id: token.user_id,
                     type: 'recovery',
                     title: 'Recovery Window Active! ⏰',
-                    message: `${workoutName} completed ${minutesSinceEnd} min ago. ${remainingMinutes} min remaining for optimal recovery nutrition.`,
+                    message: `${workoutName} completed ${minutesSinceEnd} min ago. ${remainingMinutes} min remaining for optimal recovery nutrition. (Extended window for testing)`,
                     scheduled_for: new Date().toISOString(),
                     training_date: new Date().toISOString().split('T')[0],
                     activity_type: workoutName,
@@ -283,7 +312,12 @@ T        // Fetch sessions (handle pagination)
                       name: workoutName,
                       minutes_since_end: minutesSinceEnd,
                       remaining_minutes: remainingMinutes,
-                      distance: mostRecent.distance ? (mostRecent.distance / 1000).toFixed(1) : null
+                      distance: mostRecent.distance ? (mostRecent.distance / 1000).toFixed(1) : null,
+                      calories_burned: mostRecent.calories || null,
+                      duration_minutes: (() => {
+                        const startTimeMillis = parseInt(mostRecent.startTimeMillis);
+                        return isNaN(startTimeMillis) ? 0 : Math.round((endTimeMillis - startTimeMillis) / (60 * 1000));
+                      })()
                     })
                   }, {
                     onConflict: 'user_id,training_date,type'
@@ -293,6 +327,38 @@ T        // Fetch sessions (handle pagination)
                   console.error(`Failed to create recovery notification for user ${token.user_id}:`, notifError);
                 } else {
                   console.log(`✅ Recovery notification created for user ${token.user_id}`);
+                  
+                  // SYNC TO TRAINING_ACTIVITIES TABLE for training widget display
+                  try {
+                    const { error: trainingError } = await supabaseClient
+                      .from('training_activities')
+                      .upsert({
+                        user_id: token.user_id,
+                        date: new Date().toISOString().split('T')[0],
+                        activity_type: workoutName,
+                        start_time: new Date(parseInt(mostRecent.startTimeMillis)).toISOString(),
+                        duration_minutes: (() => {
+                          const startTimeMillis = parseInt(mostRecent.startTimeMillis);
+                          return isNaN(startTimeMillis) ? 0 : Math.round((endTimeMillis - startTimeMillis) / (60 * 1000));
+                        })(),
+                        distance_km: mostRecent.distance ? (mostRecent.distance / 1000).toFixed(2) : null,
+                        intensity: 'moderate', // Default intensity
+                        estimated_calories: mostRecent.calories || null,
+                        notes: `Synced from Google Fit: ${workoutName}`,
+                        is_actual: true, // Mark as actual training
+                        source: 'google_fit'
+                      }, {
+                        onConflict: 'user_id,date,activity_type,is_actual'
+                      });
+                    
+                    if (trainingError) {
+                      console.warn('Failed to sync to training_activities:', trainingError);
+                    } else {
+                      console.log(`✅ Training activity synced to training_activities for user ${token.user_id}`);
+                    }
+                  } catch (syncError) {
+                    console.warn('Error syncing to training_activities:', syncError);
+                  }
                   
                   // Send push notification (Android users)
                   try {
@@ -325,6 +391,60 @@ T        // Fetch sessions (handle pagination)
                   } catch (pushError) {
                     console.warn(`Push notification error for user ${token.user_id}:`, pushError);
                     // Non-critical error, continue
+                  }
+                }
+              } else {
+                console.log(`No recent workouts found for user ${token.user_id}`);
+                
+                // FALLBACK: Create training activities for today's sessions even if not recent
+                const todaySessions = exerciseSessions.filter((session: any) => {
+                  const startTimeMillis = parseInt(session.startTimeMillis);
+                  if (isNaN(startTimeMillis)) return false; // Skip sessions with invalid timestamps
+                  
+                  const sessionDate = new Date(startTimeMillis);
+                  const today = new Date();
+                  return sessionDate.toDateString() === today.toDateString();
+                });
+                
+                if (todaySessions.length > 0) {
+                  console.log(`📅 Found ${todaySessions.length} sessions for today, creating training activities...`);
+                  
+                  for (const session of todaySessions) {
+                    try {
+                      const numericType = Number(session._activityTypeNumeric ?? session.activityType ?? session.activity);
+                      const friendlyName = (!Number.isNaN(numericType) && activityTypeNames[numericType]) || null;
+                      const workoutName = session.name || friendlyName || session.description || 'Workout';
+                      
+                      const { error: trainingError } = await supabaseClient
+                        .from('training_activities')
+                        .upsert({
+                          user_id: token.user_id,
+                          date: new Date().toISOString().split('T')[0],
+                          activity_type: workoutName,
+                          start_time: new Date(parseInt(session.startTimeMillis)).toISOString(),
+                          duration_minutes: (() => {
+                            const startTimeMillis = parseInt(session.startTimeMillis);
+                            const endTimeMillis = parseInt(session.endTimeMillis);
+                            return isNaN(startTimeMillis) || isNaN(endTimeMillis) ? 0 : Math.round((endTimeMillis - startTimeMillis) / (60 * 1000));
+                          })(),
+                          distance_km: session.distance ? (session.distance / 1000).toFixed(2) : null,
+                          intensity: 'moderate',
+                          estimated_calories: session.calories || null,
+                          notes: `Synced from Google Fit: ${workoutName}`,
+                          is_actual: true,
+                          source: 'google_fit'
+                        }, {
+                          onConflict: 'user_id,date,activity_type,is_actual'
+                        });
+                      
+                      if (trainingError) {
+                        console.warn(`Failed to sync session ${session.id} to training_activities:`, trainingError);
+                      } else {
+                        console.log(`✅ Session ${session.id} synced to training_activities`);
+                      }
+                    } catch (syncError) {
+                      console.warn(`Error syncing session ${session.id}:`, syncError);
+                    }
                   }
                 }
               }
@@ -384,8 +504,12 @@ T        // Fetch sessions (handle pagination)
               const dayStart = new Date(day + 'T00:00:00Z');
               const dayEnd = new Date(day + 'T23:59:59Z');
               const daySessions = (exerciseSessions || []).filter((s: any) => {
-                const sessionStart = new Date(Number(s.startTimeMillis));
-                const sessionEnd = new Date(Number(s.endTimeMillis));
+                const startTimeMillis = parseInt(s.startTimeMillis);
+                const endTimeMillis = parseInt(s.endTimeMillis);
+                if (isNaN(startTimeMillis) || isNaN(endTimeMillis)) return false; // Skip sessions with invalid timestamps
+                
+                const sessionStart = new Date(startTimeMillis);
+                const sessionEnd = new Date(endTimeMillis);
                 // Include session if it overlaps any part of the day
                 return sessionStart <= dayEnd && sessionEnd >= dayStart;
               }).map((s: any) => {
@@ -422,8 +546,8 @@ T        // Fetch sessions (handle pagination)
           console.warn('Aggregate fetch error:', e);
         }
 
-        // Add a small delay between users to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Reduced delay between users for faster recovery detection
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         results.successful_syncs++;
         console.log(`Successfully synced user ${token.user_id}`);

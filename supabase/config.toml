@@ -39,3 +39,21 @@ verify_jwt = false
 
 [functions.update-actual-training]
 verify_jwt = false
+
+[functions.gamification]
+verify_jwt = true
+
+[functions.fetch-google-fit-data]
+verify_jwt = false
+
+[functions.sync-historical-google-fit-data]
+verify_jwt = false
+
+[functions.generate-meal-plan-simple]
+verify_jwt = false
+
+[functions.generate-meal-plan-range]
+verify_jwt = false
+
+[functions.refresh-all-google-tokens]
+verify_jwt = false

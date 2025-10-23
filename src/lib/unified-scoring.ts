@@ -15,6 +15,7 @@
 export type TrainingLoad = 'rest' | 'easy' | 'moderate' | 'long' | 'quality';
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type ScoringStrategy = 'runner-focused' | 'general' | 'meal-level';
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 
 export interface NutritionTargets {
   calories: number;
@@ -78,6 +79,7 @@ export interface ScoringContext {
   // Scoring configuration
   load: TrainingLoad;
   strategy: ScoringStrategy;
+  experienceLevel?: ExperienceLevel;
   // Flags and bonuses
   flags?: {
     windowSyncAll?: boolean;
@@ -160,6 +162,33 @@ const SCORING_CONFIG = {
 } as const;
 
 /**
+ * Progressive scoring tolerances based on experience level
+ */
+const EXPERIENCE_TOLERANCES = {
+  beginner: {
+    perfect: 0.15,    // ±15% = perfect (very forgiving)
+    good: 0.25,       // ±25% = good
+    fair: 0.40,       // ±40% = fair
+    poor: 0.60,       // ±60% = poor
+    veryPoor: 1.0,    // >60% = very poor
+  },
+  intermediate: {
+    perfect: 0.10,    // ±10% = perfect (current default)
+    good: 0.20,       // ±20% = good
+    fair: 0.30,       // ±30% = fair
+    poor: 0.50,       // ±50% = poor
+    veryPoor: 0.80,   // >50% = very poor
+  },
+  advanced: {
+    perfect: 0.05,    // ±5% = perfect (strict)
+    good: 0.10,       // ±10% = good
+    fair: 0.20,       // ±20% = fair
+    poor: 0.30,       // ±30% = poor
+    veryPoor: 0.50,   // >30% = very poor
+  },
+} as const;
+
+/**
  * Load-based weights for nutrition vs training importance
  */
 const LOAD_WEIGHTS: Record<TrainingLoad, { nutrition: number; training: number }> = {
@@ -171,19 +200,23 @@ const LOAD_WEIGHTS: Record<TrainingLoad, { nutrition: number; training: number }
 };
 
 /**
- * Calculate macro score using piecewise function
+ * Calculate macro score using piecewise function with progressive tolerances
  */
-function calculateMacroScore(actual: number, target: number): number {
+function calculateMacroScore(actual: number, target: number, experienceLevel: ExperienceLevel = 'intermediate'): number {
   // If target is 0 or missing, this indicates missing meal plan data
   // Return 0 instead of 100 to avoid rewarding incomplete data
   if (target <= 0) return 0;
   
   const errorPercent = Math.abs(actual - target) / target;
+  const tolerances = EXPERIENCE_TOLERANCES[experienceLevel];
   
-  if (errorPercent <= 0.05) return 100;  // ±5% = perfect
-  if (errorPercent <= 0.10) return 60;  // ±10% = good
-  if (errorPercent <= 0.20) return 20;  // ±20% = poor
-  return 0;  // >20% = fail
+  // Progressive scoring based on experience level
+  if (errorPercent <= tolerances.perfect) return 100;
+  if (errorPercent <= tolerances.good) return 80;
+  if (errorPercent <= tolerances.fair) return 60;
+  if (errorPercent <= tolerances.poor) return 40;
+  if (errorPercent <= tolerances.veryPoor) return 20;
+  return 0;  // Beyond very poor threshold
 }
 
 /**
@@ -198,7 +231,23 @@ function calculateTimingScore(
   if (windows.pre.applicable) {
     const need = (target.preCho ?? 0) * 0.8;
     const got = actual.preCho ?? 0;
-    preScore = (windows.pre.inWindow && got >= need && need > 0) ? 100 : 0;
+    if (need <= 0) {
+      preScore = 100;
+    } else if (windows.pre.inWindow) {
+      // In window: gradual scoring based on how close to target
+      const ratio = got / need;
+      if (ratio >= 1.0) preScore = 100;      // 100%+ of target
+      else if (ratio >= 0.8) preScore = 90;  // 80-99% of target
+      else if (ratio >= 0.6) preScore = 70;  // 60-79% of target
+      else if (ratio >= 0.4) preScore = 50;  // 40-59% of target
+      else preScore = 30;                     // <40% of target
+    } else {
+      // Out of window: partial credit for effort
+      const ratio = got / need;
+      if (ratio >= 0.8) preScore = 60;        // Good amount, wrong timing
+      else if (ratio >= 0.5) preScore = 40;  // Decent amount, wrong timing
+      else preScore = 20;                     // Low amount, wrong timing
+    }
   }
 
   let duringScore = 100;
@@ -225,7 +274,28 @@ function calculateTimingScore(
     const needPro = (target.postPro ?? 0) * 0.8;
     const gotCho = actual.postCho ?? 0;
     const gotPro = actual.postPro ?? 0;
-    postScore = (windows.post.inWindow && gotCho >= needCho && gotPro >= needPro && (needCho + needPro > 0)) ? 100 : 0;
+    
+    if (needCho + needPro <= 0) {
+      postScore = 100;
+    } else if (windows.post.inWindow) {
+      // In window: score both carbs and protein separately, then average
+      const choRatio = needCho > 0 ? Math.min(gotCho / needCho, 1.0) : 1.0;
+      const proRatio = needPro > 0 ? Math.min(gotPro / needPro, 1.0) : 1.0;
+      
+      const choScore = choRatio >= 0.8 ? 100 : choRatio >= 0.6 ? 80 : choRatio >= 0.4 ? 60 : 40;
+      const proScore = proRatio >= 0.8 ? 100 : proRatio >= 0.6 ? 80 : proRatio >= 0.4 ? 60 : 40;
+      
+      postScore = Math.round((choScore + proScore) / 2);
+    } else {
+      // Out of window: partial credit
+      const choRatio = needCho > 0 ? Math.min(gotCho / needCho, 1.0) : 1.0;
+      const proRatio = needPro > 0 ? Math.min(gotPro / needPro, 1.0) : 1.0;
+      const avgRatio = (choRatio + proRatio) / 2;
+      
+      if (avgRatio >= 0.8) postScore = 60;      // Good amount, wrong timing
+      else if (avgRatio >= 0.5) postScore = 40; // Decent amount, wrong timing
+      else postScore = 20;                       // Low amount, wrong timing
+    }
   }
 
   return preScore * 0.4 + duringScore * 0.4 + postScore * 0.2;
@@ -334,7 +404,7 @@ function calculateModifiers(
  * Main unified scoring function
  */
 export function calculateUnifiedScore(context: ScoringContext): ScoreBreakdown {
-  const { nutrition, training, load, strategy, flags } = context;
+  const { nutrition, training, load, strategy, flags, experienceLevel = 'intermediate' } = context;
   const config = SCORING_CONFIG[strategy];
   const weights = LOAD_WEIGHTS[load];
   
@@ -343,11 +413,11 @@ export function calculateUnifiedScore(context: ScoringContext): ScoreBreakdown {
   const hasFoodLogs = nutrition.actual.calories > 0 || nutrition.mealsPresent.length > 0;
   const mealsLogged = nutrition.mealsPresent.length;
   
-  // Calculate macro scores
-  const calorieScore = calculateMacroScore(nutrition.actual.calories, nutrition.target.calories);
-  const proteinScore = calculateMacroScore(nutrition.actual.protein, nutrition.target.protein);
-  const carbsScore = calculateMacroScore(nutrition.actual.carbs, nutrition.target.carbs);
-  const fatScore = calculateMacroScore(nutrition.actual.fat, nutrition.target.fat);
+  // Calculate macro scores with experience level
+  const calorieScore = calculateMacroScore(nutrition.actual.calories, nutrition.target.calories, experienceLevel);
+  const proteinScore = calculateMacroScore(nutrition.actual.protein, nutrition.target.protein, experienceLevel);
+  const carbsScore = calculateMacroScore(nutrition.actual.carbs, nutrition.target.carbs, experienceLevel);
+  const fatScore = calculateMacroScore(nutrition.actual.fat, nutrition.target.fat, experienceLevel);
   
   // Weighted macro score
   const macrosScore = 
@@ -530,6 +600,28 @@ export function determineTrainingLoad(activities: Array<{ duration_minutes?: num
 }
 
 /**
+ * Determine user's experience level based on their data history
+ */
+export function determineExperienceLevel(
+  daysWithData: number,
+  averageScore: number,
+  hasConsistentLogging: boolean
+): ExperienceLevel {
+  // Beginner: < 30 days of data OR average score < 60
+  if (daysWithData < 30 || averageScore < 60) {
+    return 'beginner';
+  }
+  
+  // Advanced: > 90 days AND average score > 80 AND consistent logging
+  if (daysWithData > 90 && averageScore > 80 && hasConsistentLogging) {
+    return 'advanced';
+  }
+  
+  // Intermediate: everything else
+  return 'intermediate';
+}
+
+/**
  * Create scoring context from raw data
  */
 export function createScoringContext(
@@ -551,7 +643,7 @@ export function createScoringContext(
   // Default fueling windows
   const windows: FuelingWindows = options.windows || {
     pre: { applicable: load !== 'rest', inWindow: true },
-    during: { applicable: load === 'long', inWindow: true },
+    during: { applicable: load === 'long' },
     post: { applicable: load !== 'rest', inWindow: true },
   };
   

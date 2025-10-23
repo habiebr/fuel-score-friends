@@ -9,6 +9,7 @@ import { useGoogleFitSync } from '@/hooks/useGoogleFitSync';
 import { supabase } from '@/integrations/supabase/client';
 import { NutriSyncLogo } from '@/components/NutriSyncLogo';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -17,6 +18,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
   const { canInstall, installPWA } = usePWA() as any;
   const { connectGoogleFit } = useGoogleFitSync();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const [step, setStep] = useState<Step>(0);
 
@@ -159,45 +161,45 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
             {step === 1 && (
               <div className="w-full max-w-2xl mx-auto space-y-8 px-4 sm:px-6">
                 <div className="text-center space-y-6">
-                  <h2 className="text-3xl font-bold text-white">Step 1: Basic Profile</h2>
-                  <p className="text-lg text-gray-300">Let's get to know you better! Please fill in your basic information so we can personalize your nutrition plan.</p>
-                  <p className="text-sm text-gray-400">Fields marked with <span className="text-red-400">*</span> are required</p>
+                  <h2 className="text-3xl font-bold text-white">{t('onboarding.step1BasicProfile')}</h2>
+                  <p className="text-lg text-gray-300">{t('onboarding.getToKnowYou')}</p>
+                  <p className="text-sm text-gray-400">{t('onboarding.fieldsMarkedRequired')}</p>
                 </div>
                 <div className="grid grid-cols-1 gap-8">
                   <div>
-                    <Label className="text-white text-lg">Name <span className="text-red-400">*</span></Label>
+                    <Label className="text-white text-lg">{t('profile.name')} <span className="text-red-400">*</span></Label>
                     <Input value={name} onChange={e => setName(e.target.value)} className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
-                    <Label className="text-white text-lg">Age <span className="text-red-400">*</span></Label>
+                    <Label className="text-white text-lg">{t('profile.age')} <span className="text-red-400">*</span></Label>
                     <Input value={age} onChange={e => setAge(e.target.value)} type="number" className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
-                    <Label className="text-white text-lg">Sex <span className="text-red-400">*</span></Label>
+                    <Label className="text-white text-lg">{t('profile.sex')} <span className="text-red-400">*</span></Label>
                     <Select value={sex} onValueChange={(v: any) => setSex(v)}>
-                      <SelectTrigger className="mt-2 h-12 text-lg"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectTrigger className="mt-2 h-12 text-lg"><SelectValue placeholder={t('onboarding.select')} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="male">{t('profile.male')}</SelectItem>
+                        <SelectItem value="female">{t('profile.female')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-white text-lg">Height (cm) <span className="text-red-400">*</span></Label>
+                    <Label className="text-white text-lg">{t('onboarding.heightCm')} <span className="text-red-400">*</span></Label>
                     <Input value={height} onChange={e => setHeight(e.target.value)} type="number" className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
-                    <Label className="text-white text-lg">Weight (kg) <span className="text-red-400">*</span></Label>
+                    <Label className="text-white text-lg">{t('onboarding.weightKg')} <span className="text-red-400">*</span></Label>
                     <Input value={weight} onChange={e => setWeight(e.target.value)} type="number" className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                   <div>
-                    <Label className="text-white text-lg">City</Label>
-                    <Input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g., Jakarta" className="mt-2 h-12 text-lg px-3 py-3" />
+                    <Label className="text-white text-lg">{t('onboarding.city')}</Label>
+                    <Input value={city} onChange={e => setCity(e.target.value)} placeholder={t('onboarding.cityPlaceholder')} className="mt-2 h-12 text-lg px-3 py-3" />
                   </div>
                 </div>
                 <div className="flex justify-between pt-8">
-                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
-                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">{t('common.back')}</Button>
+                  <Button onClick={next} className="h-12 px-8">{t('common.continue')}</Button>
                 </div>
               </div>
             )}
@@ -224,8 +226,8 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                   </div>
                 </div>
                 <div className="flex justify-between pt-8">
-                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
-                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">{t('common.back')}</Button>
+                  <Button onClick={next} className="h-12 px-8">{t('common.continue')}</Button>
                 </div>
               </div>
             )}
@@ -286,8 +288,8 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                   </div>
                 </div>
                 <div className="flex justify-between pt-8">
-                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
-                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">{t('common.back')}</Button>
+                  <Button onClick={next} className="h-12 px-8">{t('common.continue')}</Button>
                 </div>
               </div>
             )}
@@ -296,7 +298,7 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
               <div className="text-center space-y-4">
                 <h3 className="text-2xl font-bold">Thank you for being our early user!</h3>
                 <p className="text-lg text-muted-foreground">Your feedback helps us improve the app.</p>
-                <div className="flex justify-center"><Button onClick={next} size="lg">Continue</Button></div>
+                <div className="flex justify-center"><Button onClick={next} size="lg">{t('common.continue')}</Button></div>
               </div>
             )}
 
@@ -316,8 +318,8 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                 </div>
                     <p className="text-lg text-gray-300 text-center max-w-md px-4">To get pre-training meal suggestions, please complete your training plan. Go to <span className="font-semibold text-white">Profile &gt; Training Goals</span>.</p>
                 <div className="flex justify-between w-full max-w-md pt-4 px-4">
-                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
-                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">{t('common.back')}</Button>
+                  <Button onClick={next} className="h-12 px-8">{t('common.continue')}</Button>
                 </div>
               </div>
             )}
@@ -338,8 +340,8 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                 </div>
                     <p className="text-lg text-gray-300 text-center max-w-md px-4">To log your meal, please <span className="font-semibold text-white">click the button on the right bottom corner</span>.</p>
                 <div className="flex justify-between w-full max-w-md pt-4 px-4">
-                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
-                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">{t('common.back')}</Button>
+                  <Button onClick={next} className="h-12 px-8">{t('common.continue')}</Button>
                 </div>
               </div>
             )}
@@ -360,8 +362,8 @@ export default function OnboardingWizard({ onDone }: { onDone?: () => void }) {
                 </div>
                     <p className="text-lg text-gray-300 text-center max-w-md px-4">Add this site to your home screen for easy access. Go to <span className="font-semibold text-white">Profile</span> and follow the prompt under your <span className="font-semibold text-white">Profile Name</span>.</p>
                 <div className="flex justify-between w-full max-w-md pt-4 px-4">
-                  <Button variant="outline" onClick={prev} className="h-12 px-8">Back</Button>
-                  <Button onClick={next} className="h-12 px-8">Continue</Button>
+                  <Button variant="outline" onClick={prev} className="h-12 px-8">{t('common.back')}</Button>
+                  <Button onClick={next} className="h-12 px-8">{t('common.continue')}</Button>
                 </div>
               </div>
             )}

@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, memo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Info } from "lucide-react";
@@ -14,7 +14,7 @@ interface ScoreCardProps {
   tooltip?: ReactNode;
 }
 
-export function ScoreCard({ 
+export const ScoreCard = memo(function ScoreCard({ 
   title, 
   score, 
   maxScore = 100, 
@@ -90,4 +90,4 @@ export function ScoreCard({
       </CardContent>
     </Card>
   );
-}
+});
