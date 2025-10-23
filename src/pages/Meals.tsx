@@ -686,8 +686,8 @@ export default function Meals() {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-background pb-20 overflow-x-hidden w-screen">
-        <div className="w-full px-4 py-4 box-border">
+      <div className="min-h-screen bg-gradient-background pb-20">
+        <div className="max-w-none mx-auto p-4">
           <PageHeading
             title="Meals"
             description="Track, review and plan your nutrition"
