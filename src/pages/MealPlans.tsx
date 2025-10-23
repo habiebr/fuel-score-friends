@@ -123,7 +123,7 @@ export default function MealPlans() {
       if (error) throw error;
 
       await loadWeeklyPlans();
-      toast({ title: 'Plans generated', description: '7-day meal plans created.' });
+      // toast({ title: 'Plans generated', description: '7-day meal plans created.' });
     } catch (e) {
       // Fallback: per-day generation to handle potential conflicts when rows exist
       try {
@@ -145,7 +145,7 @@ export default function MealPlans() {
           } catch {}
         }
         await loadWeeklyPlans();
-        toast({ title: 'Plans generated', description: 'Generated day-by-day successfully.' });
+        // toast({ title: 'Plans generated', description: 'Generated day-by-day successfully.' });
       } catch (err) {
         console.error('Failed to generate week', err);
         toast({ title: 'Generation failed', description: 'Could not generate plans.', variant: 'destructive' });
@@ -174,10 +174,10 @@ export default function MealPlans() {
       if (error) throw error;
 
       await loadWeeklyPlans();
-      toast({ 
-        title: '🤖 AI Menu Generated!', 
-        description: 'New meal suggestions created for today.' 
-      });
+      // toast({ 
+      //   title: '🤖 AI Menu Generated!', 
+      //   description: 'New meal suggestions created for today.' 
+      // });
     } catch (err) {
       console.error('Failed to generate AI menu', err);
       toast({ 

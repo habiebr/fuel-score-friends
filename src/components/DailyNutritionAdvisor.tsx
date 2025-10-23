@@ -108,10 +108,10 @@ export function DailyNutritionAdvisor() {
         };
 
         setAdvice(advice);
-        toast({
-          title: 'Running-specific nutrition advice generated!',
-          description: 'AI has analyzed your running goals and created personalized recommendations',
-        });
+        // toast({
+        //   title: 'Running-specific nutrition advice generated!',
+        //   description: 'AI has analyzed your running goals and created personalized recommendations',
+        // });
       } else {
         // Fallback to basic advice if no meal plan data
         const advice: NutritionAdvice = {
