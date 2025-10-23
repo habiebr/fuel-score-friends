@@ -113,6 +113,67 @@ function calculateEstimatedCalories(distanceKm: number | null, durationMinutes: 
   return Math.round(durationMinutes * caloriesPerMinute);
 }
 
+function parseRunnaNotes(description: string | undefined): string {
+  if (!description) return '';
+  
+  // Remove "View in Runna app" links and other promotional text
+  let cleaned = description
+    .replace(/📲 View in the Runna app: https:\/\/[^\s]+/g, '')
+    .replace(/View in the Runna app: https:\/\/[^\s]+/g, '')
+    .replace(/📲 View in Runna: https:\/\/[^\s]+/g, '')
+    .replace(/View in Runna: https:\/\/[^\s]+/g, '')
+    .replace(/https:\/\/club\.runna\.com\/[^\s]+/g, '')
+    .replace(/https:\/\/cal\.runna\.com\/[^\s]+/g, '')
+    .trim();
+  
+  // Extract key workout insights
+  const insights: string[] = [];
+  
+  // Extract workout type and distance from first line
+  const firstLineMatch = cleaned.match(/^([^•]+)\s+•\s+([\d.]+)km\s+•\s+(\d+)m\s+-\s+(\d+)m/);
+  if (firstLineMatch) {
+    const [, workoutType, distance, minDuration, maxDuration] = firstLineMatch;
+    insights.push(`🏃 ${workoutType.trim()} - ${distance}km (${minDuration}-${maxDuration} min)`);
+  }
+  
+  // Extract warm-up instructions
+  const warmupMatch = cleaned.match(/(\d+)\s*mins?\s*walking\s*warm\s*up/i);
+  if (warmupMatch) {
+    insights.push(`🔥 ${warmupMatch[1]} min warm-up`);
+  }
+  
+  // Extract interval instructions
+  const intervalMatch = cleaned.match(/Repeat\s+the\s+following\s+(\d+)x?:/i);
+  if (intervalMatch) {
+    const reps = intervalMatch[1];
+    const intervalDetails = cleaned.match(/Repeat\s+the\s+following\s+\d+x?:\s*([^]+?)(?=\n\n|\n5\s*mins?\s*walking\s*cool\s*down|$)/i);
+    if (intervalDetails) {
+      const details = intervalDetails[1].trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+      insights.push(`🔄 ${reps} reps: ${details}`);
+    }
+  }
+  
+  // Extract cool-down instructions
+  const cooldownMatch = cleaned.match(/(\d+)\s*mins?\s*walking\s*cool\s*down/i);
+  if (cooldownMatch) {
+    insights.push(`❄️ ${cooldownMatch[1]} min cool-down`);
+  }
+  
+  // Extract pace guidance
+  const paceMatch = cleaned.match(/(conversational\s+pace|easy\s+pace|moderate\s+pace|tempo\s+pace|hard\s+pace)/i);
+  if (paceMatch) {
+    insights.push(`🎯 Pace: ${paceMatch[1]}`);
+  }
+  
+  // If we have insights, return them; otherwise return cleaned description
+  if (insights.length > 0) {
+    return insights.join('\n');
+  }
+  
+  // Fallback: return cleaned description without promotional text
+  return cleaned;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -202,7 +263,7 @@ serve(async (req) => {
           activity_type: event.summary,
           duration_minutes: durationMinutes,
           distance_km: distanceKm,
-          notes: event.description || null,
+          notes: parseRunnaNotes(event.description),
           start_time: event.startTime || null,
           intensity: intensity,
           estimated_calories: calculateEstimatedCalories(distanceKm, durationMinutes, intensity),
