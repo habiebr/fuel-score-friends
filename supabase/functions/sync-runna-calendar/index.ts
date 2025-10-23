@@ -88,6 +88,31 @@ function parseDistance(description: string | undefined): number | null {
   return null;
 }
 
+function calculateEstimatedCalories(distanceKm: number | null, durationMinutes: number, intensity: string): number {
+  // Base calories per minute for different intensities
+  const baseCaloriesPerMinute = {
+    'low': 8,      // Easy/recovery pace
+    'moderate': 12, // Normal training pace
+    'high': 16     // Tempo/intervals
+  };
+  
+  // If we have distance, use distance-based calculation (more accurate)
+  if (distanceKm && distanceKm > 0) {
+    // Calories per km based on intensity
+    const caloriesPerKm = {
+      'low': 60,      // ~6 min/km pace
+      'moderate': 80, // ~5 min/km pace  
+      'high': 100     // ~4 min/km pace
+    };
+    
+    return Math.round(distanceKm * caloriesPerKm[intensity as keyof typeof caloriesPerKm]);
+  }
+  
+  // Fallback to duration-based calculation
+  const caloriesPerMinute = baseCaloriesPerMinute[intensity as keyof typeof baseCaloriesPerMinute] || 12;
+  return Math.round(durationMinutes * caloriesPerMinute);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -165,19 +190,26 @@ serve(async (req) => {
 
     // Insert new Runna activities
     if (futureEvents.length > 0) {
-      const activities = futureEvents.map(event => ({
-        user_id: user.id,
-        date: event.date,
-        activity_type: event.summary,
-        duration_minutes: parseDuration(event.duration),
-        distance_km: parseDistance(event.description),
-        notes: event.description || null,
-        start_time: event.startTime || null,
-        intensity: event.summary.toLowerCase().includes('tempo') || event.summary.toLowerCase().includes('interval') ? 'high' : 
-                   event.summary.toLowerCase().includes('easy') || event.summary.toLowerCase().includes('recovery') ? 'low' : 'moderate',
-        is_from_runna: true,
-        is_actual: false
-      }));
+      const activities = futureEvents.map(event => {
+        const durationMinutes = parseDuration(event.duration);
+        const distanceKm = parseDistance(event.description);
+        const intensity = event.summary.toLowerCase().includes('tempo') || event.summary.toLowerCase().includes('interval') ? 'high' : 
+                         event.summary.toLowerCase().includes('easy') || event.summary.toLowerCase().includes('recovery') ? 'low' : 'moderate';
+        
+        return {
+          user_id: user.id,
+          date: event.date,
+          activity_type: event.summary,
+          duration_minutes: durationMinutes,
+          distance_km: distanceKm,
+          notes: event.description || null,
+          start_time: event.startTime || null,
+          intensity: intensity,
+          estimated_calories: calculateEstimatedCalories(distanceKm, durationMinutes, intensity),
+          is_from_runna: true,
+          is_actual: false
+        };
+      });
 
       const { error: insertError } = await supabase
         .from('training_activities')
