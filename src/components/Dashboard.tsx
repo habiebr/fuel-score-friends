@@ -6,6 +6,7 @@ import { ScoreCard } from '@/components/ScoreCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { CalendarDays, Target, Users, Zap, TrendingUp, ChevronLeft, ChevronRight, Camera, Utensils, Settings } from 'lucide-react';
 import { Home } from 'lucide-react';
 import { PageHeading } from '@/components/PageHeading';
@@ -31,6 +32,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { readDashboardCache, writeDashboardCache, clearDashboardCache } from '@/lib/dashboard-cache';
 import { MealScoreSuggestions } from '@/components/MealScoreSuggestions';
+import { LazyGamificationWidgets } from '@/components/LazyGamificationWidgets';
+import { ScoreCardSkeleton, StreakCardSkeleton, WeeklyInsightSkeleton } from '@/components/ui/Skeleton';
+import { useGamification } from '@/hooks/useGamification';
 
 interface MealSuggestion {
   name: string;
@@ -90,9 +94,10 @@ interface DashboardProps {
 export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const { user, session } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const realtimeErrorLogged = useRef(false);
-  const { syncGoogleFit, isSyncing, lastSync, syncStatus } = useGoogleFitSync();
+  const { syncGoogleFit, isSyncing, lastSync, syncStatus, triggerImmediateSync } = useGoogleFitSync();
   const [data, setData] = useState<DashboardData | null>(null);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,9 +107,24 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
   const [hasMainMeals, setHasMainMeals] = useState(false);
   // Removed manual generate plan action from dashboard
   const [currentMealIndex, setCurrentMealIndex] = useState(0);
-  const [newActivity, setNewActivity] = useState<null | { planned?: string; actual?: string; sessionId: string }>(null);
+  const [newActivity, setNewActivity] = useState<null | { 
+    planned?: string; 
+    actual?: string; 
+    sessionId: string;
+    caloriesBurned?: number;
+    duration?: number;
+  }>(null);
   const [weeklyGoogleFitData, setWeeklyGoogleFitData] = useState<{ current: number; target: number }>({ current: 0, target: 30 });
   const [foodTrackerOpen, setFoodTrackerOpen] = useState(false);
+
+  // Gamification hook
+  const { 
+    data: gamificationData, 
+    loading: gamificationLoading, 
+    pendingMilestone, 
+    ackMilestone, 
+    dismissMilestone 
+  } = useGamification();
 
   // Function to determine current meal based on time and Google Fit activity patterns
   const getCurrentMealType = () => {
@@ -363,6 +383,14 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           .limit(1)
           .maybeSingle();
 
+        if (notifError) {
+          console.error('Error fetching training notifications:', notifError);
+          if (notifError.message.includes('access control') || notifError.message.includes('401')) {
+            console.warn('Authentication error in training_notifications, skipping recovery detection');
+            return; // Skip recovery detection if auth error
+          }
+        }
+
         if (!notifError && notification?.notes) {
           // Found cached notification from backend detection
           try {
@@ -371,7 +399,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             
             setNewActivity({
               actual: `${workoutData.name || 'Workout'} ${workoutData.distance ? workoutData.distance + ' km' : ''}`,
-              sessionId: workoutData.session_id
+              sessionId: workoutData.session_id,
+              caloriesBurned: workoutData.calories_burned || 0,
+              duration: workoutData.duration_minutes || 0
             });
             return; // Early exit - already detected by backend
           } catch (parseError) {
@@ -429,7 +459,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
               
               setNewActivity({
                 actual: `${activityType}${distance}`,
-                sessionId
+                sessionId,
+                caloriesBurned: session.calories || 0,
+                duration: Math.round((parseInt(session.endTimeMillis) - parseInt(session.startTimeMillis)) / (60 * 1000))
               });
             }
           } else {
@@ -613,6 +645,29 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       return;
     }
 
+    // Check if session is expired
+    if (session.expires_at && new Date(session.expires_at * 1000) < new Date()) {
+      console.warn('Dashboard: Session expired, refreshing...');
+      try {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          console.error('Failed to refresh session:', refreshError);
+          toast({
+            title: "Session Expired",
+            description: "Please sign in again to continue.",
+            variant: "destructive",
+          });
+          navigate('/auth', { replace: true });
+          return;
+        }
+        console.log('Session refreshed successfully');
+      } catch (error) {
+        console.error('Error refreshing session:', error);
+        navigate('/auth', { replace: true });
+        return;
+      }
+    }
+
     setLoading((prev) => prev || !data);
 
     try {
@@ -667,15 +722,43 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       // Check for authentication errors
       if (foodLogsData.error && foodLogsData.error.message.includes('access control')) {
         console.error('Authentication error in food_logs:', foodLogsData.error);
-        throw new Error('Authentication required. Please sign in again.');
+        toast({
+          title: "Authentication Error",
+          description: "Your session has expired. Please sign in again.",
+          variant: "destructive",
+        });
+        navigate('/auth', { replace: true });
+        return;
       }
       if (mealPlansData.error && mealPlansData.error.message.includes('access control')) {
         console.error('Authentication error in daily_meal_plans:', mealPlansData.error);
-        throw new Error('Authentication required. Please sign in again.');
+        toast({
+          title: "Authentication Error", 
+          description: "Your session has expired. Please sign in again.",
+          variant: "destructive",
+        });
+        navigate('/auth', { replace: true });
+        return;
       }
       if (profileData.error && profileData.error.message.includes('access control')) {
         console.error('Authentication error in profiles:', profileData.error);
-        throw new Error('Authentication required. Please sign in again.');
+        toast({
+          title: "Authentication Error",
+          description: "Your session has expired. Please sign in again.", 
+          variant: "destructive",
+        });
+        navigate('/auth', { replace: true });
+        return;
+      }
+      if (googleFitDataResult.error && googleFitDataResult.error.message.includes('access control')) {
+        console.error('Authentication error in google_fit_data:', googleFitDataResult.error);
+        toast({
+          title: "Authentication Error",
+          description: "Your session has expired. Please sign in again.",
+          variant: "destructive",
+        });
+        navigate('/auth', { replace: true });
+        return;
       }
 
       const foodLogs = foodLogsData.data || [];
@@ -875,8 +958,23 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           result: weeklyScoreResult,
           average: weeklyScoreResult?.average,
           dailyScores: weeklyScoreResult?.dailyScores,
-          validScoresCount: weeklyScoreResult?.dailyScores?.filter(d => d.score > 0).length
+          validScoresCount: weeklyScoreResult?.dailyScores?.filter(d => d.score > 0).length,
+          allScores: weeklyScoreResult?.dailyScores?.map(d => `${d.date}: ${d.score}`).join(', ')
         });
+        
+        // Additional debug: Check if we have any scores in nutrition_scores table
+        const { data: allScores } = await supabase
+          .from('nutrition_scores')
+          .select('date, daily_score')
+          .eq('user_id', user.id)
+          .order('date', { ascending: false })
+          .limit(10);
+        
+        console.log('📊 ALL RECENT SCORES:', {
+          count: allScores?.length || 0,
+          scores: allScores?.map(s => `${s.date}: ${s.daily_score}`).join(', ') || 'No scores found'
+        });
+        
       } catch (weeklyScoreError) {
         console.error('❌ Error getting weekly unified score:', weeklyScoreError);
         weeklyScoreResult = null;
@@ -966,6 +1064,10 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         console.log('🏃 Weekly running API response:', weeklyRunningData);
         if (weeklyRunningError) {
           console.error('Error loading weekly running distance for dashboard:', weeklyRunningError);
+          // Don't throw error for this non-critical data, just log it
+          if (weeklyRunningError.message.includes('access control') || weeklyRunningError.message.includes('401')) {
+            console.warn('Authentication error in weekly-running-leaderboard, skipping this data');
+          }
         } else {
           const entry = (weeklyRunningData as any)?.entries?.find((e: any) => e?.user_id === user.id);
           console.log('🏃 Found entry for user:', entry);
@@ -1103,11 +1205,23 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       {/* Header - Nutrisync Branding */}
       <div className="flex items-center justify-between">
         <PageHeading
-          title="Dashboard"
-          description="Your nutrition and training overview"
+          title={t('dashboard.title')}
+          description={t('dashboard.description')}
           icon={Home}
         />
-        <div className="flex items-center gap-3" />
+        <div className="flex items-center gap-3">
+          {/* Manual Sync Button for Recovery Detection */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={triggerImmediateSync}
+            disabled={isSyncing}
+            className="flex items-center gap-2"
+          >
+            <Zap className="h-4 w-4" />
+            {isSyncing ? t('dashboard.syncing') : t('dashboard.syncNow')}
+          </Button>
+        </div>
       </div>
 
         {/* Recovery Suggestion */}
@@ -1115,9 +1229,9 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           <RecoverySuggestion
             sessionEnd={new Date(parseInt(newActivity.sessionId.split('-')[1]))}
             intensity={newActivity.actual.toLowerCase().includes('tempo') || newActivity.actual.toLowerCase().includes('interval') ? 'high' : 'moderate'}
-            duration={60} // TODO: Get from Google Fit session
+            duration={newActivity.duration || 60}
             distance={parseFloat(newActivity.actual.match(/(\d+\.?\d*)\s*km/)?.[1] || '0')}
-            calories_burned={data?.caloriesBurned || 0}
+            calories_burned={newActivity.caloriesBurned || data?.caloriesBurned || 0}
             onDismiss={() => {
               localStorage.setItem('lastAckSessionId', newActivity.sessionId);
               setNewActivity(null);
@@ -1129,12 +1243,31 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
         <FoodTrackerDialog open={foodTrackerOpen} onOpenChange={setFoodTrackerOpen} />
 
-        {/* 1. Today & Weekly Scores */}
+        {/* Development Notice */}
+        <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
+                <span className="text-blue-600 dark:text-blue-300 text-sm font-semibold">⚠️</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                {t('dashboard.developmentNotice')}
+              </h3>
+              <p className="text-blue-800 dark:text-blue-200 text-sm leading-relaxed">
+                {t('dashboard.nutritionCalculationNotice')}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 1. Today & Weekly Scores - 2 columns in 1 row */}
         <div className="mb-4 grid grid-cols-2 gap-4">
           <ScoreCard 
-            title="Daily Score" 
+            title={t('dashboard.dailyScore')} 
             score={todayScore || 0} 
-            subtitle="Today" 
+            subtitle={t('dashboard.today')} 
             variant="success" 
             tooltip={
               <>
@@ -1169,20 +1302,27 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
             }
           />
           <ScoreCard 
-            title="Weekly Score" 
+            title={t('dashboard.weeklyScore')} 
             score={weeklyScore || 0} 
-            subtitle="Mon–Sun avg" 
+            subtitle={t('dashboard.weeklyAverage')} 
             variant="warning"
             tooltip={
               <>
                 <p className="font-semibold mb-2">⭐ Weekly Score</p>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Average of daily scores (nutrition + training + bonuses - penalties) from unified scoring system over the past 7 days.
+                  Your average daily score over the last 7 days. This score influences your performance tier.
                 </p>
                 
                 <div className="space-y-2 text-xs">
                   <div className="p-2 bg-muted/30 rounded">
-                    <p className="font-medium mb-1">📊 Formula:</p>
+                    <p className="font-medium mb-1">📊 What's measured:</p>
+                    <p className="text-muted-foreground">
+                      Consistency in daily nutrition and training performance.
+                    </p>
+                  </div>
+                  
+                  <div className="p-2 bg-muted/30 rounded">
+                    <p className="font-medium mb-1">📈 How it's calculated:</p>
                     <p className="text-muted-foreground">
                       Weekly Score = Σ(Daily Scores) / 7 days
                     </p>
@@ -1201,55 +1341,52 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
                       Curious how we grade each day? <a href="/scoring-explainer" className="text-primary underline">See the scoring explainer</a>.
                     </p>
                   </div>
+                  
+                  {weeklyScore === 0 && (
+                    <div className="p-2 bg-yellow-100 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
+                      <p className="font-medium mb-1 text-yellow-800 dark:text-yellow-200">⚠️ Why is it 0?</p>
+                      <p className="text-yellow-700 dark:text-yellow-300">
+                        Weekly score is 0 because no daily scores have been calculated yet. Log some meals and complete workouts to start building your weekly score!
+                      </p>
+                    </div>
+                  )}
                 </div>
               </>
             }
           />
         </div>
 
+        {/* 2. Gamification Section - Temporarily Hidden */}
+        {/* 
+        <div className="mb-5">
+          <LazyGamificationWidgets
+            gamificationData={gamificationData}
+            loading={gamificationLoading}
+            error={gamificationError}
+            onKeepStreak={() => {
+              toast({
+                title: t('dashboard.keepGoing'),
+                description: t('dashboard.keepLoggingMeals'),
+              });
+            }}
+            onAckMilestone={ackMilestone}
+            onDismissMilestone={dismissMilestone}
+            pendingMilestone={pendingMilestone}
+          />
+        </div>
+        */}
+
         {/* 2. Marathon Countdown */}
         <div className="mb-5">
           <RaceGoalWidget />
         </div>
 
-        {/* 2.5. Pre-Training Fueling Reminder (appears day before training) */}
+        {/* 2.6. Pre-Training Fueling Reminder (appears day before training) */}
         <div className="mb-5">
           <PreTrainingFuelingWidget />
         </div>
 
-        {/* 3. Today's Nutrition Score */}
-        <div className="mb-5">
-          <TodayMealScoreCard
-            score={mealScore.score}
-            rating={mealScore.rating}
-          />
-        </div>
 
-        {/* Meal Score Suggestions */}
-        <div className="mb-5">
-          <MealScoreSuggestions
-            score={mealScore.score}
-            breakdown={{
-              calories: Math.round((data?.calories?.consumed || 0) / (data?.calories?.target || 1) * 100),
-              protein: Math.round((data?.macros?.protein?.consumed || 0) / (data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).protein : 1) * 100),
-              carbs: Math.round((data?.macros?.carbs?.consumed || 0) / (data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).carbs : 1) * 100),
-              fat: Math.round((data?.macros?.fat?.consumed || 0) / (data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).fat : 1) * 100),
-            }}
-            actual={data?.calories ? {
-              calories: data.calories.consumed,
-              protein: data.macros?.protein?.consumed || 0,
-              carbs: data.macros?.carbs?.consumed || 0,
-              fat: data.macros?.fat?.consumed || 0,
-            } : undefined}
-            target={data?.calories ? {
-              calories: data.calories.target,
-              protein: deriveMacrosFromCalories(data.calories.target).protein,
-              carbs: deriveMacrosFromCalories(data.calories.target).carbs,
-              fat: deriveMacrosFromCalories(data.calories.target).fat,
-            } : undefined}
-            mealsLogged={data?.mealsLogged || 0}
-          />
-        </div>
 
         {/* 4. Today's Nutrition */}
         <div className="mb-5">
@@ -1301,6 +1438,22 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
         </div>
 
         {/* Today's Nutrition Plan removed */}
+
+        {/* Milestone Modal */}
+        {pendingMilestone && gamificationData && (
+          <MilestoneModal
+            milestone={pendingMilestone as any}
+            isOpen={!!pendingMilestone}
+            onClose={() => dismissMilestone()}
+            onShare={() => {
+              toast({
+                title: "Share Milestone! 🎉",
+                description: "Share your achievement with friends!",
+              });
+            }}
+            currentStreak={gamificationData.state.current_streak}
+          />
+        )}
 
       </div>
     </TooltipProvider>
