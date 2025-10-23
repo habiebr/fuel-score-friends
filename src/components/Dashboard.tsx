@@ -1356,6 +1356,32 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
         </div>
 
+        {/* 1.1. Nutrition Improvement Suggestions */}
+        <div className="mb-5">
+          <MealScoreSuggestions
+            score={todayScore || 0}
+            breakdown={{
+              calories: data?.calories?.consumed ? (data.calories.consumed / (data.calories.target || 1)) * 100 : 0,
+              protein: data?.macros?.protein?.consumed ? (data.macros.protein.consumed / (deriveMacrosFromCalories(data?.calories?.target || 0).protein || 1)) * 100 : 0,
+              carbs: data?.macros?.carbs?.consumed ? (data.macros.carbs.consumed / (deriveMacrosFromCalories(data?.calories?.target || 0).carbs || 1)) * 100 : 0,
+              fat: data?.macros?.fat?.consumed ? (data.macros.fat.consumed / (deriveMacrosFromCalories(data?.calories?.target || 0).fat || 1)) * 100 : 0
+            }}
+            actual={{
+              calories: data?.calories?.consumed || 0,
+              protein: data?.macros?.protein?.consumed || 0,
+              carbs: data?.macros?.carbs?.consumed || 0,
+              fat: data?.macros?.fat?.consumed || 0
+            }}
+            target={{
+              calories: data?.calories?.target || 0,
+              protein: data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).protein : 0,
+              carbs: data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).carbs : 0,
+              fat: data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).fat : 0
+            }}
+            mealsLogged={data?.mealsLogged || 0}
+          />
+        </div>
+
         {/* 2. Gamification Section - Temporarily Hidden */}
         {/* 
         <div className="mb-5">
@@ -1414,31 +1440,6 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
           />
         </div>
 
-        {/* 4.1. Nutrition Improvement Suggestions */}
-        <div className="mb-5">
-          <MealScoreSuggestions
-            score={todayScore || 0}
-            breakdown={{
-              calories: data?.calories?.consumed ? (data.calories.consumed / (data.calories.target || 1)) * 100 : 0,
-              protein: data?.macros?.protein?.consumed ? (data.macros.protein.consumed / (deriveMacrosFromCalories(data?.calories?.target || 0).protein || 1)) * 100 : 0,
-              carbs: data?.macros?.carbs?.consumed ? (data.macros.carbs.consumed / (deriveMacrosFromCalories(data?.calories?.target || 0).carbs || 1)) * 100 : 0,
-              fat: data?.macros?.fat?.consumed ? (data.macros.fat.consumed / (deriveMacrosFromCalories(data?.calories?.target || 0).fat || 1)) * 100 : 0
-            }}
-            actual={{
-              calories: data?.calories?.consumed || 0,
-              protein: data?.macros?.protein?.consumed || 0,
-              carbs: data?.macros?.carbs?.consumed || 0,
-              fat: data?.macros?.fat?.consumed || 0
-            }}
-            target={{
-              calories: data?.calories?.target || 0,
-              protein: data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).protein : 0,
-              carbs: data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).carbs : 0,
-              fat: data?.calories?.target ? deriveMacrosFromCalories(data.calories.target).fat : 0
-            }}
-            mealsLogged={data?.mealsLogged || 0}
-          />
-        </div>
 
         {/* 5. Weekly Kilometers */}
         <div className="mb-5">
