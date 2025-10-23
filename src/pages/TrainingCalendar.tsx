@@ -24,6 +24,7 @@ interface TrainingActivity {
   estimated_calories: number;
   notes?: string | null;
   is_actual?: boolean; // Flag to distinguish actual vs planned activities
+  is_from_runna?: boolean; // Flag to identify Runna-synced activities
 }
 
 interface DayActivities {
@@ -231,6 +232,13 @@ export default function TrainingCalendar() {
                                     <div className="flex flex-wrap items-center gap-2">
                                       <span className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
                                       <span className="text-sm font-bold capitalize text-green-900 dark:text-green-100">{dayData.actual.activity_type}</span>
+                                      {dayData.actual.is_from_runna && (
+                                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500">
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-white">
+                                            <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="currentColor"/>
+                                          </svg>
+                                        </div>
+                                      )}
                                       <span className="rounded-full bg-green-600 px-2 py-0.5 text-xs font-bold text-white">
                                         ACTUAL
                                       </span>
@@ -280,6 +288,13 @@ export default function TrainingCalendar() {
                                     <div className="flex flex-wrap items-center gap-2">
                                       <span className={`h-2.5 w-2.5 rounded-full ${hasActualActivity ? 'bg-gray-400' : 'bg-primary'}`} />
                                       <span className="text-sm font-semibold capitalize">{dayData.planned.activity_type}</span>
+                                      {dayData.planned.is_from_runna && (
+                                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500">
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-white">
+                                            <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="currentColor"/>
+                                          </svg>
+                                        </div>
+                                      )}
                                       {hasActualActivity && (
                                         <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-400">
                                           Planned
