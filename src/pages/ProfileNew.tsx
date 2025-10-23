@@ -15,8 +15,8 @@ import { PWAInstallPrompt } from '@/components/PWAInstallButton';
 import { usePWA } from '@/hooks/usePWA';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
-import { PerformanceTierBadge } from '@/components/gamification/PerformanceTierBadge';
-import { useGamification } from '@/hooks/useGamification';
+// import { PerformanceTierBadge } from '@/components/gamification/PerformanceTierBadge';
+// import { useGamification } from '@/hooks/useGamification';
 
 export default function ProfileNew() {
   const { user, signOut } = useAuth();
@@ -28,10 +28,11 @@ export default function ProfileNew() {
   const { t } = useTranslation();
   
   // Gamification hook
-  const { 
-    data: gamificationData, 
-    loading: gamificationLoading 
-  } = useGamification();
+  // Gamification hook - currently disabled
+  // const { 
+  //   data: gamificationData, 
+  //   loading: gamificationLoading 
+  // } = useGamification();
 
   const handleLogout = async () => {
     await signOut();
@@ -158,8 +159,8 @@ export default function ProfileNew() {
             </Card>
           )}
 
-          {/* Performance Tier Badge */}
-          {gamificationData && (
+          {/* Performance Tier Badge - Currently Disabled */}
+          {/* {gamificationData && (
             <div className="mb-6">
               <Card className="shadow-card">
                 <CardContent className="p-6">
@@ -174,7 +175,7 @@ export default function ProfileNew() {
                 </CardContent>
               </Card>
             </div>
-          )}
+          )} */}
 
           {/* PWA Install Prompt */}
           <div className="mb-6">
