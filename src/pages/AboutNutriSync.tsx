@@ -1,11 +1,14 @@
 import { useNavigate } from 'react-router-dom';
-import { startTransition } from 'react';
-import { ArrowLeft, GraduationCap, Users, Heart, MapPin, Calendar, MessageCircle } from 'lucide-react';
+import { startTransition, useState } from 'react';
+import { ArrowLeft, GraduationCap, Users, Heart, MapPin, Calendar, MessageCircle, Bug } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { BetaTestingReportDialog } from '@/components/BetaTestingReportDialog';
 
 export default function AboutNutriSync() {
   const navigate = useNavigate();
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -154,6 +157,18 @@ export default function AboutNutriSync() {
                     Share your feedback through the app or contact us directly
                   </span>
                 </div>
+                
+                {/* Beta Testing Report Button */}
+                <div className="pt-2">
+                  <Button
+                    onClick={() => startTransition(() => setReportDialogOpen(true))}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    size="lg"
+                  >
+                    <Bug className="h-4 w-4 mr-2" />
+                    Laporkan Masalah Beta
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -228,6 +243,12 @@ export default function AboutNutriSync() {
           </Card>
         </div>
       </div>
+      
+      {/* Beta Testing Report Dialog */}
+      <BetaTestingReportDialog 
+        open={reportDialogOpen} 
+        onOpenChange={setReportDialogOpen} 
+      />
     </div>
   );
 }

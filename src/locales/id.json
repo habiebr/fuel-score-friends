@@ -494,5 +494,28 @@
     "androidStep2": "Pilih \"Install app\" atau \"Add to Home screen\"",
     "androidStep3": "Ketuk \"Install\" untuk konfirmasi",
     "androidTip": "Menginstal aplikasi memberikan akses kamera yang lebih baik untuk foto makanan dan pengalaman yang lebih lancar!"
+  },
+  "betaTesting": {
+    "reportButton": "Laporkan Masalah Beta",
+    "reportDialog": {
+      "title": "Laporan Beta Testing",
+      "description": "Bantu kami meningkatkan NutriSync dengan melaporkan masalah atau memberikan saran Anda.",
+      "category": "Kategori",
+      "categoryOptions": {
+        "bug": "Bug/Laporan Masalah",
+        "feature": "Permintaan Fitur",
+        "ui": "Masalah UI/UX",
+        "performance": "Masalah Performa",
+        "other": "Lainnya"
+      },
+      "subject": "Subjek",
+      "subjectPlaceholder": "Ringkasan singkat masalah atau saran",
+      "descriptionLabel": "Deskripsi",
+      "descriptionPlaceholder": "Jelaskan secara detail masalah yang Anda alami atau saran yang ingin Anda berikan...",
+      "submit": "Kirim Laporan",
+      "submitting": "Mengirim...",
+      "success": "Laporan berhasil dikirim! Terima kasih atas feedback Anda.",
+      "error": "Gagal mengirim laporan. Silakan coba lagi."
+    }
   }
 }

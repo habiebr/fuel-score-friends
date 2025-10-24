@@ -148,7 +148,7 @@ function App() {
                   <Route path="/onboarding" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><OnboardingWizard /></Suspense></ProtectedRoute>} />
                   <Route path="/terms" element={<TermsOfService />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
-                  <Route path="/about" element={<AboutNutriSync />} />
+                  <Route path="/about" element={<Suspense fallback={<RouteLoadingFallback />}><AboutNutriSync /></Suspense>} />
                   <Route path="/food-share-demo" element={<ProtectedRoute><Suspense fallback={<RouteLoadingFallback />}><FoodShareDemo /></Suspense></ProtectedRoute>} />
 
                   {/* 404 - Lazy load */}
