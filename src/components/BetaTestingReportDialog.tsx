@@ -1,5 +1,4 @@
 import { useState, startTransition } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Bug, Send, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,6 @@ interface BetaTestingReportDialogProps {
 }
 
 export function BetaTestingReportDialog({ open, onOpenChange }: BetaTestingReportDialogProps) {
-  const { t } = useTranslation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -30,7 +28,7 @@ export function BetaTestingReportDialog({ open, onOpenChange }: BetaTestingRepor
     
     if (!formData.category || !formData.subject || !formData.description) {
       toast({
-        title: t('common.error'),
+        title: 'Error',
         description: 'Semua field wajib diisi',
         variant: 'destructive',
       });
@@ -61,7 +59,7 @@ export function BetaTestingReportDialog({ open, onOpenChange }: BetaTestingRepor
       }
 
       toast({
-        title: t('betaTesting.reportDialog.success'),
+        title: 'Laporan berhasil dikirim!',
         description: 'Feedback Anda sangat berharga untuk pengembangan NutriSync!',
       });
 
@@ -76,8 +74,8 @@ export function BetaTestingReportDialog({ open, onOpenChange }: BetaTestingRepor
     } catch (error) {
       console.error('Error submitting beta report:', error);
       toast({
-        title: t('common.error'),
-        description: t('betaTesting.reportDialog.error'),
+        title: 'Error',
+        description: 'Gagal mengirim laporan. Silakan coba lagi.',
         variant: 'destructive',
       });
     } finally {
@@ -94,76 +92,78 @@ export function BetaTestingReportDialog({ open, onOpenChange }: BetaTestingRepor
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="w-[95vw] max-w-md mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="flex items-center gap-2 text-lg">
             <Bug className="h-5 w-5 text-primary" />
-            {t('betaTesting.reportDialog.title')}
+            Laporan Beta Testing
           </DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            {t('betaTesting.reportDialog.description')}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Bantu kami meningkatkan NutriSync dengan melaporkan masalah atau memberikan saran Anda.
           </p>
 
-          <div className="space-y-2">
-            <Label htmlFor="category">{t('betaTesting.reportDialog.category')}</Label>
+          <div className="space-y-1">
+            <Label htmlFor="category" className="text-sm font-medium">Kategori</Label>
             <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
-              <SelectTrigger>
+              <SelectTrigger className="h-10">
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="bug">{t('betaTesting.reportDialog.categoryOptions.bug')}</SelectItem>
-                <SelectItem value="feature">{t('betaTesting.reportDialog.categoryOptions.feature')}</SelectItem>
-                <SelectItem value="ui">{t('betaTesting.reportDialog.categoryOptions.ui')}</SelectItem>
-                <SelectItem value="performance">{t('betaTesting.reportDialog.categoryOptions.performance')}</SelectItem>
-                <SelectItem value="other">{t('betaTesting.reportDialog.categoryOptions.other')}</SelectItem>
+                <SelectItem value="bug">Bug/Laporan Masalah</SelectItem>
+                <SelectItem value="feature">Permintaan Fitur</SelectItem>
+                <SelectItem value="ui">Masalah UI/UX</SelectItem>
+                <SelectItem value="performance">Masalah Performa</SelectItem>
+                <SelectItem value="other">Lainnya</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="subject">{t('betaTesting.reportDialog.subject')}</Label>
+          <div className="space-y-1">
+            <Label htmlFor="subject" className="text-sm font-medium">Subjek</Label>
             <Input
               id="subject"
               value={formData.subject}
               onChange={(e) => handleInputChange('subject', e.target.value)}
-              placeholder={t('betaTesting.reportDialog.subjectPlaceholder')}
+              placeholder="Ringkasan singkat masalah atau saran"
               maxLength={100}
+              className="h-10"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">{t('betaTesting.reportDialog.descriptionLabel')}</Label>
+          <div className="space-y-1">
+            <Label htmlFor="description" className="text-sm font-medium">Deskripsi</Label>
             <Textarea
               id="description"
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
-              placeholder={t('betaTesting.reportDialog.descriptionPlaceholder')}
-              rows={4}
+              placeholder="Jelaskan secara detail masalah yang Anda alami atau saran yang ingin Anda berikan..."
+              rows={3}
               maxLength={1000}
+              className="resize-none"
             />
           </div>
 
-          <div className="flex gap-2 pt-4">
+          <div className="flex gap-2 pt-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => startTransition(() => onOpenChange(false))}
-              className="flex-1"
+              className="flex-1 h-10"
               disabled={loading}
             >
-              <X className="h-4 w-4 mr-2" />
-              {t('common.cancel')}
+              <X className="h-4 w-4 mr-1" />
+              Batal
             </Button>
             <Button
               type="submit"
-              className="flex-1"
+              className="flex-1 h-10"
               disabled={loading}
             >
-              <Send className="h-4 w-4 mr-2" />
-              {loading ? t('betaTesting.reportDialog.submitting') : t('betaTesting.reportDialog.submit')}
+              <Send className="h-4 w-4 mr-1" />
+              {loading ? 'Mengirim...' : 'Kirim Laporan'}
             </Button>
           </div>
         </form>
