@@ -349,6 +349,7 @@ export type Database = {
           weight: number | null
           meal_plan_refresh_mode: string | null
           timezone: string | null
+          language_preference: string | null
         }
         Insert: {
           activity_level?: string | null
@@ -375,6 +376,7 @@ export type Database = {
           weight?: number | null
           meal_plan_refresh_mode?: string | null
           timezone?: string | null
+          language_preference?: string | null
         }
         Update: {
           activity_level?: string | null
@@ -401,6 +403,7 @@ export type Database = {
           weight?: number | null
           meal_plan_refresh_mode?: string | null
           timezone?: string | null
+          language_preference?: string | null
         }
         Relationships: []
       }

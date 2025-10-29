@@ -1,0 +1,12 @@
+-- Add language preference column to profiles table for cross-device language sync
+
+ALTER TABLE public.profiles 
+  ADD COLUMN IF NOT EXISTS language_preference TEXT DEFAULT 'en';
+
+COMMENT ON COLUMN public.profiles.language_preference IS 'User preferred language (e.g., en, id). Synced across devices.';
+
+-- Update existing profiles to use English as default
+UPDATE public.profiles 
+SET language_preference = 'en' 
+WHERE language_preference IS NULL;
+
