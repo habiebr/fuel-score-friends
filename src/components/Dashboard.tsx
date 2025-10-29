@@ -767,10 +767,10 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
 
       const exerciseData = {
         steps: todayGoogleFitData?.steps || 0,
-        calories_burned: todayGoogleFitData?.caloriesBurned || 0,
-        active_minutes: todayGoogleFitData?.activeMinutes || 0,
-        heart_rate_avg: todayGoogleFitData?.heartRateAvg || null,
-        distance_meters: todayGoogleFitData?.distanceMeters || 0,
+        calories_burned: todayGoogleFitData?.calories_burned || 0,
+        active_minutes: todayGoogleFitData?.active_minutes || 0,
+        heart_rate_avg: todayGoogleFitData?.heart_rate_avg || null,
+        distance_meters: todayGoogleFitData?.distance_meters || 0,
         sessions: todayGoogleFitData?.sessions || []
       };
 
