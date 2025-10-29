@@ -77,10 +77,10 @@ Fuel Score Friends is a comprehensive nutrition and training tracking system des
 
 ```bash
 # Clone the repository
-git clone https://github.com/habiebr/fuel-score-friends.git
+git clone https://github.com/habiebr/nutrisync.git
 
 # Navigate to project directory
-cd fuel-score-friends
+cd nutrisync
 
 # Install dependencies
 npm install
@@ -111,7 +111,7 @@ npm run preview
 ### Project Structure
 
 ```
-fuel-score-friends/
+nutrisync/
 ├── src/
 │   ├── components/        # Reusable UI components
 │   ├── pages/             # Route components
