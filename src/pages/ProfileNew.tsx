@@ -93,8 +93,6 @@ export default function ProfileNew() {
       path: '/integrations',
       iconBg: 'bg-gray-100 dark:bg-gray-800'
     },
-    // Temporarily hidden language switcher
-    /*
     {
       icon: Globe,
       title: t('settings.language'),
@@ -103,7 +101,6 @@ export default function ProfileNew() {
       iconBg: 'bg-gray-100 dark:bg-gray-800',
       isLanguageSwitcher: true
     }
-    */
   ];
 
   return (
