@@ -141,13 +141,26 @@ export function calculateMacros(
   const choKcal = choGrams * 4;
   const proteinKcal = proteinGrams * 4;
   
-  // Remaining calories for fat (minimum 20% of TDEE)
-  const minFatKcal = tdee * 0.2;
+  // Calculate fat to ensure TDEE is met or exceeded
+  const minFatKcal = tdee * 0.2; // Minimum 20% of TDEE
   const remainingKcal = tdee - choKcal - proteinKcal;
-  const fatKcal = Math.max(minFatKcal, remainingKcal);
   
-  // Convert fat calories to grams (9 kcal/g)
-  const fatGrams = Math.round(fatKcal / 9);
+  // **UNDERFUELING SAFEGUARD**: Ensure fat provides enough calories to meet TDEE
+  // If CHO + protein already exceed TDEE, use minimum fat
+  // Otherwise, use the larger of minimum fat or remaining calories
+  let fatKcal = Math.max(minFatKcal, remainingKcal);
+  
+  // Calculate total from macros to check for underfueling
+  const totalKcal = choKcal + proteinKcal + fatKcal;
+  
+  // **CRITICAL**: If total is less than TDEE, add more fat to prevent underfueling
+  if (totalKcal < tdee) {
+    const deficit = tdee - totalKcal;
+    fatKcal += deficit;
+  }
+  
+  // Convert fat calories to grams (9 kcal/g) - use ceiling to prevent underfueling
+  const fatGrams = Math.ceil(fatKcal / 9);
   
   return {
     cho: choGrams,
