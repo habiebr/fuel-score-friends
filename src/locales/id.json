@@ -473,6 +473,69 @@
       "setGoal": "Tetapkan Tujuan"
     }
   },
+  "trainingWidget": {
+    "actualTraining": "Latihan Aktual",
+    "plannedTraining": "Latihan Terencana",
+    "completed": "Selesai",
+    "restDayRecovery": "Pemulihan Hari Istirahat",
+    "allDay": "Sepanjang hari",
+    "every4560Min": "Setiap 45-60 menit",
+    "withinMinutes": "Dalam {{minutes}} menit",
+    "hoursBefore": "{{hours}} jam sebelumnya",
+    "hoursBeforeTomorrow": "{{hours}} jam sebelum latihan besok",
+    "trainingLoad": {
+      "rest": "Istirahat",
+      "easy": "Ringan",
+      "moderate": "Sedang",
+      "long": "Panjang",
+      "quality": "Kualitas"
+    },
+    "intensity": {
+      "low": "Rendah",
+      "moderate": "Sedang",
+      "high": "Tinggi"
+    },
+    "suggestions": {
+      "preWorkout": [
+        "Pisang dengan selai kacang",
+        "Oatmeal dengan beri",
+        "Roti dengan madu",
+        "Yogurt Yunani dengan granola"
+      ],
+      "duringWorkout": [
+        "Minuman olahraga",
+        "Gel energi",
+        "Pisang",
+        "Kurma"
+      ],
+      "postWorkout": [
+        "Susu coklat",
+        "Smoothie protein",
+        "Nasi dengan ayam",
+        "Yogurt Yunani dengan buah"
+      ],
+      "restDay": [
+        "Fokus pada makanan utuh",
+        "Tetap terhidrasi",
+        "Dapatkan tidur yang cukup",
+        "Peregangan ringan atau yoga"
+      ]
+    },
+    "benefits": {
+      "sustainedEnergy": "Energi berkelanjutan",
+      "preventsHunger": "Mencegah kelaparan",
+      "optimizesPerformance": "Mengoptimalkan performa",
+      "maintainsEnergy": "Mempertahankan energi",
+      "preventsBonking": "Mencegah bonking",
+      "sustainsPerformance": "Menopang performa",
+      "muscleRecovery": "Pemulihan otot",
+      "glycogenReplenishment": "Isi ulang glikogen",
+      "reducesSoreness": "Mengurangi nyeri",
+      "muscleRecoveryRest": "Pemulihan otot",
+      "energyRestoration": "Pemulihan energi",
+      "mentalRelaxation": "Relaksasi mental"
+    }
+  },
   "pwa": {
     "installApp": "Instal Aplikasi",
     "installNutriSync": "Instal NutriSync",

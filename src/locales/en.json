@@ -473,6 +473,69 @@
       "setGoal": "Set Goal"
     }
   },
+  "trainingWidget": {
+    "actualTraining": "Actual Training",
+    "plannedTraining": "Planned Training",
+    "completed": "Completed",
+    "restDayRecovery": "Rest Day Recovery",
+    "allDay": "All day",
+    "every4560Min": "Every 45-60 minutes",
+    "withinMinutes": "Within {{minutes}} minutes",
+    "hoursBefore": "{{hours}} hours before",
+    "hoursBeforeTomorrow": "{{hours}} hours before tomorrow's training",
+    "trainingLoad": {
+      "rest": "Rest",
+      "easy": "Easy",
+      "moderate": "Moderate",
+      "long": "Long",
+      "quality": "Quality"
+    },
+    "intensity": {
+      "low": "Low",
+      "moderate": "Moderate",
+      "high": "High"
+    },
+    "suggestions": {
+      "preWorkout": [
+        "Banana with peanut butter",
+        "Oatmeal with berries",
+        "Toast with honey",
+        "Greek yogurt with granola"
+      ],
+      "duringWorkout": [
+        "Sports drink",
+        "Energy gels",
+        "Banana",
+        "Dates"
+      ],
+      "postWorkout": [
+        "Chocolate milk",
+        "Protein smoothie",
+        "Rice with chicken",
+        "Greek yogurt with fruit"
+      ],
+      "restDay": [
+        "Focus on whole foods",
+        "Stay hydrated",
+        "Get adequate sleep",
+        "Light stretching or yoga"
+      ]
+    },
+    "benefits": {
+      "sustainedEnergy": "Sustained energy",
+      "preventsHunger": "Prevents hunger",
+      "optimizesPerformance": "Optimizes performance",
+      "maintainsEnergy": "Maintains energy",
+      "preventsBonking": "Prevents bonking",
+      "sustainsPerformance": "Sustains performance",
+      "muscleRecovery": "Muscle recovery",
+      "glycogenReplenishment": "Glycogen replenishment",
+      "reducesSoreness": "Reduces soreness",
+      "muscleRecoveryRest": "Muscle recovery",
+      "energyRestoration": "Energy restoration",
+      "mentalRelaxation": "Mental relaxation"
+    }
+  },
   "pwa": {
     "installApp": "Install App",
     "installNutriSync": "Install NutriSync",

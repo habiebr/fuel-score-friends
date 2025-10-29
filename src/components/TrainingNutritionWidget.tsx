@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { 
   Clock, 
   Zap, 
@@ -95,6 +96,7 @@ interface TrainingNutritionWidgetProps {
 export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActivities = [], onRefresh }: TrainingNutritionWidgetProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<any>(null);
   const [recentWorkout, setRecentWorkout] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -524,11 +526,11 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
           <div className="flex items-center gap-2 mb-2">
             <Activity className="h-4 w-4 text-primary" />
             <span className="font-medium text-primary">
-              {hasActual || todayAggregate ? 'Actual Training' : 'Planned Training'}
+              {hasActual || todayAggregate ? t('trainingWidget.actualTraining') : t('trainingWidget.plannedTraining')}
             </span>
             {(hasActual || todayAggregate) && (
               <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                ✓ Completed
+                ✓ {t('trainingWidget.completed')}
               </Badge>
             )}
           </div>
@@ -548,7 +550,7 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
                   <div className="flex items-center gap-1"><span className="font-semibold text-foreground">{Math.round(todayAggregate.caloriesBurned)}</span><span>kcal</span></div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">moderate intensity</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('trainingWidget.intensity.moderate')} intensity</p>
             </div>
           ) : Array.isArray(actualTrainingData) && actualTrainingData.length >= 2 ? (
             <div className="relative">
@@ -560,7 +562,7 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
                         <p className="font-medium capitalize">{s.activity_type || 'run'}</p>
                         {renderSessionMetrics(s)}
                         <p className="text-xs text-muted-foreground mt-1">
-                          {(s.intensity || 'moderate')} intensity
+                          {t(`trainingWidget.intensity.${s.intensity || 'moderate'}`)} intensity
                         </p>
                       </div>
                     </CarouselItem>
@@ -576,7 +578,7 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
                 <p className="font-medium capitalize">{s.activity_type || 'run'}</p>
                 {renderSessionMetrics(s)}
                 <p className="text-xs text-muted-foreground mt-1">
-                  {(s.intensity || 'moderate')} intensity
+                  {t(`trainingWidget.intensity.${s.intensity || 'moderate'}`)} intensity
                 </p>
               </div>
             ))
@@ -585,7 +587,7 @@ export function TrainingNutritionWidget({ selectedDate, activities, tomorrowActi
               <div key={index} className="text-sm">
                 <p className="font-medium capitalize">{activity.activity_type}</p>
                 <p className="text-muted-foreground">
-                  {activity.duration_minutes} min • {activity.intensity} intensity
+                  {activity.duration_minutes} min • {t(`trainingWidget.intensity.${activity.intensity}`)} intensity
                   {activity.distance_km && ` • ${activity.distance_km}km`}
                 </p>
               </div>
