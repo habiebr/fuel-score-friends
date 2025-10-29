@@ -135,7 +135,7 @@ export default function MealPlans() {
           const session = (await supabase.auth.getSession()).data.session;
           const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
           try {
-            await supabase.functions.invoke('generate-meal-plan', {
+            await supabase.functions.invoke('generate-meal-plan-gemini', {
               body: { date: day },
               headers: {
                 ...(apiKey ? { apikey: apiKey } : {}),
@@ -163,7 +163,7 @@ export default function MealPlans() {
       const session = (await supabase.auth.getSession()).data.session;
       const apiKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
       
-      const { error } = await supabase.functions.invoke('generate-meal-plan', {
+      const { error } = await supabase.functions.invoke('generate-meal-plan-gemini', {
         body: { date: today, useAI: true },
         headers: {
           ...(apiKey ? { apikey: apiKey } : {}),

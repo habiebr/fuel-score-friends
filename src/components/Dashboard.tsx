@@ -307,10 +307,10 @@ export function Dashboard({ onAddMeal, onAnalyzeFitness }: DashboardProps) {
       const today = format(new Date(), 'yyyy-MM-dd');
       console.log('Generating meal plan for today...');
       
-      const { data, error } = await supabase.functions.invoke('generate-meal-plan', {
-        body: { 
+      const { data, error } = await supabase.functions.invoke('generate-meal-plan-gemini', {
+        body: {
           date: today,
-          useAI: false // Use templates for faster generation
+          useAI: true // Use Gemini AI for meal suggestions
         }
       });
       

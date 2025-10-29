@@ -10,8 +10,13 @@ import { Globe, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export const LanguageSwitcher: React.FC = memo(() => {
-  const { currentLanguage, setLanguage, availableLanguages } = useLanguage();
+  const languageContext = useLanguage();
   const [isChanging, setIsChanging] = useState(false);
+
+  // Fallback if context is not available (defensive programming)
+  const currentLanguage = languageContext?.currentLanguage || 'en';
+  const setLanguage = languageContext?.setLanguage || ((lang: string) => console.warn('LanguageProvider not ready'));
+  const availableLanguages = languageContext?.availableLanguages || [{ code: 'en', name: 'English', flag: '🇺🇸' }, { code: 'id', name: 'Bahasa Indonesia', flag: '🇮🇩' }];
 
   // Memoize currentLang to prevent find() on every render
   const currentLang = useMemo(() => 

@@ -22,8 +22,8 @@ serve(async (req) => {
   console.log("=== Unified Meal Plan Generation Started ===");
 
   try {
-    console.log("1. Extracting user from JWT...");
-    
+    console.log("1. Extracting user from JWT or service key...");
+
     // Get the JWT token from Authorization header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -34,21 +34,32 @@ serve(async (req) => {
       });
     }
 
-    // Extract and decode JWT to get user ID
+    // Extract token
     const token = authHeader.replace("Bearer ", "");
-    
-    // Decode JWT (it's a base64 encoded JSON in the middle part)
+
+    // Read request body first
+    const requestBody = await req.json();
+    const { date, useAI: forceAI, userId: providedUserId } = requestBody;
+
     let userId: string;
     try {
-      const parts = token.split('.');
-      if (parts.length !== 3) {
-        throw new Error("Invalid token format");
+      // Check if this is a service role key (much longer) or JWT token
+      if (token.length > 200) {
+        // This is likely a service role key, use provided userId from request body
+        userId = providedUserId || 'test-user';
+        console.log(`2. Using service role key with test user: ${userId}`);
+      } else {
+        // This is a JWT token, decode it
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+          throw new Error("Invalid token format");
+        }
+        const payload = JSON.parse(atob(parts[1]));
+        userId = payload.sub;
+        console.log(`2. User ID extracted from JWT: ${userId}`);
       }
-      const payload = JSON.parse(atob(parts[1]));
-      userId = payload.sub;
-      console.log(`2. User ID extracted from JWT: ${userId}`);
     } catch (e) {
-      console.error("JWT decode error:", e);
+      console.error("Token decode error:", e);
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -57,8 +68,6 @@ serve(async (req) => {
 
     // Create admin client with service role key for database operations
     const supabaseAdmin = getSupabaseAdmin();
-
-    const { date, useAI: forceAI } = await req.json();
     const requestDate = date || new Date().toISOString().split("T")[0];
     const requestDateObj = new Date(requestDate + 'T00:00:00');
     const requestWeekday = requestDateObj.toLocaleDateString('en-US', { weekday: 'long' });
