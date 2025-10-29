@@ -264,9 +264,9 @@ export default function Meals() {
         if (caloriesBurnedToday > 0) {
           const scale = calorieTarget / tdee;
           macroTargets = {
-            protein: Math.round(scienceMacros.protein * scale),
-            carbs: Math.round(scienceMacros.cho * scale),
-            fat: Math.round(scienceMacros.fat * scale)
+            protein: Math.ceil(scienceMacros.protein * scale), // Round UP to prevent underfueling
+            carbs: Math.ceil(scienceMacros.cho * scale), // Round UP to prevent underfueling
+            fat: Math.ceil(scienceMacros.fat * scale) // Round UP to prevent underfueling
           };
         } else {
           macroTargets = {
