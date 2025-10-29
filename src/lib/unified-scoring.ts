@@ -138,6 +138,44 @@ export interface MealScore {
 }
 
 /**
+ * Penalty Configuration
+ * 
+ * Option 1 (Current - Reduced Severity): Less strict penalties for better user experience
+ * Option 2 (Legacy - Strict): Original strict penalties for maximum accountability
+ * 
+ * To switch: Change ACTIVE_PENALTY_PROFILE below
+ */
+const PENALTY_PROFILES = {
+  reduced: {
+    // Activity-based penalties (max -8 instead of -15)
+    hardUnderfuel: -2,           // Old: -5
+    bigDeficit: -5,              // Old: -10
+    missedPostWindow: -1,        // Old: -3
+    maxCombined: -8,             // Old: -15
+    
+    // Data completeness penalties (reduced)
+    noFoodLogs: -15,             // Old: -30
+    noStructuredMeals: 0,        // Old: -10 (DISABLED)
+  },
+  strict: {
+    // Activity-based penalties (original strict values)
+    hardUnderfuel: -5,
+    bigDeficit: -10,
+    missedPostWindow: -3,
+    maxCombined: -15,
+    
+    // Data completeness penalties (original values)
+    noFoodLogs: -30,
+    noStructuredMeals: -10,
+  },
+} as const;
+
+// Switch penalty profile here: 'reduced' or 'strict'
+const ACTIVE_PENALTY_PROFILE: 'reduced' | 'strict' = 'reduced';
+
+const PENALTIES = PENALTY_PROFILES[ACTIVE_PENALTY_PROFILE];
+
+/**
  * Configuration for different scoring strategies
  */
 const SCORING_CONFIG = {
@@ -390,12 +428,12 @@ function calculateModifiers(
   if (flags.hydrationOk) bonuses += 2;
   bonuses = Math.min(10, bonuses);
   
-  // Penalties
+  // Penalties - using configurable values
   const hardUnderfuel = flags.isHardDay && actual.carbs < (target.carbs * 0.8);
-  if (hardUnderfuel) penalties -= 5;
-  if (flags.bigDeficit && actualDur >= 90) penalties -= 10;
-  if (flags.missedPostWindow) penalties -= 3;
-  penalties = Math.max(-15, penalties);
+  if (hardUnderfuel) penalties += PENALTIES.hardUnderfuel; // Negative value
+  if (flags.bigDeficit && actualDur >= 90) penalties += PENALTIES.bigDeficit; // Negative value
+  if (flags.missedPostWindow) penalties += PENALTIES.missedPostWindow; // Negative value
+  penalties = Math.max(PENALTIES.maxCombined, penalties);
   
   return { bonuses, penalties };
 }
@@ -482,12 +520,14 @@ export function calculateUnifiedScore(context: ScoringContext): ScoreBreakdown {
   
   if (!hasFoodLogs) {
     // User didn't log any food - this deserves a penalty
-    incompletePenalty -= 30;
+    incompletePenalty += PENALTIES.noFoodLogs; // Negative value
     missingData.push('food logs');
   }
-  if (mealsLogged === 0 && hasFoodLogs) {
+  // Structured meals penalty is now disabled (set to 0 in reduced profile)
+  // but kept available in legacy strict profile for easy recall
+  if (mealsLogged === 0 && hasFoodLogs && PENALTIES.noStructuredMeals < 0) {
     // User logged food but not in structured meals
-    incompletePenalty -= 10;
+    incompletePenalty += PENALTIES.noStructuredMeals; // Negative value
     missingData.push('structured meals');
   }
   

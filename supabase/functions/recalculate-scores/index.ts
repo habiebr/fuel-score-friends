@@ -76,6 +76,29 @@ const LOAD_WEIGHTS = {
   'long': { nutrition: 0.65, training: 0.35 }
 };
 
+// Penalty Configuration (matches unified-scoring.ts)
+const PENALTY_PROFILES = {
+  reduced: {
+    hardUnderfuel: -2,           // Old: -5
+    bigDeficit: -5,              // Old: -10
+    missedPostWindow: -1,        // Old: -3
+    maxCombined: -8,             // Old: -15
+    noFoodLogs: -15,             // Old: -30
+    noStructuredMeals: 0,         // Old: -10 (DISABLED)
+  },
+  strict: {
+    hardUnderfuel: -5,
+    bigDeficit: -10,
+    missedPostWindow: -3,
+    maxCombined: -15,
+    noFoodLogs: -30,
+    noStructuredMeals: -10,
+  },
+};
+
+const ACTIVE_PENALTY_PROFILE: 'reduced' | 'strict' = 'reduced';
+const PENALTIES = PENALTY_PROFILES[ACTIVE_PENALTY_PROFILE];
+
 function calculateMacroScore(actual: number, target: number): number {
   if (target === 0) return 100;
   const ratio = actual / target;
@@ -171,10 +194,10 @@ function calculateUnifiedScore(context: ScoringContext) {
 
   let penalty = 0;
   const hardUnderfuel = context.flags?.isHardDay && nutrition.actual.carbs < (nutrition.target.carbs * 0.8);
-  if (hardUnderfuel) penalty -= 5;
-  if (context.flags?.bigDeficit && (training.actual?.durationMin ?? 0) >= 90) penalty -= 10;
-  if (context.flags?.missedPostWindow) penalty -= 3;
-  penalty = Math.max(-15, penalty);
+  if (hardUnderfuel) penalty += PENALTIES.hardUnderfuel; // Negative value
+  if (context.flags?.bigDeficit && (training.actual?.durationMin ?? 0) >= 90) penalty += PENALTIES.bigDeficit; // Negative value
+  if (context.flags?.missedPostWindow) penalty += PENALTIES.missedPostWindow; // Negative value
+  penalty = Math.max(PENALTIES.maxCombined, penalty);
 
   // Final weighted score
   const final = (nutritionTotal * weights.nutrition) + (trainingTotal * weights.training) + bonus + penalty;
