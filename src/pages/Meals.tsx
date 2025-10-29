@@ -189,20 +189,29 @@ export default function Meals() {
             const hasRest = plannedActivities.some((act: any) => act.activity_type === 'rest');
             const hasHighIntensity = plannedActivities.some((act: any) => act.intensity === 'high');
             
+            // Check for user's explicit activity label (Priority 1)
+            const userLabel = plannedActivities[0]?.user_activity_label;
+            
             console.log('📅 Meals Page - Using PLANNED training from training_activities:', {
               activities: plannedActivities.length,
               totalDuration,
               totalDistance,
               hasRest,
-              hasHighIntensity
+              hasHighIntensity,
+              userLabel
             });
             
-            // Classify based on planned workout
+            // Priority 1: User's explicit activity designation
+            if (userLabel === 'long_run') return 'long';
+            if (userLabel === 'interval') return 'quality';
+            
+            // Priority 2: Automatic classification based on parameters
             if (hasRest && plannedActivities.length === 1) return 'rest';
             if (totalDistance >= 15) return 'long';
-            if (hasHighIntensity || (totalDuration >= 60 && totalDistance >= 10)) return 'quality';
-            if (totalDuration >= 45 || totalDistance >= 8) return 'moderate';
-            return 'easy';
+            if (hasHighIntensity) return 'quality'; // Quality = intensity-based only (tempo, intervals, hills)
+            if (totalDuration >= 60 || totalDistance >= 10) return 'moderate';
+            if (totalDuration >= 30 || totalDistance >= 5) return 'easy';
+            return 'rest';
           }
           
           // 2. Fallback: Infer from actual activity (Google Fit)
@@ -211,11 +220,20 @@ export default function Meals() {
           const activeMinutes = todayFitData?.activeMinutes || 0;
           const distanceKm = (todayFitData?.distanceMeters || 0) / 1000;
           
+          // Rest day: minimal activity
           if (activeMinutes < 15 && distanceKm < 2) return 'rest';
-          if (activeMinutes < 45 || distanceKm < 8) return 'easy';
+          
+          // Long run: high distance (priority)
           if (distanceKm >= 15) return 'long';
-          if (activeMinutes >= 60 && distanceKm >= 10) return 'quality';
-          return 'moderate';
+          
+          // Moderate: sustained effort
+          if (activeMinutes >= 60 || distanceKm >= 10) return 'moderate';
+          
+          // Easy: light activity
+          if (activeMinutes >= 30 || distanceKm >= 5) return 'easy';
+          
+          // Default to rest
+          return 'rest';
         };
         
         const trainingLoad = await determineTrainingLoad();

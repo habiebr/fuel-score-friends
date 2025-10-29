@@ -267,7 +267,14 @@ export default function TrainingCalendar() {
                                     </div>
                                     {dayData.actual.start_time && (
                                       <div className="flex items-center gap-1">
-                                        <span>{format(new Date(`1970-01-01T${dayData.actual.start_time}`), 'hh:mm a')}</span>
+                                        <span>{(() => {
+                                          // Parse time as UTC and convert to local timezone
+                                          const [hours, minutes] = dayData.actual.start_time.split(':');
+                                          const utcDate = new Date();
+                                          utcDate.setUTCHours(parseInt(hours), parseInt(minutes), 0, 0);
+                                          // Format as local time
+                                          return format(utcDate, 'hh:mm a');
+                                        })()}</span>
                                       </div>
                                     )}
                                   </div>

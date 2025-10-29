@@ -59,6 +59,16 @@ serve(async (req: Request) => {
 
     console.log(`Updating actual training for user ${user.id} on ${date}`);
 
+    // Get user's timezone from profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('timezone')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const userTimezone = profile?.timezone || 'UTC';
+    console.log(`User timezone: ${userTimezone}`);
+
     // Check if user has a Google Fit token
     console.log('Checking Google Fit token for user:', user.id);
     const { data: googleFitToken, error: tokenError } = await supabase
@@ -99,15 +109,16 @@ serve(async (req: Request) => {
       });
     }
 
-    // Get Google Fit sessions for the specific date only
-    // Important: Filter by date to avoid processing all sessions repeatedly
-    console.log(`Fetching Google Fit sessions for user ${user.id} on date ${date}`);
+    // Get Google Fit sessions for the specific date using PostgreSQL timezone functions
+    // Convert the local date boundaries to UTC using PostgreSQL's AT TIME ZONE
+    console.log(`Fetching Google Fit sessions for user ${user.id} on date ${date} in timezone ${userTimezone}`);
     const { data: googleFitSessions, error: sessionsError} = await supabase
-      .from('google_fit_sessions')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('start_time', `${date}T00:00:00`)
-      .lt('start_time', `${date}T23:59:59`);
+      .rpc('get_google_fit_sessions_for_date', {
+        p_user_id: user.id,
+        p_date: date,
+        p_timezone: userTimezone
+      })
+      .select();
     
     console.log('DEBUG: Google Fit sessions for date:', JSON.stringify(googleFitSessions, null, 2));
     console.log('DEBUG: Sessions error if any:', sessionsError);
